@@ -3,12 +3,12 @@ import { db } from "./firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 
 /* =====================
-   LANDING PAGE (안정화 + Firestore 초대코드 가입)
+   LANDING PAGE (완성형 / 블랙화면 방지 / Firestore 초대코드 가입)
 ===================== */
 export default function LandingPage({
   t,
   lang,
-  users = [],
+  users,
   setUsers,
   onLogin,
   onGuestLogin,
@@ -20,17 +20,25 @@ export default function LandingPage({
   styles,
   isAdmin,
 }) {
-  const [mode, setMode] = useState("login");
-  const [id, setId] = useState("");
-  const [pw, setPw] = useState("");
-  const [ref, setRef] = useState("");
-
-  // ✅ 블랙화면 방지: 필수 props 없으면 최소 UI로라도 렌더
+  // ---- 안전 기본값 (undefined 방지) ----
   const safeLang = lang || "ko";
-  const safeT = t || { login: "로그인", signup: "회원가입", id: "아이디", pw: "비밀번호", guest: "게스트" };
-  const safeHero = hero || { mode: "image", title: { ko: "DAISY" }, desc: { ko: "" } };
+  const safeUsers = Array.isArray(users) ? users : [];
+  const safeT = t || {
+    login: "로그인",
+    signup: "회원가입",
+    id: "아이디",
+    pw: "비밀번호",
+    guest: "게스트",
+  };
+  const safeHero = hero || {
+    mode: "image",
+    imageSrc: "",
+    title: { ko: "DAISY", en: "DAISY" },
+    desc: { ko: "", en: "" },
+  };
   const safeStyles =
-    styles || ({
+    styles ||
+    ({
       landingWrapper: { minHeight: "100dvh", background: "#000", color: "#fff" },
       bgWrap: {},
       bgOverlay: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)" },
@@ -45,12 +53,18 @@ export default function LandingPage({
       authCard: { width: 420, background: "rgba(0,0,0,0.55)", border: "1px solid #333", borderRadius: 16 },
       authTitle: { fontWeight: 900 },
       authInput: { width: "100%", padding: 14, borderRadius: 10, border: "1px solid #333", background: "#111", color: "#fff" },
-      primaryBtn: { width: "100%", padding: 16, borderRadius: 12, border: "none", background: "#ffb347", fontWeight: 900 },
-      guestBtn: { width: "100%", padding: 14, borderRadius: 12, border: "1px solid #333", background: "#111", color: "#fff" },
+      primaryBtn: { width: "100%", padding: 16, borderRadius: 12, border: "none", background: "#ffb347", fontWeight: 900, cursor: "pointer" },
+      guestBtn: { width: "100%", padding: 14, borderRadius: 12, border: "1px solid #333", background: "#111", color: "#fff", cursor: "pointer" },
       authToggle: { marginTop: 16, cursor: "pointer", opacity: 0.85, textAlign: "center" },
     });
 
-  // ✅ Firestore 초대코드 가입 로직
+  // ---- 상태 ----
+  const [mode, setMode] = useState("login");
+  const [id, setId] = useState("");
+  const [pw, setPw] = useState("");
+  const [ref, setRef] = useState("");
+
+  // ---- 회원가입(Firestore 기반) ----
   const signup = async () => {
     if (!id || !pw || !ref) {
       return alert(safeLang === "ko" ? "모든 정보를 입력해주세요." : "Please fill all info.");
@@ -61,19 +75,20 @@ export default function LandingPage({
     const inputRef = ref.trim().toUpperCase();
 
     try {
-      // 초대코드(실장)
+      // 1) 초대코드(실장): invite_codes/{code}
       const inviteSnap = await getDoc(doc(db, "invite_codes", inputRef));
 
-      // 유저 추천코드(유저의 추천코드를 아이디로 쓰는 구조면 users/{id} 확인 가능)
+      // 2) 유저 추천코드(유저 id를 추천코드로 쓰는 구조): users/{id}
       const userRefSnap = await getDoc(doc(db, "users", inputRef));
 
+      // 3) 마스터 코드
       const isMaster = inputRef === "ADMIN";
 
       if (!inviteSnap.exists() && !userRefSnap.exists() && !isMaster) {
         return alert(safeLang === "ko" ? "존재하지 않거나 틀린 초대 코드입니다." : "Invalid referral code.");
       }
 
-      // 아이디 중복 체크
+      // 아이디 중복 체크 (Firestore 기준)
       const myUserRef = doc(db, "users", newId);
       const myUserSnap = await getDoc(myUserRef);
       if (myUserSnap.exists()) {
@@ -85,8 +100,8 @@ export default function LandingPage({
 
       const newUser = {
         id: newId,
-        password: newPw, // admin 호환
-        pw: newPw,       // 기존 호환
+        pw: newPw,          // 기존 호환
+        password: newPw,    // admin 호환
         no: generatedNo,
         referral: inputRef,
         diamond: 0,
@@ -96,12 +111,12 @@ export default function LandingPage({
         createdAt: serverTimestamp(),
       };
 
-      // ✅ merge 없이 저장 (가입은 새 문서 생성이 안전)
+      // 가입은 새 문서 생성이 안전 (merge X)
       await setDoc(myUserRef, newUser);
 
-      // 로컬 상태 즉시 반영(선택)
+      // 화면 즉시 반영용 로컬 상태 업데이트(선택)
       if (typeof setUsers === "function") {
-        setUsers([...(users || []), newUser]);
+        setUsers([...(safeUsers || []), newUser]);
       }
 
       alert(safeLang === "ko" ? "성공적으로 가입되었습니다! 로그인해주세요." : "Signup Success! Please Login.");
@@ -113,30 +128,21 @@ export default function LandingPage({
     }
   };
 
+  // ✅ Enter 처리 (블랙화면 원인 해결 포인트)
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
-      mode === "login" ? onLogin?.(id, pw) : signup();
+      if (mode === "login") {
+        onLogin?.(id, pw);
+      } else {
+        signup();
+      }
     }
   };
 
   return (
-    <div
-      style={{
-        ...safeStyles.landingWrapper,
-        minHeight: "100dvh",
-        position: "relative",
-      }}
-    >
+    <div style={{ ...safeStyles.landingWrapper, minHeight: "100dvh", position: "relative" }}>
       {/* 1) 배경 */}
-      <div
-        style={{
-          ...safeStyles.bgWrap,
-          minHeight: "100dvh",
-          position: "absolute",
-          inset: 0,
-          overflow: "hidden",
-        }}
-      >
+      <div style={{ ...safeStyles.bgWrap, minHeight: "100dvh", position: "absolute", inset: 0, overflow: "hidden" }}>
         <div style={safeStyles.bgOverlay} />
 
         {safeHero.mode === "image" && safeHero.imageSrc && (
@@ -144,14 +150,7 @@ export default function LandingPage({
             src={safeHero.imageSrc}
             alt=""
             draggable={false}
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100dvh",
-              objectFit: "cover",
-              zIndex: -1,
-            }}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100dvh", objectFit: "cover", zIndex: -1 }}
           />
         )}
 
@@ -163,11 +162,7 @@ export default function LandingPage({
             muted
             loop
             playsInline
-            style={{
-              ...safeStyles.bgVideo,
-              height: "100dvh",
-              objectFit: "cover",
-            }}
+            style={{ ...safeStyles.bgVideo, height: "100dvh", objectFit: "cover" }}
           />
         )}
       </div>
