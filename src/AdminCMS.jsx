@@ -1,18 +1,21 @@
 import { useState } from "react";
-import { uploadToCloudinary } from "./CloudinaryService"; 
+import { uploadToCloudinary } from "./CloudinaryService";
 
-export default function AdminCMS({ 
+// ✅ 대용량 영상 자동 압축 + 업로드
+import { compressAndUploadVideo } from "./browserCompressUpload";
+
+export default function AdminCMS({
   adminPreviewMode, setAdminPreviewMode,
-  hero, setHero, videoURL, setVideoURL, 
-  logo, setLogo, logoSize, setLogoSize, 
-  logoPos, setLogoPos, innerLogo, setInnerLogo, 
+  hero, setHero, videoURL, setVideoURL,
+  logo, setLogo, logoSize, setLogoSize,
+  logoPos, setLogoPos, innerLogo, setInnerLogo,
   onExit, members, setMembers,
   slideImages, setSlideImages, videos, setVideos,
   adminPw, setAdminPw, telegramLink, setTelegramLink,
-  saveToFirebase, 
+  saveToFirebase,
   syncToFirebase,
-  openIndependent, 
-  styles 
+  openIndependent,
+  styles
 }) {
   const regionData = {
     "서울": ["강남/서초/송파", "강동/광진/성동", "마포/강서/양천", "영등포/구로/금천", "종로/중구/용산", "동대문/중랑/노원"],
@@ -30,20 +33,25 @@ export default function AdminCMS({
   const regions = Object.keys(regionData);
   const videoCategories = ["한국", "일본", "중국", "동남아", "서양"];
 
-  const initialMember = { 
-    name: '', region: '서울', loc: regionData["서울"][0], img: '', video: '', 
-    age: '', height: '', weight: '', bust: '' 
+  const initialMember = {
+    name: "", region: "서울", loc: regionData["서울"][0], img: "", video: "",
+    age: "", height: "", weight: "", bust: ""
   };
-  
+
   const [newM, setNewM] = useState(initialMember);
   const [editingId, setEditingId] = useState(null);
-  const [loading, setLoading] = useState(false); 
+  const [loading, setLoading] = useState(false);
+
+  // ✅ 업로드 상태 표시(문구/퍼센트)
+  const [uploadText, setUploadText] = useState("");
+  const [uploadPct, setUploadPct] = useState(0);
+
   const [videoCategory, setVideoCategory] = useState("한국");
   const [videoDesc, setVideoDesc] = useState("");
   const [showManagerModal, setShowManagerModal] = useState(false);
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [editingVideoId, setEditingVideoId] = useState(null);
-  const [tempVideoUrl, setTempVideoUrl] = useState(""); 
+  const [tempVideoUrl, setTempVideoUrl] = useState("");
 
   const handleRegionChange = (val) => {
     setNewM({ ...newM, region: val, loc: regionData[val][0] });
@@ -53,27 +61,27 @@ export default function AdminCMS({
     setEditingId(m.id);
     setNewM(m);
     setShowManagerModal(true);
-    const modalContent = document.getElementById('manager-modal-scroll');
-    if (modalContent) modalContent.scrollTo({ top: 0, behavior: 'smooth' });
+    const modalContent = document.getElementById("manager-modal-scroll");
+    if (modalContent) modalContent.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const saveMember = async () => {
     if (loading) return alert("파일 업로드 중입니다. 잠시만 기다려주세요.");
     if (!newM.img || !newM.name) return alert("매니저 이름과 사진은 필수입니다.");
-    
+
     let updatedMembers;
     if (editingId) {
-      updatedMembers = members.map(m => m.id === editingId ? { ...newM, id: editingId } : m);
+      updatedMembers = members.map((m) => (m.id === editingId ? { ...newM, id: editingId } : m));
       setEditingId(null);
     } else {
       updatedMembers = [...members, { ...newM, id: Date.now() }];
     }
-    
+
     setMembers(updatedMembers);
     setLoading(true);
     const ok = await syncToFirebase({ members: updatedMembers });
     setLoading(false);
-    
+
     if (ok) {
       setNewM(initialMember);
       alert("매니저 정보가 서버에 즉시 반영되었습니다! ✅");
@@ -82,40 +90,84 @@ export default function AdminCMS({
 
   const saveVideoToGallery = async () => {
     if (!tempVideoUrl) return alert("영상 파일을 먼저 업로드해주세요.");
-    
+
     let updatedVideos;
     if (editingVideoId) {
-      updatedVideos = videos.map(v => v.id === editingVideoId ? { ...v, url: tempVideoUrl, category: videoCategory, description: videoDesc } : v);
+      updatedVideos = videos.map((v) =>
+        v.id === editingVideoId ? { ...v, url: tempVideoUrl, category: videoCategory, description: videoDesc } : v
+      );
       setEditingVideoId(null);
     } else {
       updatedVideos = [...videos, { id: Date.now(), url: tempVideoUrl, category: videoCategory, description: videoDesc }];
     }
-    
+
     setVideos(updatedVideos);
     setLoading(true);
     const ok = await syncToFirebase({ videos: updatedVideos });
     setLoading(false);
-    
+
     if (ok) {
-      setTempVideoUrl(""); setVideoDesc("");
+      setTempVideoUrl("");
+      setVideoDesc("");
       alert("갤러리 영상이 서버에 반영되었습니다! ✅");
     }
   };
 
+  // ✅ 파일 처리: 이미지/영상 업로드 + (영상이면) 대용량 자동 압축
   const handleFileProcess = async (e, mode, callback) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const isVideo = file.type?.startsWith("video/");
+    const sizeMB = file.size / (1024 * 1024);
+
     try {
       setLoading(true);
-      const url = await uploadToCloudinary(file);
+      setUploadText("");
+      setUploadPct(0);
+
+      let url = null;
+
+      // ✅ 영상이고 80MB 이상이면 자동 압축 후 업로드
+      if (isVideo && sizeMB > 80) {
+        const targetMB = 70;     // ✅ 50~80MB 목표 (중간값)
+        const maxWidth = 1920;   // ✅ 1080p 최대 유지
+
+        const res = await compressAndUploadVideo(file, {
+          targetMB,
+          maxWidth,
+          onProgress: ({ progress, text }) => {
+            setUploadPct(Math.round(progress * 100));
+            if (text) setUploadText(text);
+          },
+          onLog: (msg) => {
+            // 필요하면 로그 보고싶을 때만 켜
+            // console.log("[FFMPEG]", msg);
+          }
+        });
+
+        url = res?.url || null;
+      } else {
+        // ✅ 이미지 / 작은 영상은 그냥 업로드
+        setUploadText(isVideo ? "영상 업로드 중..." : "이미지 업로드 중...");
+        setUploadPct(25);
+
+        url = await uploadToCloudinary(file);
+
+        setUploadPct(100);
+        setUploadText("완료!");
+      }
 
       if (url) {
-        callback(url); 
+        callback(url);
+
+        // ✅ mode별 firebase 즉시 반영(기존 기능 유지)
         let updates = {};
-        if (mode === 'logo') updates = { logo: url };
-        else if (mode === 'innerLogo') updates = { innerLogo: url };
-        else if (mode === 'heroImg') updates = { hero: { ...hero, imageSrc: url, mode: "image" } };
+        if (mode === "logo") updates = { logo: url };
+        else if (mode === "innerLogo") updates = { innerLogo: url };
+        else if (mode === "heroImg") updates = { hero: { ...hero, imageSrc: url, mode: "image" } };
+        else if (mode === "heroVid") updates = { videoURL: url, hero: { ...hero, mode: "video" } };
+        // mode가 image/video(매니저) / gallery video 등은 저장 버튼에서 처리되므로 updates 없음
 
         if (Object.keys(updates).length > 0) {
           await syncToFirebase(updates);
@@ -123,19 +175,21 @@ export default function AdminCMS({
       }
     } catch (err) {
       console.error("저장 과정 에러:", err);
+      alert(err?.message || "업로드 실패");
     } finally {
       setLoading(false);
-      e.target.value = ""; 
+      e.target.value = "";
+      // 상태는 잠시 보여주고 싶으면 여기서 바로 초기화 안 해도 됨
+      // setUploadText(""); setUploadPct(0);
     }
   };
 
-  // ✅ [수정] 시스템 설정(텔레그램/비밀번호)만 따로 저장하는 함수
+  // ✅ 시스템 설정(텔레그램/비밀번호)만 따로 저장
   const handleSaveSystemSettings = async () => {
     setLoading(true);
-    // syncToFirebase를 통해 텔레그램 링크와 관리자 비밀번호만 전송
-    const success = await syncToFirebase({ 
-      telegramLink: telegramLink, 
-      adminPw: adminPw 
+    const success = await syncToFirebase({
+      telegramLink: telegramLink,
+      adminPw: adminPw
     });
     setLoading(false);
     if (success) {
@@ -145,95 +199,198 @@ export default function AdminCMS({
 
   return (
     <div style={cmsStyles.cms}>
-      {/* ❶ 프리뷰 전환 탭 - 기능 복구 */}
+      {/* ❶ 프리뷰 전환 탭 */}
       <div style={cmsStyles.toggleArea}>
-        <button 
-          onClick={() => {
-            console.log("Landing Mode Clicked");
-            setAdminPreviewMode("landing");
-          }} 
+        <button
+          onClick={() => setAdminPreviewMode("landing")}
           style={{
-            ...cmsStyles.tabBtn, 
-            background: adminPreviewMode === "landing" ? "#ffb347" : "#222", 
+            ...cmsStyles.tabBtn,
+            background: adminPreviewMode === "landing" ? "#ffb347" : "#222",
             color: adminPreviewMode === "landing" ? "#000" : "#888",
             border: adminPreviewMode === "landing" ? "2px solid #fff" : "none"
           }}
-        >❶ 랜딩페이지 보기</button>
-        <button 
-          onClick={() => {
-            console.log("Dashboard Mode Clicked");
-            setAdminPreviewMode("dashboard");
-          }} 
+        >
+          ❶ 랜딩페이지 보기
+        </button>
+        <button
+          onClick={() => setAdminPreviewMode("dashboard")}
           style={{
-            ...cmsStyles.tabBtn, 
-            background: adminPreviewMode === "dashboard" ? "#ffb347" : "#222", 
+            ...cmsStyles.tabBtn,
+            background: adminPreviewMode === "dashboard" ? "#ffb347" : "#222",
             color: adminPreviewMode === "dashboard" ? "#000" : "#888",
             border: adminPreviewMode === "dashboard" ? "2px solid #fff" : "none"
           }}
-        >❷ 홈페이지 보기</button>
+        >
+          ❷ 홈페이지 보기
+        </button>
       </div>
 
-      <div style={{padding: '20px'}}>
+      <div style={{ padding: "20px" }}>
         <h3 style={cmsStyles.mainTitle}>SERVER ADMIN PANEL</h3>
-        
+
+        {/* ✅ 업로드 진행 상태 표시 */}
+        {(uploadText || uploadPct > 0) && (
+          <div style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid #333",
+            padding: "10px",
+            borderRadius: "10px",
+            marginBottom: 15
+          }}>
+            <div style={{ fontSize: 12, color: "#ffb347", fontWeight: "bold" }}>
+              {uploadText || "업로드 처리 중..."}
+            </div>
+            <div style={{ marginTop: 6, fontSize: 12, color: "#fff" }}>
+              {uploadPct}%
+            </div>
+            <div style={{ height: 6, background: "#222", borderRadius: 6, overflow: "hidden", marginTop: 6 }}>
+              <div style={{ width: `${uploadPct}%`, height: "100%", background: "#ffb347" }} />
+            </div>
+          </div>
+        )}
+
         {/* SECTION 1: 랜딩 페이지 설정 */}
         <div style={cmsStyles.sectionBox}>
           <label style={cmsStyles.sectionLabel}>❶ 랜딩 페이지 배경 설정</label>
-          <div style={{display: 'flex', gap: 5, marginBottom: 15}}>
-            <button onClick={() => setHero({...hero, mode: "image"})} style={{...cmsStyles.modeBtn, background: hero.mode === 'image' ? '#fff' : '#333', color: hero.mode === 'image' ? '#000' : '#888'}}>이미지 모드</button>
-            <button onClick={() => setHero({...hero, mode: "video"})} style={{...cmsStyles.modeBtn, background: hero.mode === 'video' ? '#fff' : '#333', color: hero.mode === 'video' ? '#000' : '#888'}}>동영상 모드</button>
+
+          <div style={{ display: "flex", gap: 5, marginBottom: 15 }}>
+            <button
+              onClick={() => setHero({ ...hero, mode: "image" })}
+              style={{
+                ...cmsStyles.modeBtn,
+                background: hero.mode === "image" ? "#fff" : "#333",
+                color: hero.mode === "image" ? "#000" : "#888"
+              }}
+            >
+              이미지 모드
+            </button>
+            <button
+              onClick={() => setHero({ ...hero, mode: "video" })}
+              style={{
+                ...cmsStyles.modeBtn,
+                background: hero.mode === "video" ? "#fff" : "#333",
+                color: hero.mode === "video" ? "#000" : "#888"
+              }}
+            >
+              동영상 모드
+            </button>
           </div>
+
           <div style={cmsStyles.fieldGroup}>
             <label style={cmsStyles.fieldLabel}>배경 이미지 (업로드 시 자동저장)</label>
-            <input type="file" accept="image/*" style={cmsStyles.fileInput} onChange={(e) => handleFileProcess(e, 'heroImg', (url) => setHero({ ...hero, imageSrc: url, mode: "image" }))} />
-            {hero.imageSrc && <img src={hero.imageSrc} style={{width: '100%', height: 60, objectFit: 'cover', marginTop: 5, borderRadius: 5}} alt="preview" />}
+            <input
+              type="file"
+              accept="image/*"
+              style={cmsStyles.fileInput}
+              onChange={(e) => handleFileProcess(e, "heroImg", (url) => setHero({ ...hero, imageSrc: url, mode: "image" }))}
+            />
+            {hero.imageSrc && (
+              <img
+                src={hero.imageSrc}
+                style={{ width: "100%", height: 60, objectFit: "cover", marginTop: 5, borderRadius: 5 }}
+                alt="preview"
+              />
+            )}
           </div>
+
           <div style={cmsStyles.fieldGroup}>
-            <label style={cmsStyles.fieldLabel}>배경 동영상 (업로드 시 자동저장)</label>
-            <input type="file" accept="video/*" style={cmsStyles.fileInput} onChange={(e) => handleFileProcess(e, 'heroVid', (url) => { setVideoURL(url); setHero({ ...hero, mode: "video" }); })} />
-            {videoURL && <div style={{marginTop: 5}}><p style={cmsStyles.checkText}>동영상 준비됨 ✅</p></div>}
+            <label style={cmsStyles.fieldLabel}>배경 동영상 (업로드 시 자동저장 / 대용량 자동압축)</label>
+            <input
+              type="file"
+              accept="video/*"
+              style={cmsStyles.fileInput}
+              onChange={(e) =>
+                handleFileProcess(e, "heroVid", (url) => {
+                  setVideoURL(url);
+                  setHero({ ...hero, mode: "video" });
+                })
+              }
+            />
+            {videoURL && (
+              <div style={{ marginTop: 5 }}>
+                <p style={cmsStyles.checkText}>동영상 준비됨 ✅</p>
+              </div>
+            )}
           </div>
+
           <div style={cmsStyles.fieldGroup}>
             <label style={cmsStyles.fieldLabel}>중앙 메인 로고 및 위치</label>
-            <input type="file" accept="image/*" style={cmsStyles.fileInput} onChange={(e) => handleFileProcess(e, 'logo', setLogo)} />
-            <div style={cmsStyles.rangeRow}><span>크기: {logoSize}px</span><input type="range" min="40" max="600" value={logoSize} onChange={e => setLogoSize(+e.target.value)} /></div>
+            <input type="file" accept="image/*" style={cmsStyles.fileInput} onChange={(e) => handleFileProcess(e, "logo", setLogo)} />
+            <div style={cmsStyles.rangeRow}>
+              <span>크기: {logoSize}px</span>
+              <input type="range" min="40" max="600" value={logoSize} onChange={(e) => setLogoSize(+e.target.value)} />
+            </div>
             <div style={cmsStyles.rangeGrid}>
-              <div><span>상하(Y)</span><input type="range" min="0" max="1000" value={logoPos.y} onChange={e => setLogoPos({...logoPos, y: +e.target.value})} /></div>
-              <div><span>좌우(X)</span><input type="range" min="0" max="1000" value={logoPos.x} onChange={e => setLogoPos({...logoPos, x: +e.target.value})} /></div>
+              <div>
+                <span>상하(Y)</span>
+                <input type="range" min="0" max="1000" value={logoPos.y} onChange={(e) => setLogoPos({ ...logoPos, y: +e.target.value })} />
+              </div>
+              <div>
+                <span>좌우(X)</span>
+                <input type="range" min="0" max="1000" value={logoPos.x} onChange={(e) => setLogoPos({ ...logoPos, x: +e.target.value })} />
+              </div>
             </div>
           </div>
         </div>
 
         {/* SECTION 2: 홈페이지 설정 */}
-        <div style={{...cmsStyles.sectionBox, borderColor: '#FFD700'}}>
-          <label style={{...cmsStyles.sectionLabel, color: '#FFD700'}}>❷ 홈페이지 설정</label>
+        <div style={{ ...cmsStyles.sectionBox, borderColor: "#FFD700" }}>
+          <label style={{ ...cmsStyles.sectionLabel, color: "#FFD700" }}>❷ 홈페이지 설정</label>
+
           <div style={cmsStyles.fieldGroup}>
             <label style={cmsStyles.fieldLabel}>상단 고정 로고 (Inner Logo)</label>
-            <input type="file" accept="image/*" style={cmsStyles.fileInput} onChange={(e) => handleFileProcess(e, 'innerLogo', setInnerLogo)} />
-            {innerLogo && <img src={innerLogo} style={{maxHeight: 30, marginTop: 5}} alt="inner-logo" />}
+            <input type="file" accept="image/*" style={cmsStyles.fileInput} onChange={(e) => handleFileProcess(e, "innerLogo", setInnerLogo)} />
+            {innerLogo && <img src={innerLogo} style={{ maxHeight: 30, marginTop: 5 }} alt="inner-logo" />}
           </div>
+
           <div style={cmsStyles.fieldGroup}>
             <label style={cmsStyles.fieldLabel}>상단 배너 슬라이더 (X 눌러 삭제)</label>
-            <input type="file" multiple accept="image/*" style={cmsStyles.fileInput} onChange={async (e) => {
-              const files = Array.from(e.target.files);
-              setLoading(true);
-              const urls = await Promise.all(files.map(f => uploadToCloudinary(f)));
-              const newImgs = urls.filter(u => u).map(u => ({ id: Date.now() + Math.random(), url: u }));
-              const updatedSlide = [...slideImages, ...newImgs];
-              setSlideImages(updatedSlide);
-              await syncToFirebase({ slideImages: updatedSlide });
-              setLoading(false);
-              e.target.value = "";
-            }} />
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              style={cmsStyles.fileInput}
+              onChange={async (e) => {
+                const files = Array.from(e.target.files || []);
+                if (files.length === 0) return;
+
+                setLoading(true);
+                setUploadText("배너 이미지 업로드 중...");
+                setUploadPct(10);
+
+                try {
+                  const urls = await Promise.all(files.map((f) => uploadToCloudinary(f)));
+                  const newImgs = urls.filter((u) => u).map((u) => ({ id: Date.now() + Math.random(), url: u }));
+                  const updatedSlide = [...slideImages, ...newImgs];
+                  setSlideImages(updatedSlide);
+                  await syncToFirebase({ slideImages: updatedSlide });
+
+                  setUploadPct(100);
+                  setUploadText("완료!");
+                } catch (err) {
+                  console.error(err);
+                  alert(err?.message || "배너 업로드 실패");
+                } finally {
+                  setLoading(false);
+                  e.target.value = "";
+                }
+              }}
+            />
+
             <div style={cmsStyles.bannerList}>
-              {slideImages.map(img => (
+              {slideImages.map((img) => (
                 <div key={img.id} style={cmsStyles.bannerThumb}>
-                  <img src={img.url} alt="slide" style={{width:'100%', height:'100%', objectFit:'cover'}} />
-                  <button onClick={async () => {
-                    const filtered = slideImages.filter(x => x.id !== img.id);
-                    setSlideImages(filtered);
-                    await syncToFirebase({ slideImages: filtered });
-                  }} style={cmsStyles.bannerDelBtn}>✕</button>
+                  <img src={img.url} alt="slide" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <button
+                    onClick={async () => {
+                      const filtered = slideImages.filter((x) => x.id !== img.id);
+                      setSlideImages(filtered);
+                      await syncToFirebase({ slideImages: filtered });
+                    }}
+                    style={cmsStyles.bannerDelBtn}
+                  >
+                    ✕
+                  </button>
                 </div>
               ))}
             </div>
@@ -243,56 +400,67 @@ export default function AdminCMS({
         {/* SECTION 3: 컨텐츠 데이터 관리 */}
         <div style={cmsStyles.sectionBox}>
           <label style={cmsStyles.sectionLabel}>❸ 컨텐츠 데이터 관리</label>
-          <button onClick={() => setShowManagerModal(true)} style={cmsStyles.modalOpenBtn}>매니저 프로필 관리 ({members.length}명)</button>
-          <button onClick={() => setShowVideoModal(true)} style={{...cmsStyles.modalOpenBtn, background: '#2196F3', marginTop: 10}}>비디오 갤러리 관리 ({videos.length}개)</button>
-          <button onClick={() => openIndependent && openIndependent()} style={{...cmsStyles.modalOpenBtn, background: '#9C27B0', marginTop: 10}}>회원 포인트 관리 (독립 어드민)</button>
+          <button onClick={() => setShowManagerModal(true)} style={cmsStyles.modalOpenBtn}>
+            매니저 프로필 관리 ({members.length}명)
+          </button>
+          <button onClick={() => setShowVideoModal(true)} style={{ ...cmsStyles.modalOpenBtn, background: "#2196F3", marginTop: 10 }}>
+            비디오 갤러리 관리 ({videos.length}개)
+          </button>
+          <button onClick={() => openIndependent && openIndependent()} style={{ ...cmsStyles.modalOpenBtn, background: "#9C27B0", marginTop: 10 }}>
+            회원 포인트 관리 (독립 어드민)
+          </button>
         </div>
 
-        {/* SECTION 4: 시스템 설정 (텔레그램/비밀번호) */}
+        {/* SECTION 4: 시스템 설정 */}
         <div style={cmsStyles.sectionBox}>
           <label style={cmsStyles.sectionLabel}>❹ 시스템 설정</label>
+
           <div style={cmsStyles.fieldGroup}>
             <label style={cmsStyles.fieldLabel}>텔레그램 상담 링크 아이디</label>
-            <input 
-              type="text" 
-              style={cmsStyles.textInput} 
-              placeholder="@TelegramID" 
-              value={telegramLink || ""} 
-              onChange={e => setTelegramLink(e.target.value)} 
+            <input
+              type="text"
+              style={cmsStyles.textInput}
+              placeholder="@TelegramID"
+              value={telegramLink || ""}
+              onChange={(e) => setTelegramLink(e.target.value)}
             />
           </div>
+
           <div style={cmsStyles.fieldGroup}>
             <label style={cmsStyles.fieldLabel}>관리자 접속 비밀번호</label>
-            <input 
-              type="text" 
-              style={cmsStyles.textInput} 
-              placeholder="새 비밀번호 입력" 
-              value={adminPw || ""} 
-              onChange={e => setAdminPw(e.target.value)} 
+            <input
+              type="text"
+              style={cmsStyles.textInput}
+              placeholder="새 비밀번호 입력"
+              value={adminPw || ""}
+              onChange={(e) => setAdminPw(e.target.value)}
             />
           </div>
-          <button 
-            onClick={handleSaveSystemSettings} 
-            style={{...cmsStyles.modalOpenBtn, background: '#4CAF50', marginTop: 5}}
-          >시스템 설정 즉시저장</button>
+
+          <button onClick={handleSaveSystemSettings} style={{ ...cmsStyles.modalOpenBtn, background: "#4CAF50", marginTop: 5 }}>
+            시스템 설정 즉시저장
+          </button>
         </div>
 
-        <button 
+        <button
           style={{
             ...cmsStyles.saveExitBtn,
             background: loading ? "#ffb347" : "#fff",
             cursor: loading ? "wait" : "pointer"
-          }} 
+          }}
           onClick={async () => {
             if (loading) return;
             setLoading(true);
-            const timer = setTimeout(() => { onExit(); }, 5000); 
+            const timer = setTimeout(() => { onExit(); }, 5000);
             try {
               if (saveToFirebase) await saveToFirebase();
               clearTimeout(timer);
-              onExit(); 
-            } catch (err) { onExit(); }
-            finally { setLoading(false); }
+              onExit();
+            } catch (err) {
+              onExit();
+            } finally {
+              setLoading(false);
+            }
           }}
         >
           {loading ? "데이터 저장 확인 중..." : "작업 종료 및 패널 닫기"}
@@ -304,59 +472,75 @@ export default function AdminCMS({
         <div style={modalStyles.overlay}>
           <div id="manager-modal-scroll" style={modalStyles.container}>
             <div style={modalStyles.header}>
-              <h2 style={{color: '#ffb347'}}>{editingId ? "매니저 정보 수정" : "신규 매니저 등록"}</h2>
-              <button onClick={() => {setShowManagerModal(false); setEditingId(null); setNewM(initialMember);}} style={modalStyles.closeBtn}>닫기</button>
+              <h2 style={{ color: "#ffb347" }}>{editingId ? "매니저 정보 수정" : "신규 매니저 등록"}</h2>
+              <button onClick={() => { setShowManagerModal(false); setEditingId(null); setNewM(initialMember); }} style={modalStyles.closeBtn}>
+                닫기
+              </button>
             </div>
+
             <div style={modalStyles.formBox}>
-              <div style={{display:'flex', gap: 10, marginBottom: 10}}>
-                <select value={newM.region} onChange={e => handleRegionChange(e.target.value)} style={modalStyles.select}>
-                  {regions.map(r => <option key={r} value={r}>{r}</option>)}
+              <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                <select value={newM.region} onChange={(e) => handleRegionChange(e.target.value)} style={modalStyles.select}>
+                  {regions.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
-                <select value={newM.loc} onChange={e => setNewM({...newM, loc: e.target.value})} style={modalStyles.select}>
-                  {regionData[newM.region].map(l => <option key={l} value={l}>{l}</option>)}
+                <select value={newM.loc} onChange={(e) => setNewM({ ...newM, loc: e.target.value })} style={modalStyles.select}>
+                  {regionData[newM.region].map((l) => <option key={l} value={l}>{l}</option>)}
                 </select>
               </div>
-              <div style={{display: 'flex', gap: 10}}>
-                <input style={{...modalStyles.input, flex: 2}} placeholder="매니저 이름" value={newM.name} onChange={e=>setNewM({...newM, name: e.target.value})} />
-                <input style={{...modalStyles.input, flex: 1}} placeholder="나이" value={newM.age} onChange={e=>setNewM({...newM, age: e.target.value})} />
+
+              <div style={{ display: "flex", gap: 10 }}>
+                <input style={{ ...modalStyles.input, flex: 2 }} placeholder="매니저 이름" value={newM.name} onChange={(e) => setNewM({ ...newM, name: e.target.value })} />
+                <input style={{ ...modalStyles.input, flex: 1 }} placeholder="나이" value={newM.age} onChange={(e) => setNewM({ ...newM, age: e.target.value })} />
               </div>
-              
-              <div style={{display:'flex', gap: 8, marginBottom: 10, marginTop:10}}>
-                <input style={modalStyles.input} placeholder="키 (cm)" value={newM.height} onChange={e=>setNewM({...newM, height: e.target.value})} />
-                <input style={modalStyles.input} placeholder="몸무게 (kg)" value={newM.weight} onChange={e=>setNewM({...newM, weight: e.target.value})} />
-                <input style={modalStyles.input} placeholder="가슴 (컵)" value={newM.bust} onChange={e=>setNewM({...newM, bust: e.target.value})} />
+
+              <div style={{ display: "flex", gap: 8, marginBottom: 10, marginTop: 10 }}>
+                <input style={modalStyles.input} placeholder="키 (cm)" value={newM.height} onChange={(e) => setNewM({ ...newM, height: e.target.value })} />
+                <input style={modalStyles.input} placeholder="몸무게 (kg)" value={newM.weight} onChange={(e) => setNewM({ ...newM, weight: e.target.value })} />
+                <input style={modalStyles.input} placeholder="가슴 (컵)" value={newM.bust} onChange={(e) => setNewM({ ...newM, bust: e.target.value })} />
               </div>
-              <div style={{display:'flex', gap: 10, marginBottom: 10, marginTop:10}}>
-                <div style={{flex:1}}>
-                  <p style={{fontSize: 11, color: '#ffb347', margin:'0 0 5px 0'}}>사진 업로드</p>
-                  <input type="file" accept="image/*" onChange={e => handleFileProcess(e, 'image', (url)=>setNewM({...newM, img: url}))} />
+
+              <div style={{ display: "flex", gap: 10, marginBottom: 10, marginTop: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 11, color: "#ffb347", margin: "0 0 5px 0" }}>사진 업로드</p>
+                  <input type="file" accept="image/*" onChange={(e) => handleFileProcess(e, "image", (url) => setNewM({ ...newM, img: url }))} />
                   {newM.img && <img src={newM.img} style={modalStyles.previewImg} alt="p" />}
                 </div>
-                <div style={{flex:1}}>
-                  <p style={{fontSize: 11, color: '#ffb347', margin:'0 0 5px 0'}}>영상 업로드</p>
-                  <input type="file" accept="video/*" onChange={e => handleFileProcess(e, 'video', (url)=>setNewM({...newM, video: url}))} />
+
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 11, color: "#ffb347", margin: "0 0 5px 0" }}>영상 업로드 (대용량 자동압축)</p>
+                  <input type="file" accept="video/*" onChange={(e) => handleFileProcess(e, "video", (url) => setNewM({ ...newM, video: url }))} />
                   {newM.video && <video src={newM.video} style={modalStyles.previewImg} controls />}
                 </div>
               </div>
-              <button onClick={saveMember} style={modalStyles.actionBtn}>{editingId ? "수정 완료" : "목록 추가"}</button>
+
+              <button onClick={saveMember} style={modalStyles.actionBtn}>
+                {editingId ? "수정 완료" : "목록 추가"}
+              </button>
             </div>
+
             <div style={modalStyles.list}>
-              {members.map(m => (
+              {members.map((m) => (
                 <div key={m.id} style={modalStyles.listItem}>
-                  <span>[{m.loc}] {m.name} ({m.age ? m.age + '세' : '나이미정'})</span>
+                  <span>[{m.loc}] {m.name} ({m.age ? m.age + "세" : "나이미정"})</span>
                   <div>
                     <button onClick={() => startEdit(m)} style={modalStyles.editBtn}>수정</button>
-                    <button onClick={async () => {
-                      if (confirm("삭제하시겠습니까?")) {
-                        const filtered = members.filter(x => x.id !== m.id);
-                        setMembers(filtered);
-                        await syncToFirebase({ members: filtered });
-                      }
-                    }} style={modalStyles.delBtn}>삭제</button>
+                    <button
+                      onClick={async () => {
+                        if (confirm("삭제하시겠습니까?")) {
+                          const filtered = members.filter((x) => x.id !== m.id);
+                          setMembers(filtered);
+                          await syncToFirebase({ members: filtered });
+                        }
+                      }}
+                      style={modalStyles.delBtn}
+                    >
+                      삭제
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
+
           </div>
         </div>
       )}
@@ -364,35 +548,60 @@ export default function AdminCMS({
       {/* [모달 2] 비디오 관리 */}
       {showVideoModal && (
         <div style={modalStyles.overlay}>
-          <div id="video-modal-scroll" style={{...modalStyles.container, border: '2px solid #2196F3'}}>
+          <div id="video-modal-scroll" style={{ ...modalStyles.container, border: "2px solid #2196F3" }}>
             <div style={modalStyles.header}>
-              <h2 style={{color: '#2196F3'}}>{editingVideoId ? "영상 정보 수정" : "새 영상 업로드"}</h2>
-              <button onClick={() => {setShowVideoModal(false); setEditingVideoId(null); setVideoDesc(""); setTempVideoUrl("");}} style={modalStyles.closeBtn}>닫기</button>
+              <h2 style={{ color: "#2196F3" }}>{editingVideoId ? "영상 정보 수정" : "새 영상 업로드"}</h2>
+              <button
+                onClick={() => { setShowVideoModal(false); setEditingVideoId(null); setVideoDesc(""); setTempVideoUrl(""); }}
+                style={modalStyles.closeBtn}
+              >
+                닫기
+              </button>
             </div>
+
             <div style={modalStyles.formBox}>
-              <select value={videoCategory} onChange={e => setVideoCategory(e.target.value)} style={modalStyles.select}>
-                {videoCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              <select value={videoCategory} onChange={(e) => setVideoCategory(e.target.value)} style={modalStyles.select}>
+                {videoCategories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
               </select>
-              <input style={{...modalStyles.input, marginTop: 10}} placeholder="영상 설명" value={videoDesc} onChange={e=>setVideoDesc(e.target.value)} />
-              <input type="file" accept="video/*" onChange={e => handleFileProcess(e, 'video', (url) => setTempVideoUrl(url))} />
-              {tempVideoUrl && <video src={tempVideoUrl} style={{width: '100%', maxHeight: 150, marginTop: 10}} controls />}
-              <button onClick={saveVideoToGallery} style={{...modalStyles.actionBtn, background: '#2196F3'}}>갤러리 반영</button>
+
+              <input style={{ ...modalStyles.input, marginTop: 10 }} placeholder="영상 설명" value={videoDesc} onChange={(e) => setVideoDesc(e.target.value)} />
+
+              <input
+                type="file"
+                accept="video/*"
+                onChange={(e) => handleFileProcess(e, "video", (url) => setTempVideoUrl(url))}
+              />
+
+              {tempVideoUrl && <video src={tempVideoUrl} style={{ width: "100%", maxHeight: 150, marginTop: 10 }} controls />}
+
+              <button onClick={saveVideoToGallery} style={{ ...modalStyles.actionBtn, background: "#2196F3" }}>
+                갤러리 반영
+              </button>
             </div>
+
             <div style={modalStyles.list}>
-              {videos.map(v => (
+              {videos.map((v) => (
                 <div key={v.id} style={modalStyles.listItem}>
-                  <video src={v.url} style={{width: 60, height: 40, objectFit:'cover', borderRadius: 4}} />
-                  <div style={{flex:1, marginLeft: 10}}><p style={{fontSize: 10, color: '#888', margin: 0}}>{v.description}</p></div>
-                  <button onClick={async () => {
-                    if (confirm("삭제하시겠습니까?")) {
-                      const filtered = videos.filter(x => x.id !== v.id);
-                      setVideos(filtered);
-                      await syncToFirebase({ videos: filtered });
-                    }
-                  }} style={modalStyles.delBtn}>삭제</button>
+                  <video src={v.url} style={{ width: 60, height: 40, objectFit: "cover", borderRadius: 4 }} />
+                  <div style={{ flex: 1, marginLeft: 10 }}>
+                    <p style={{ fontSize: 10, color: "#888", margin: 0 }}>{v.description}</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (confirm("삭제하시겠습니까?")) {
+                        const filtered = videos.filter((x) => x.id !== v.id);
+                        setVideos(filtered);
+                        await syncToFirebase({ videos: filtered });
+                      }
+                    }}
+                    style={modalStyles.delBtn}
+                  >
+                    삭제
+                  </button>
                 </div>
               ))}
             </div>
+
           </div>
         </div>
       )}
@@ -401,39 +610,200 @@ export default function AdminCMS({
 }
 
 const cmsStyles = {
-  cms: { position: 'fixed', right: 0, top: 0, height: '100vh', width: '340px', background: '#111', borderLeft: '1px solid #333', zIndex: 11000, color: '#fff', boxSizing: 'border-box', overflowY: 'auto' },
-  toggleArea: { display: 'flex', background: '#000', padding: '10px', gap: '5px', position: 'sticky', top: 0, zIndex: 12000 },
-  tabBtn: { flex: 1, padding: '12px 5px', border: 'none', borderRadius: '8px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' },
-  mainTitle: { color: '#ffb347', fontSize: '1.1rem', borderBottom: '1px solid #333', paddingBottom: 10, marginBottom: 20, textAlign: 'center' },
-  sectionBox: { background: 'rgba(255,255,255,0.02)', border: '1px solid #333', padding: '15px', borderRadius: '12px', marginBottom: 20 },
-  sectionLabel: { fontSize: '13px', fontWeight: 'bold', color: '#ffb347', display: 'block', marginBottom: 15 },
-  modeBtn: { flex: 1, padding: '8px', fontSize: '11px', borderRadius: '5px', border: 'none', fontWeight: 'bold', cursor: 'pointer' },
-  fieldGroup: { marginBottom: 15, paddingBottom: 10, borderBottom: '1px solid #222' },
-  fieldLabel: { fontSize: '11px', color: '#aaa', display: 'block', marginBottom: 5 },
-  fileInput: { width: '100%', fontSize: '11px', color: '#888' },
-  checkText: { fontSize: '10px', color: '#4CAF50', margin: '5px 0' },
-  rangeRow: { display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginTop: 10, color: '#888' },
-  rangeGrid: { display: 'flex', gap: 10, marginTop: 10, fontSize: '10px', color: '#888' },
-  bannerList: { display: 'flex', gap: 8, overflowX: 'auto', marginTop: 10, paddingBottom: 5 },
-  bannerThumb: { position: 'relative', flexShrink: 0, width: 80, height: 45, borderRadius: 4, overflow: 'hidden', border: '1px solid #444' },
-  bannerDelBtn: { position: 'absolute', top: 2, right: 2, background: 'rgba(255,0,0,0.8)', color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, fontSize: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
-  modalOpenBtn: { width: '100%', padding: '12px', background: '#ffb347', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' },
-  textInput: { width: '100%', padding: '12px', background: '#000', border: '1px solid #333', color: '#fff', borderRadius: '8px', fontSize: '12px', boxSizing: 'border-box' },
-  saveExitBtn: { width: '100%', padding: '18px', background: '#fff', color: '#000', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', marginTop: 10 }
+  cms: {
+    position: "fixed",
+    right: 0,
+    top: 0,
+    height: "100vh",
+    width: "340px",
+    background: "#111",
+    borderLeft: "1px solid #333",
+    zIndex: 11000,
+    color: "#fff",
+    boxSizing: "border-box",
+    overflowY: "auto",
+  },
+
+  toggleArea: {
+    display: "flex",
+    background: "#000",
+    padding: "10px",
+    gap: "5px",
+    position: "sticky",
+    top: 0,
+    zIndex: 12000,
+  },
+
+  tabBtn: {
+    flex: 1,
+    padding: "12px 5px",
+    border: "none",
+    borderRadius: "8px",
+    fontSize: "11px",
+    fontWeight: "bold",
+    cursor: "pointer",
+    transition: "0.2s",
+  },
+
+  mainTitle: {
+    color: "#ffb347",
+    fontSize: "1.1rem",
+    borderBottom: "1px solid #333",
+    paddingBottom: 10,
+    marginBottom: 20,
+    textAlign: "center",
+  },
+
+  sectionBox: {
+    background: "rgba(255,255,255,0.02)",
+    border: "1px solid #333",
+    padding: "15px",
+    borderRadius: "12px",
+    marginBottom: 20,
+  },
+
+  sectionLabel: {
+    fontSize: "13px",
+    fontWeight: "bold",
+    color: "#ffb347",
+    display: "block",
+    marginBottom: 15,
+  },
+
+  modeBtn: {
+    flex: 1,
+    padding: "8px",
+    fontSize: "11px",
+    borderRadius: "5px",
+    border: "none",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+
+  fieldGroup: {
+    marginBottom: 15,
+    paddingBottom: 10,
+    borderBottom: "1px solid #222",
+  },
+
+  fieldLabel: {
+    fontSize: "11px",
+    color: "#aaa",
+    display: "block",
+    marginBottom: 5,
+  },
+
+  fileInput: {
+    width: "100%",
+    fontSize: "11px",
+    color: "#888",
+  },
+
+  checkText: {
+    fontSize: "10px",
+    color: "#4CAF50",
+    margin: "5px 0",
+  },
+
+  rangeRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    fontSize: "10px",
+    marginTop: 10,
+    color: "#888",
+  },
+
+  rangeGrid: {
+    display: "flex",
+    gap: 10,
+    marginTop: 10,
+    fontSize: "10px",
+    color: "#888",
+  },
+
+  bannerList: {
+    display: "flex",
+    gap: 8,
+    overflowX: "auto",
+    marginTop: 10,
+    paddingBottom: 5,
+  },
+
+  bannerThumb: {
+    position: "relative",
+    flexShrink: 0,
+    width: 80,
+    height: 45,
+    borderRadius: 4,
+    overflow: "hidden",
+    border: "1px solid #444",
+  },
+
+  bannerDelBtn: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    background: "rgba(255,0,0,0.8)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "50%",
+    width: 18,
+    height: 18,
+    fontSize: "10px",
+    cursor: "pointer",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+
+  modalOpenBtn: {
+    width: "100%",
+    padding: "12px",
+    background: "#ffb347",
+    border: "none",
+    borderRadius: "8px",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+
+  textInput: {
+    width: "100%",
+    padding: "12px",
+    background: "#000",
+    border: "1px solid #333",
+    color: "#fff",
+    borderRadius: "8px",
+    fontSize: "12px",
+    boxSizing: "border-box",
+  },
+
+  saveExitBtn: {
+    width: "100%",
+    padding: "18px",
+    background: "#fff",
+    color: "#000",
+    border: "none",
+    borderRadius: "10px",
+    fontWeight: "bold",
+    cursor: "pointer",
+    marginTop: 10,
+  },
 };
 
+
 const modalStyles = {
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 12000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  container: { width: '100%', maxWidth: '550px', maxHeight: '90vh', background: '#111', padding: '25px', borderRadius: '20px', border: '2px solid #ffb347', overflowY: 'auto' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  closeBtn: { background: '#ff4d4d', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '6px', cursor: 'pointer' },
-  formBox: { background: 'rgba(255,255,255,0.03)', padding: 15, borderRadius: '12px', marginBottom: 20 },
-  select: { flex: 1, padding: '10px', background: '#000', color: '#fff', border: '1px solid #444', borderRadius: '6px' },
-  input: { width: '100%', padding: '12px', background: '#000', border: '1px solid #333', color: '#fff', borderRadius: '8px', boxSizing: 'border-box' },
-  previewImg: { width: '100%', height: 100, objectFit: 'contain', background: '#000', marginTop: 10, borderRadius: 8 },
-  actionBtn: { width: '100%', padding: '15px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', marginTop: 10 },
-  list: { background: '#000', borderRadius: '10px', border: '1px solid #222' },
-  listItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #111' },
-  editBtn: { background: 'none', color: '#4CAF50', border: 'none', cursor: 'pointer', fontWeight: 'bold' },
-  delBtn: { background: 'none', color: '#ff4d4d', border: 'none', cursor: 'pointer', marginLeft: 10 }
+  overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.95)", zIndex: 12000, display: "flex", justifyContent: "center", alignItems: "center", padding: 20 },
+  container: { width: "100%", maxWidth: "550px", maxHeight: "90vh", background: "#111", padding: "25px", borderRadius: "20px", border: "2px solid #ffb347", overflowY: "auto" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  closeBtn: { background: "#ff4d4d", color: "#fff", border: "none", padding: "8px 15px", borderRadius: "6px", cursor: "pointer" },
+  formBox: { background: "rgba(255,255,255,0.03)", padding: 15, borderRadius: "12px", marginBottom: 20 },
+  select: { flex: 1, padding: "10px", background: "#000", color: "#fff", border: "1px solid #444", borderRadius: "6px" },
+  input: { width: "100%", padding: "12px", background: "#000", border: "1px solid #333", color: "#fff", borderRadius: "8px", boxSizing: "border-box" },
+  previewImg: { width: "100%", height: 100, objectFit: "contain", background: "#000", marginTop: 10, borderRadius: 8 },
+  actionBtn: { width: "100%", padding: "15px", background: "#4CAF50", color: "#fff", border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", marginTop: 10 },
+  list: { background: "#000", borderRadius: "10px", border: "1px solid #222" },
+  listItem: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", borderBottom: "1px solid #111" },
+  editBtn: { background: "none", color: "#4CAF50", border: "none", cursor: "pointer", fontWeight: "bold" },
+  delBtn: { background: "none", color: "#ff4d4d", border: "none", cursor: "pointer", marginLeft: 10 }
 };
