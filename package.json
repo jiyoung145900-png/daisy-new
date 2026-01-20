@@ -13,8 +13,6 @@
     "deploy": "gh-pages -d dist"
   },
   "dependencies": {
-    "@ffmpeg/ffmpeg": "^0.12.15",
-    "@ffmpeg/util": "^0.12.2",
     "firebase": "^12.7.0",
     "framer-motion": "^12.23.26",
     "howler": "^2.2.4",
