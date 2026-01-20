@@ -1,7 +1,17 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { db } from "./firebase"; 
 // ★ [핵심] Firestore 함수들 import
-import { doc, onSnapshot, setDoc, getDoc, updateDoc } from "firebase/firestore"; 
+import {
+  doc,
+  onSnapshot,
+  setDoc,
+  getDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs
+} from "firebase/firestore";
 import LandingPage from "./LandingPage";
 import Dashboard from "./Dashboard";
 import AdminCMS from "./AdminCMS";
@@ -231,41 +241,72 @@ export default function App() {
   };
 
   // ★ [추가됨] 회원가입 액션 (LandingPage로 전달됨)
-  const handleSignupAction = async (id, pw, nickname, referralCode) => {
-      if (!id || !pw) return alert(t.input_id_pw || "ID/PW Required");
-      
-      try {
-          const userRef = doc(db, "users", id);
-          const userSnap = await getDoc(userRef);
-          
-          if (userSnap.exists()) {
-              alert(t.id_exists || "ID exists");
-              return;
-          }
+ const handleSignupAction = async (id, pw, nickname, referralCode) => {
+  if (!id || !pw) return alert(t.input_id_pw || "ID/PW Required");
 
-          const newUser = {
-              id,
-              password: pw,
-              nickname: nickname || id,
-              referral: referralCode || "", // 추천인 코드 저장
-              diamond: 0,
-              rewards: 0,
-              lastActive: Date.now(),
-              createdAt: new Date().toISOString()
-          };
+  try {
+    const cleanId = String(id).trim();
+    const cleanPw = String(pw).trim();
+    const cleanNick = (nickname && String(nickname).trim()) || cleanId;
+    const cleanRef = (referralCode && String(referralCode).trim()) || "";
 
-          // DB 저장
-          await setDoc(userRef, newUser);
-          
-          // 로컬 목록에도 추가 (즉각 반응용)
-          setUsers(prev => [...prev, newUser]);
-          
-          alert(t.signup_ok || "Welcome!");
-      } catch(e) {
-          console.error(e);
-          alert("Signup Error");
+    if (!cleanId || !cleanPw) {
+      return alert(t.input_id_pw || "ID/PW Required");
+    }
+
+    // 1) 아이디 중복 확인
+    const userRef = doc(db, "users", cleanId);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      alert(t.id_exists || "ID exists");
+      return;
+    }
+
+    // 2) ✅ 추천인 코드(DB) 검증: users 컬렉션에서 refCode가 일치하는 유저 찾기
+    // - 여기서 referralOwnerId는 "추천인 유저의 id"가 됨
+    let referralOwnerId = "";
+    if (cleanRef) {
+      const q = query(collection(db, "users"), where("refCode", "==", cleanRef));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        alert(lang === "ko" ? "유효하지 않은 추천인 코드입니다." : "Invalid referral code.");
+        return;
       }
-  };
+
+      // refCode는 유니크인 게 이상적 (여러 개면 첫 번째 사용)
+      referralOwnerId = snap.docs[0].id;
+    }
+
+    // 3) 유저 생성
+    const newUser = {
+      id: cleanId,
+      password: cleanPw,
+      nickname: cleanNick,
+
+      // ✅ 저장 방식: 둘 다 저장(추적/정산 편함)
+      referral: referralOwnerId, // 추천인 유저ID (없으면 "")
+      referralCode: cleanRef,    // 입력된 추천인 코드 원문 (없으면 "")
+
+      diamond: 0,
+      rewards: 0,
+      lastActive: Date.now(),
+      createdAt: new Date().toISOString(),
+    };
+
+    // 4) DB 저장
+    await setDoc(userRef, newUser);
+
+    // 5) 로컬 목록에도 추가 (즉각 반응용)
+    setUsers((prev) => [...prev, newUser]);
+
+    alert(t.signup_ok || "Sign up successful!");
+  } catch (e) {
+    console.error(e);
+    alert("Signup Error");
+  }
+};
+
 
   const handleLogout = () => {
     setLoggedIn(false); setIsAdmin(false); setIsGuest(false); setIsIndependentAdmin(false);
