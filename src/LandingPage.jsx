@@ -1,11 +1,11 @@
 import { useState } from "react";
-// ✅ Firebase 관련
+// ✅ Firebase 관련 기능 불러오기
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "./firebase"; 
 
-/* =====================
-   LANDING PAGE (공백 자동 제거 + 탐정 모드 탑재)
-===================== */
+/* =================================================================
+   LANDING PAGE (완성본: 공백 제거 + DB 직통 확인 기능 탑재)
+================================================================= */
 export default function LandingPage({ 
   t, lang, users, setUsers, onLogin, onGuestLogin, 
   hero, videoURL, logo, logoSize, logoPos, styles, isAdmin,
@@ -17,20 +17,20 @@ export default function LandingPage({
   const [ref, setRef] = useState("");
 
   /* =====================
-      회원가입 로직 (공백 강력 제거 ✂️)
+       1. 회원가입 로직 (공백 강력 제거 ✂️)
   ===================== */
   const signup = async () => {
-    // 1. 앞뒤 공백 무조건 제거
+    // 앞뒤 공백 무조건 제거
     const cleanId = id.trim();
     const cleanPw = pw.trim();
     const cleanRef = ref.trim();
 
-    // 2. 입력값 확인
+    // 입력값 확인
     if (!cleanId || !cleanPw || !cleanRef) {
       return alert(lang === "ko" ? "모든 정보를 입력해주세요." : "Please fill all info.");
     }
 
-    // 3. 이미 존재하는 아이디인지 확인
+    // 이미 존재하는 아이디인지 확인
     if (users.find(u => u.id === cleanId)) {
       return alert(lang === "ko" ? "이미 존재하는 아이디입니다." : "ID already exists.");
     }
@@ -38,7 +38,7 @@ export default function LandingPage({
     let agentName = "";
     let isValidRef = false;
 
-    // 4. 초대 코드 검증
+    // 초대 코드 검증
     if (cleanRef === "ADMIN") {
       isValidRef = true;
       agentName = "ADMIN";
@@ -57,7 +57,6 @@ export default function LandingPage({
             isValidRef = true;
             agentName = docSnap.data().name;
           } else {
-            // 실패 시 안내
             return alert(lang === "ko" ? "존재하지 않는 초대 코드입니다." : "Invalid referral code.");
           }
         } catch (error) {
@@ -69,12 +68,12 @@ export default function LandingPage({
 
     if (!isValidRef) return;
 
-    // 5. 유저 생성 (공백 제거된 cleanId 사용!)
+    // 유저 생성 (공백 제거된 cleanId 사용!)
     const startNo = 2783982189;
     const generatedNo = (startNo + users.length).toString();
 
     const newUser = { 
-      id: cleanId, // 👈 여기가 핵심! 공백 없는 아이디로 저장
+      id: cleanId, 
       pw: cleanPw,
       no: generatedNo,
       referral: cleanRef,
@@ -96,10 +95,55 @@ export default function LandingPage({
     setMode("login");
   };
 
-  // ✅ 엔터키 쳤을 때도 공백 제거하고 로그인
+  /* =====================
+       2. 로그인 로직 (DB 직통 확인 기능 추가 🕵️‍♂️)
+  ===================== */
+  const handleLogin = async () => {
+    const cleanId = id.trim();
+    const cleanPw = pw.trim();
+
+    if (!cleanId || !cleanPw) {
+      return alert(lang === "ko" ? "아이디와 비번을 입력하세요." : "Enter ID & PW.");
+    }
+
+    // 1단계: 내 컴퓨터(users 배열)에 있는지 먼저 확인 (빠른 로그인)
+    const localUser = users.find(u => u.id === cleanId && u.pw === cleanPw);
+    if (localUser) {
+      onLogin(cleanId, cleanPw);
+      return;
+    }
+
+    // 2단계: 없으면 Firebase 본사에 직접 물어봅니다! (데이터 로딩 지연 해결)
+    try {
+      const docRef = doc(db, "users", cleanId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const userData = docSnap.data();
+        if (userData.pw === cleanPw) {
+          // 비밀번호까지 맞으면 로그인 성공! 
+          // (내 컴퓨터 명단에도 강제로 추가해줌)
+          const newUsersList = [...users, userData];
+          setUsers(newUsersList); 
+          
+          // 로그인 진행
+          onLogin(cleanId, cleanPw);
+        } else {
+          alert(lang === "ko" ? "비밀번호가 틀렸습니다." : "Wrong Password.");
+        }
+      } else {
+        alert(lang === "ko" ? "존재하지 않는 아이디입니다." : "ID not found.");
+      }
+    } catch (error) {
+      console.error("로그인 확인 중 에러:", error);
+      alert("Error checking login.");
+    }
+  };
+
+  // ✅ 엔터키 쳤을 때도 새로 만든 handleLogin 사용
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
-      mode === "login" ? onLogin(id.trim(), pw.trim()) : signup();
+      mode === "login" ? handleLogin() : signup();
     }
   };
 
@@ -223,8 +267,8 @@ export default function LandingPage({
 
               <button
                 style={{ ...styles.primaryBtn, height: "65px", fontSize: "20px", fontWeight: "900", marginTop: "10px" }}
-                // 👇 버튼 클릭 시에도 공백(.trim) 제거하고 보냄
-                onClick={() => mode === "login" ? onLogin(id.trim(), pw.trim()) : signup()}
+                // 👇 기존 버튼 로직을 handleLogin으로 교체!
+                onClick={() => mode === "login" ? handleLogin() : signup()}
               >
                 {mode === "login" ? t.login : t.signup}
               </button>
