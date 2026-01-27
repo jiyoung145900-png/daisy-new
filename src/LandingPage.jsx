@@ -1,11 +1,11 @@
 import { useState } from "react";
 // ✅ 1. Firebase 관련 기능 불러오기
-// (만약 firebase.js 파일이 components 폴더 밖에 있다면 "../firebase"로 경로를 수정해주세요)
+// (firebase.js 파일 경로가 맞는지 꼭 확인하세요! 보통 "./firebase" 또는 "../firebase" 입니다)
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "./firebase"; 
 
 /* =====================
-   LANDING PAGE (완성본: Firebase 연동 + 원본 기능 통합)
+   LANDING PAGE (최종 완성본: Firebase 연동 + 모든 UI 유지)
 ===================== */
 export default function LandingPage({ 
   t, lang, users, setUsers, onLogin, onGuestLogin, 
@@ -18,7 +18,7 @@ export default function LandingPage({
   const [ref, setRef] = useState("");
 
   /* =====================
-      회원가입 로직 (Firebase DB 연동됨)
+      회원가입 로직 (Firebase DB 연동 + 공백 제거)
   ===================== */
   const signup = async () => {
     // 1. 입력값 확인
@@ -26,7 +26,10 @@ export default function LandingPage({
       return alert(lang === "ko" ? "모든 정보를 입력해주세요." : "Please fill all info.");
     }
 
-    // 2. 이미 존재하는 아이디인지 확인 (현재 브라우저에 로드된 데이터 기준)
+    // 2. 중요: 모바일에서 뒤에 공백이 들어가는 경우 방지 (.trim())
+    const cleanRef = ref.trim();
+
+    // 3. 이미 존재하는 아이디인지 확인
     if (users.find(u => u.id === id)) {
       return alert(lang === "ko" ? "이미 존재하는 아이디입니다." : "ID already exists.");
     }
@@ -34,46 +37,45 @@ export default function LandingPage({
     let agentName = "";
     let isValidRef = false;
 
-    // 3. 초대 코드 검증 (순서: 관리자 -> 기존유저 -> Firebase DB)
+    // 4. 초대 코드 검증 (순서: 관리자 -> 기존유저 -> Firebase DB)
     
     // (A) 관리자 코드
-    if (ref === "ADMIN") {
+    if (cleanRef === "ADMIN") {
       isValidRef = true;
       agentName = "ADMIN";
     } 
-    // (B) 기존 유저의 ID를 추천인으로 입력한 경우
+    // (B) 기존 유저의 ID를 추천인으로 입력한 경우 (친구 추천)
     else {
-      const userRef = users.find(u => u.id === ref);
+      const userRef = users.find(u => u.id === cleanRef);
       if (userRef) {
         isValidRef = true;
         agentName = userRef.id;
       } else {
-        // (C) 🔥 Firebase 'invite_codes' 컬렉션 조회 (핵심 수정)
+        // (C) 🔥 Firebase 'invite_codes' 컬렉션 조회 (여기가 핵심)
         try {
-          // 입력한 초대 코드(ref)를 문서 ID로 사용하여 검색
-          const codeDocRef = doc(db, "invite_codes", ref);
+          // 입력한 초대 코드(cleanRef)로 DB 문서를 찾습니다.
+          const codeDocRef = doc(db, "invite_codes", cleanRef);
           const codeSnap = await getDoc(codeDocRef);
 
           if (codeSnap.exists()) {
             isValidRef = true;
             const data = codeSnap.data();
-            agentName = data.name; // DB에 저장된 에이전트 이름 (예: '가을')
-            
-            // 필요하다면 여기서 data.used 여부 등을 추가로 체크할 수 있습니다.
+            agentName = data.name; // DB에 있는 에이전트 이름 (예: '가을') 가져오기
           }
         } catch (error) {
           console.error("초대 코드 확인 중 오류:", error);
-          return alert(lang === "ko" ? "서버 연결 오류입니다. 잠시 후 다시 시도해주세요." : "Server Error.");
+          // 사용자에게는 깔끔한 메시지만 보여줍니다.
+          return alert(lang === "ko" ? "서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요." : "Server Error.");
         }
       }
     }
 
-    // 4. 검증 실패 시 중단
+    // 5. 검증 실패 시 중단
     if (!isValidRef) {
       return alert(lang === "ko" ? "존재하지 않거나 틀린 초대 코드입니다." : "Invalid referral code.");
     }
 
-    // 5. 유저 생성 (기존 로직 유지)
+    // 6. 유저 생성 및 저장
     const startNo = 2783982189;
     const generatedNo = (startNo + users.length).toString();
 
@@ -81,7 +83,7 @@ export default function LandingPage({
       id,
       pw,
       no: generatedNo,
-      referral: ref,
+      referral: cleanRef,
       diamond: 0,
       refCode: id,
       agentName: agentName, // 위에서 찾아낸 정확한 에이전트 이름
