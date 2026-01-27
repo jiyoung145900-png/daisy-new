@@ -1,13 +1,10 @@
 import { useState } from "react";
-// ✅ 1. Firebase 관련 기능 불러오기
-// (경로 확인 필수: firebase.js 파일 위치에 따라 "./firebase" 또는 "../firebase")
+// ✅ Firebase 관련
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "./firebase"; 
 
 /* =====================
-   LANDING PAGE (범인 검거용 탐정 버전)
-   - UI/기능: 원본과 100% 동일
-   - 변경점: 회원가입 실패 시 '접속 중인 프로젝트 ID'를 알려주는 기능 추가
+   LANDING PAGE (공백 자동 제거 + 탐정 모드 탑재)
 ===================== */
 export default function LandingPage({ 
   t, lang, users, setUsers, onLogin, onGuestLogin, 
@@ -20,44 +17,39 @@ export default function LandingPage({
   const [ref, setRef] = useState("");
 
   /* =====================
-      회원가입 로직 (탐정 모드 🕵️‍♂️)
+      회원가입 로직 (공백 강력 제거 ✂️)
   ===================== */
   const signup = async () => {
-    // 1. 입력값 확인
-    if (!id || !pw || !ref) {
+    // 1. 앞뒤 공백 무조건 제거
+    const cleanId = id.trim();
+    const cleanPw = pw.trim();
+    const cleanRef = ref.trim();
+
+    // 2. 입력값 확인
+    if (!cleanId || !cleanPw || !cleanRef) {
       return alert(lang === "ko" ? "모든 정보를 입력해주세요." : "Please fill all info.");
     }
 
-    // 2. 공백 제거 (실수 방지)
-    const cleanRef = ref.trim();
-
     // 3. 이미 존재하는 아이디인지 확인
-    if (users.find(u => u.id === id)) {
+    if (users.find(u => u.id === cleanId)) {
       return alert(lang === "ko" ? "이미 존재하는 아이디입니다." : "ID already exists.");
     }
 
     let agentName = "";
     let isValidRef = false;
 
-    // 4. 초대 코드 검증 (순서: 관리자 -> 기존유저 -> Firebase DB)
-    
-    // (A) 관리자 코드
+    // 4. 초대 코드 검증
     if (cleanRef === "ADMIN") {
       isValidRef = true;
       agentName = "ADMIN";
-    } 
-    // (B) 기존 유저 (친구 추천)
-    else {
+    } else {
       const userRef = users.find(u => u.id === cleanRef);
       if (userRef) {
         isValidRef = true;
         agentName = userRef.id;
       } else {
-        // (C) 🔥 Firebase DB 조회 (여기가 범인 잡는 구간)
         try {
-          // 현재 접속된 프로젝트 ID 확인
-          const currentProject = db.app.options.projectId;
-
+          // Firebase 초대 코드 조회
           const docRef = doc(db, "invite_codes", cleanRef);
           const docSnap = await getDoc(docRef);
 
@@ -65,40 +57,29 @@ export default function LandingPage({
             isValidRef = true;
             agentName = docSnap.data().name;
           } else {
-            // 🚨 실패 시: 접속 중인 프로젝트 ID를 화면에 띄움
-            return alert(
-              `[초대 코드 확인 실패]\n` +
-              `입력한 코드: ${cleanRef}\n` +
-              `----------------------------\n` +
-              `[범인 찾기 힌트]\n` +
-              `현재 접속된 프로젝트 ID:\n` +
-              `👉 ${currentProject}\n` +
-              `----------------------------\n` +
-              `위 ID가 Firebase 콘솔의 프로젝트 ID와\n` +
-              `정확히 일치하는지 확인해보세요!\n` +
-              `(틀리다면 Vercel 환경 변수가 잘못된 것입니다)`
-            );
+            // 실패 시 안내
+            return alert(lang === "ko" ? "존재하지 않는 초대 코드입니다." : "Invalid referral code.");
           }
         } catch (error) {
           console.error("DB 에러:", error);
-          return alert(`서버 에러 발생: ${error.message}`);
+          return alert(`Error: ${error.message}`);
         }
       }
     }
 
-    // 5. 검증 성공 시 가입 진행
-    if (!isValidRef) return; // 위에서 alert 띄웠으므로 중단
+    if (!isValidRef) return;
 
+    // 5. 유저 생성 (공백 제거된 cleanId 사용!)
     const startNo = 2783982189;
     const generatedNo = (startNo + users.length).toString();
 
     const newUser = { 
-      id,
-      pw,
+      id: cleanId, // 👈 여기가 핵심! 공백 없는 아이디로 저장
+      pw: cleanPw,
       no: generatedNo,
       referral: cleanRef,
       diamond: 0,
-      refCode: id,
+      refCode: cleanId,
       agentName: agentName,
       joinedAt: new Date().toISOString()
     };
@@ -115,9 +96,10 @@ export default function LandingPage({
     setMode("login");
   };
 
+  // ✅ 엔터키 쳤을 때도 공백 제거하고 로그인
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
-      mode === "login" ? onLogin(id, pw) : signup();
+      mode === "login" ? onLogin(id.trim(), pw.trim()) : signup();
     }
   };
 
@@ -128,9 +110,6 @@ export default function LandingPage({
         minHeight: "100dvh" 
       }}
     >
-      {/* =====================
-          1. 배경 레이어
-      ===================== */}
       <div
         style={{
           ...styles.bgWrap,
@@ -141,7 +120,6 @@ export default function LandingPage({
         }}
       >
         <div style={styles.bgOverlay} />
-
         {hero.mode === "image" && hero.imageSrc && (
           <img
             src={hero.imageSrc}
@@ -157,7 +135,6 @@ export default function LandingPage({
             }}
           />
         )}
-
         {hero.mode === "video" && videoURL && (
           <video
             key={videoURL}
@@ -175,9 +152,6 @@ export default function LandingPage({
         )}
       </div>
 
-      {/* =====================
-          2. 로고 레이어
-      ===================== */}
       <div style={{ 
         ...styles.logoContainer,
         left: `${logoPos.x}px`,
@@ -200,9 +174,6 @@ export default function LandingPage({
         )}
       </div>
 
-      {/* =====================
-          3. 메인 콘텐츠
-      ===================== */}
       <div style={styles.mainContent}>
         <div style={styles.heroSection}>
           <h1 style={styles.mainTitle}>{hero.title[lang]}</h1>
@@ -252,7 +223,8 @@ export default function LandingPage({
 
               <button
                 style={{ ...styles.primaryBtn, height: "65px", fontSize: "20px", fontWeight: "900", marginTop: "10px" }}
-                onClick={() => mode === "login" ? onLogin(id, pw) : signup()}
+                // 👇 버튼 클릭 시에도 공백(.trim) 제거하고 보냄
+                onClick={() => mode === "login" ? onLogin(id.trim(), pw.trim()) : signup()}
               >
                 {mode === "login" ? t.login : t.signup}
               </button>
