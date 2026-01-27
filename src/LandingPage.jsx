@@ -1,7 +1,7 @@
 import { useState } from "react";
 // ✅ Firebase 관련 기능 불러오기
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "./firebase"; 
+import { db } from "../firebase"; 
 
 /* =================================================================
    LANDING PAGE (완성본: 공백 제거 + DB 직통 확인 기능 탑재)
