@@ -1,7 +1,11 @@
 import { useState } from "react";
+// ✅ 1. Firebase 관련 기능 불러오기
+// (만약 firebase.js 파일이 components 폴더 밖에 있다면 "../firebase"로 경로를 수정해주세요)
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "./firebase"; 
 
 /* =====================
-   LANDING PAGE (순차 고유번호 2783982189 및 원본 기능 통합)
+   LANDING PAGE (완성본: Firebase 연동 + 원본 기능 통합)
 ===================== */
 export default function LandingPage({ 
   t, lang, users, setUsers, onLogin, onGuestLogin, 
@@ -14,26 +18,62 @@ export default function LandingPage({
   const [ref, setRef] = useState("");
 
   /* =====================
-     회원가입 로직 (원본 유지)
+      회원가입 로직 (Firebase DB 연동됨)
   ===================== */
   const signup = async () => {
+    // 1. 입력값 확인
     if (!id || !pw || !ref) {
       return alert(lang === "ko" ? "모든 정보를 입력해주세요." : "Please fill all info.");
     }
 
-    const agents = JSON.parse(localStorage.getItem("daisy_agents") || "[]");
-    const foundAgent = agents.find(a => a.code === ref);
-    const isUserRef = users.find(u => u.id === ref);
-    const isMaster = ref === "ADMIN";
-
-    if (!foundAgent && !isUserRef && !isMaster) {
-      return alert(lang === "ko" ? "존재하지 않거나 틀린 초대 코드입니다." : "Invalid referral code.");
-    }
-
+    // 2. 이미 존재하는 아이디인지 확인 (현재 브라우저에 로드된 데이터 기준)
     if (users.find(u => u.id === id)) {
       return alert(lang === "ko" ? "이미 존재하는 아이디입니다." : "ID already exists.");
     }
 
+    let agentName = "";
+    let isValidRef = false;
+
+    // 3. 초대 코드 검증 (순서: 관리자 -> 기존유저 -> Firebase DB)
+    
+    // (A) 관리자 코드
+    if (ref === "ADMIN") {
+      isValidRef = true;
+      agentName = "ADMIN";
+    } 
+    // (B) 기존 유저의 ID를 추천인으로 입력한 경우
+    else {
+      const userRef = users.find(u => u.id === ref);
+      if (userRef) {
+        isValidRef = true;
+        agentName = userRef.id;
+      } else {
+        // (C) 🔥 Firebase 'invite_codes' 컬렉션 조회 (핵심 수정)
+        try {
+          // 입력한 초대 코드(ref)를 문서 ID로 사용하여 검색
+          const codeDocRef = doc(db, "invite_codes", ref);
+          const codeSnap = await getDoc(codeDocRef);
+
+          if (codeSnap.exists()) {
+            isValidRef = true;
+            const data = codeSnap.data();
+            agentName = data.name; // DB에 저장된 에이전트 이름 (예: '가을')
+            
+            // 필요하다면 여기서 data.used 여부 등을 추가로 체크할 수 있습니다.
+          }
+        } catch (error) {
+          console.error("초대 코드 확인 중 오류:", error);
+          return alert(lang === "ko" ? "서버 연결 오류입니다. 잠시 후 다시 시도해주세요." : "Server Error.");
+        }
+      }
+    }
+
+    // 4. 검증 실패 시 중단
+    if (!isValidRef) {
+      return alert(lang === "ko" ? "존재하지 않거나 틀린 초대 코드입니다." : "Invalid referral code.");
+    }
+
+    // 5. 유저 생성 (기존 로직 유지)
     const startNo = 2783982189;
     const generatedNo = (startNo + users.length).toString();
 
@@ -44,13 +84,14 @@ export default function LandingPage({
       referral: ref,
       diamond: 0,
       refCode: id,
-      agentName: foundAgent ? foundAgent.name : "",
+      agentName: agentName, // 위에서 찾아낸 정확한 에이전트 이름
       joinedAt: new Date().toISOString()
     };
 
     const updatedUsers = [...users, newUser];
     setUsers(updatedUsers);
 
+    // Firebase 유저 데이터 동기화
     if (syncToFirebase) {
       await syncToFirebase({ users: updatedUsers });
     }
@@ -70,11 +111,11 @@ export default function LandingPage({
     <div
       style={{
         ...styles.landingWrapper,
-        minHeight: "100dvh" // ✅ iOS 확대 방지 핵심
+        minHeight: "100dvh" // ✅ iOS 확대 방지 및 레이아웃 깨짐 방지
       }}
     >
       {/* =====================
-          1. 배경 레이어 (iOS 안전 구조)
+          1. 배경 레이어
       ===================== */}
       <div
         style={{
@@ -121,7 +162,7 @@ export default function LandingPage({
       </div>
 
       {/* =====================
-          2. 로고 레이어 (원본 유지)
+          2. 로고 레이어
       ===================== */}
       <div style={{ 
         ...styles.logoContainer,
@@ -146,7 +187,7 @@ export default function LandingPage({
       </div>
 
       {/* =====================
-          3. 메인 콘텐츠 (원본 유지)
+          3. 메인 콘텐츠
       ===================== */}
       <div style={styles.mainContent}>
         <div style={styles.heroSection}>
