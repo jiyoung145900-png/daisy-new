@@ -1,32 +1,32 @@
-import { useState, useMemo } from "react";
+﻿import { useState, useMemo } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
 /* =================================================================
-   LANDING PAGE (공백 ?�거 + DB 직통 ?�인 + admin/game ?�수 로그??지??
-   - 기존 기능 ?��?
-   - admin / game 로그??"존재?��? ?�는 ?�이?? 방�?
-   - pw/password ?�용 방어
-   - 복붙 ?�로??공백 방어
+   LANDING PAGE (怨듬갚 ?쒓굅 + DB 吏곹넻 ?뺤씤 + admin/game ?뱀닔 濡쒓렇??吏??
+   - 湲곗〈 湲곕뒫 ?좎?
+   - admin / game 濡쒓렇??"議댁옱?섏? ?딅뒗 ?꾩씠?? 諛⑹?
+   - pw/password ?쇱슜 諛⑹뼱
+   - 蹂듬텤 ?쒕줈??怨듬갚 諛⑹뼱
 ================================================================= */
 
-// ???�틸: ?�로??공백/?�상문자 ?�거 + trim
+// ???좏떥: ?쒕줈??怨듬갚/?댁긽臾몄옄 ?쒓굅 + trim
 const sanitizeText = (s) =>
   String(s ?? "")
     .replace(/\u200B/g, "") // zero-width space
     .replace(/\uFEFF/g, "") // BOM
     .trim();
 
-// ??ID??비교?�으로만 ?�문???�일 (?�요 ?�으�?.toLowerCase() ?�거 가??
+// ??ID??鍮꾧탳?⑹쑝濡쒕쭔 ?뚮Ц???듭씪 (?꾩슂 ?놁쑝硫?.toLowerCase() ?쒓굅 媛??
 const normalizeId = (s) => sanitizeText(s).toLowerCase();
 
-// ??비번?� 그�?�?trim�?
+// ??鍮꾨쾲? 洹몃?濡?trim留?
 const normalizePw = (s) => sanitizeText(s);
 
-// ???��? 객체?�서 비번 추출 (pw/password ?????�용)
+// ???좎? 媛앹껜?먯꽌 鍮꾨쾲 異붿텧 (pw/password ?????덉슜)
 const passOf = (u) => String(u?.password ?? u?.pw ?? "");
 
-// ??가?????�?�도 pw/password ?????�어???�환
+// ??媛??????λ룄 pw/password ?????ｌ뼱???명솚
 const buildUserPasswordFields = (pw) => {
   const clean = normalizePw(pw);
   return { pw: clean, password: clean };
@@ -57,34 +57,34 @@ export default function LandingPage({
 
   const texts = useMemo(
     () => ({
-      fillAll: isKo ? "모든 ?�보�??�력?�주?�요." : "Please fill all info.",
-      idExists: isKo ? "?��? 존재?�는 ?�이?�입?�다." : "ID already exists.",
-      invalidInvite: isKo ? "존재?��? ?�는 초�? 코드?�니??" : "Invalid referral code.",
-      needIdPw: isKo ? "?�이?��? 비번???�력?�세??" : "Enter ID & PW.",
-      wrongPw: isKo ? "비�?번호가 ?�?�습?�다." : "Wrong Password.",
-      idNotFound: isKo ? "존재?��? ?�는 ?�이?�입?�다." : "ID not found.",
-      signupOk: isKo ? "?�공?�으�?가?�되?�습?�다! 로그?�해주세??" : "Signup Success! Please Login.",
+      fillAll: isKo ? "紐⑤뱺 ?뺣낫瑜??낅젰?댁＜?몄슂." : "Please fill all info.",
+      idExists: isKo ? "?대? 議댁옱?섎뒗 ?꾩씠?붿엯?덈떎." : "ID already exists.",
+      invalidInvite: isKo ? "議댁옱?섏? ?딅뒗 珥덈? 肄붾뱶?낅땲??" : "Invalid referral code.",
+      needIdPw: isKo ? "?꾩씠?붿? 鍮꾨쾲???낅젰?섏꽭??" : "Enter ID & PW.",
+      wrongPw: isKo ? "鍮꾨?踰덊샇媛 ??몄뒿?덈떎." : "Wrong Password.",
+      idNotFound: isKo ? "議댁옱?섏? ?딅뒗 ?꾩씠?붿엯?덈떎." : "ID not found.",
+      signupOk: isKo ? "?깃났?곸쑝濡?媛?낅릺?덉뒿?덈떎! 濡쒓렇?명빐二쇱꽭??" : "Signup Success! Please Login.",
     }),
     [isKo]
   );
 
   /* =====================
-       1) ?�원가??(기존 기능 ?��? + ?�환 강화)
+       1) ?뚯썝媛??(湲곗〈 湲곕뒫 ?좎? + ?명솚 媛뺥솕)
   ===================== */
   const signup = async () => {
     const cleanIdRaw = sanitizeText(id);
     const cleanPw = normalizePw(pw);
     const cleanRef = sanitizeText(ref);
 
-    // ???�력 ?�인
+    // ???낅젰 ?뺤씤
     if (!cleanIdRaw || !cleanPw || !cleanRef) {
       return alert(texts.fillAll);
     }
 
-    // ??ID 비교??normalize(?�문?? ?�로???�거) 기�?
+    // ??ID 鍮꾧탳??normalize(?뚮Ц?? ?쒕줈???쒓굅) 湲곗?
     const cleanId = normalizeId(cleanIdRaw);
 
-    // ??로컬 중복 ?�인 (pw/password ?�용 고려 X, id�?체크)
+    // ??濡쒖뺄 以묐났 ?뺤씤 (pw/password ?쇱슜 怨좊젮 X, id留?泥댄겕)
     if (users.find((u) => normalizeId(u.id) === cleanId)) {
       return alert(texts.idExists);
     }
@@ -92,18 +92,18 @@ export default function LandingPage({
     let agentName = "";
     let isValidRef = false;
 
-    // ??초�? 코드 검�?(기존 ?��?)
+    // ??珥덈? 肄붾뱶 寃利?(湲곗〈 ?좎?)
     if (cleanRef === "ADMIN") {
       isValidRef = true;
       agentName = "ADMIN";
     } else {
-      // 1) 로컬 users?�서 초�?코드�?찾기(기존 ?��?)
+      // 1) 濡쒖뺄 users?먯꽌 珥덈?肄붾뱶濡?李얘린(湲곗〈 ?좎?)
       const userRef = users.find((u) => u.id === cleanRef);
       if (userRef) {
         isValidRef = true;
         agentName = userRef.id;
       } else {
-        // 2) Firestore invite_codes?�서 찾기(기존 ?��?)
+        // 2) Firestore invite_codes?먯꽌 李얘린(湲곗〈 ?좎?)
         try {
           const docRef = doc(db, "invite_codes", cleanRef);
           const docSnap = await getDoc(docRef);
@@ -115,7 +115,7 @@ export default function LandingPage({
             return alert(texts.invalidInvite);
           }
         } catch (error) {
-          console.error("DB ?�러:", error);
+          console.error("DB ?먮윭:", error);
           return alert(`Error: ${error.message}`);
         }
       }
@@ -123,17 +123,17 @@ export default function LandingPage({
 
     if (!isValidRef) return;
 
-    // ???��? ?�성 (기존 ?�드 ?��? + password??같이 ?�?�해???�환)
+    // ???좎? ?앹꽦 (湲곗〈 ?꾨뱶 ?좎? + password??媛숈씠 ??ν빐???명솚)
     const startNo = 2783982189;
     const generatedNo = (startNo + users.length).toString();
 
     const newUser = {
-      id: cleanId, // ??id??normalize??값으�??�???�래?��??�?�하�??�으�?cleanIdRaw�?바꿔????
-      ...buildUserPasswordFields(cleanPw), // pw + password 모두 ?�??
+      id: cleanId, // ??id??normalize??媛믪쑝濡?????먮옒?濡???ν븯怨??띠쑝硫?cleanIdRaw濡?諛붽퓭????
+      ...buildUserPasswordFields(cleanPw), // pw + password 紐⑤몢 ???
       no: generatedNo,
       referral: cleanRef,
       diamond: 0,
-      refCode: cleanId, // 기존 ?��?
+      refCode: cleanId, // 湲곗〈 ?좎?
       agentName,
       joinedAt: new Date().toISOString(),
     };
@@ -142,8 +142,8 @@ export default function LandingPage({
     setUsers(updatedUsers);
 
     if (syncToFirebase) {
-      // ?�️ ?�기??settings/global??users�??�째�??�는 구조�?undefined ?�거 ?�요?????�음.
-      // 기존 기능 ?��? 차원?�서 그�?�??�출
+      // ?좑툘 ?ш린??settings/global??users瑜??듭㎏濡??ｋ뒗 援ъ“硫?undefined ?쒓굅 ?꾩슂?????덉쓬.
+      // 湲곗〈 湲곕뒫 ?좎? 李⑥썝?먯꽌 洹몃?濡??몄텧
       await syncToFirebase({ users: updatedUsers });
     }
 
@@ -155,7 +155,7 @@ export default function LandingPage({
   };
 
   /* =====================
-       2) 로그??(admin/game 즉시 ?�과 + pw/password ?�환)
+       2) 濡쒓렇??(admin/game 利됱떆 ?듦낵 + pw/password ?명솚)
   ===================== */
   const handleLogin = async () => {
     const cleanIdRaw = sanitizeText(id);
@@ -167,13 +167,13 @@ export default function LandingPage({
 
     const cleanId = normalizeId(cleanIdRaw);
 
-    // ??[?�심] admin/game?� Landing?�서 DB 조회?��? 말고 App?�로 바로 ?��?
+    // ??[?듭떖] admin/game? Landing?먯꽌 DB 議고쉶?섏? 留먭퀬 App?쇰줈 諛붾줈 ?섍?
     if (cleanId === "admin" || cleanId === "game") {
       onLogin(cleanId, cleanPw);
       return;
     }
 
-    // 1?�계: 로컬 users 배열 먼�? ?�인 (빠른 로그??
+    // 1?④퀎: 濡쒖뺄 users 諛곗뿴 癒쇱? ?뺤씤 (鍮좊Ⅸ 濡쒓렇??
     const localUser = users.find(
       (u) => normalizeId(u.id) === cleanId && passOf(u) === cleanPw
     );
@@ -182,7 +182,7 @@ export default function LandingPage({
       return;
     }
 
-    // 2?�계: Firestore users 컬렉??직접 ?�인
+    // 2?④퀎: Firestore users 而щ젆??吏곸젒 ?뺤씤
     try {
       const docRef = doc(db, "users", cleanId);
       const docSnap = await getDoc(docRef);
@@ -191,7 +191,7 @@ export default function LandingPage({
         const userData = docSnap.data();
 
         if (passOf(userData) === cleanPw) {
-          // ??로컬 users?�도 추�?(기존 기능 ?��?)
+          // ??濡쒖뺄 users?먮룄 異붽?(湲곗〈 湲곕뒫 ?좎?)
           const newUsersList = [...users, userData];
           setUsers(newUsersList);
 
@@ -203,12 +203,12 @@ export default function LandingPage({
         alert(texts.idNotFound);
       }
     } catch (error) {
-      console.error("로그???�인 �??�러:", error);
+      console.error("濡쒓렇???뺤씤 以??먮윭:", error);
       alert("Error checking login.");
     }
   };
 
-  // ???�터???�작 ?��?
+  // ???뷀꽣???숈옉 ?좎?
   const handleKeyDown = (e) => {
     if (e.key === "Enter") {
       mode === "login" ? handleLogin() : signup();
@@ -346,7 +346,7 @@ export default function LandingPage({
                     border: "2px solid #ffb347",
                     background: "rgba(255,179,71,0.05)",
                   }}
-                  placeholder={isKo ? "�ʴ� �ڵ带 �Է��ϼ���" : "Enter Invitation Code"}
+                  placeholder={"Enter Invitation Code"}
                   value={ref}
                   onChange={(e) => setRef(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -386,10 +386,10 @@ export default function LandingPage({
               >
                 {mode === "login"
                   ? isKo
-                    ? "처음?�신가?? ?�원가??
+                    ? "泥섏쓬?댁떊媛?? ?뚯썝媛??
                     : "New here? Sign Up"
                   : isKo
-                  ? "?��? 계정???�나?? 로그??
+                  ? "?대? 怨꾩젙???덈굹?? 濡쒓렇??
                   : "Have an account? Login"}
               </div>
             </div>
@@ -399,3 +399,6 @@ export default function LandingPage({
     </div>
   );
 }
+
+
+
