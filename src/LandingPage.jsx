@@ -346,7 +346,7 @@ export default function LandingPage({
                     border: "2px solid #ffb347",
                     background: "rgba(255,179,71,0.05)",
                   }}
-                  placeholder={isKo ? "ì´ˆë? ì½”ë“œë¥??…ë ¥?˜ì„¸?? : "Enter Invitation Code"}
+                  placeholder={isKo ? "ÃÊ´ë ÄÚµå¸¦ ÀÔ·ÂÇÏ¼¼¿ä" : "Enter Invitation Code"}
                   value={ref}
                   onChange={(e) => setRef(e.target.value)}
                   onKeyDown={handleKeyDown}
