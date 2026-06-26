@@ -2,8 +2,13 @@ import React, { useState } from "react";
 import { iaStyles } from "./AdminStyles";
 import { ITEM_CONFIG } from "./EventService";
 
+<<<<<<< HEAD
 // --- 1. 입출금 요청 뷰 (승인 / 거절 2개 버튼으로 분리) ---
 export const RequestsView = ({ depositRequests, withdrawRequests, approveDeposit, approveWithdraw, rejectDeposit, rejectWithdraw }) => (
+=======
+// --- 1. 입출금 요청 뷰 ---
+export const RequestsView = ({ depositRequests, withdrawRequests, approveDeposit, approveWithdraw }) => (
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
   <div style={iaStyles.card}>
     <h1 style={iaStyles.bigTabTitle}>🔔 입/출금 승인 대기</h1>
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40 }}>
@@ -12,6 +17,7 @@ export const RequestsView = ({ depositRequests, withdrawRequests, approveDeposit
           ▼ 입금 신청 ({depositRequests.length})
         </h3>
         <table style={iaStyles.table}>
+<<<<<<< HEAD
           <thead><tr><th>정보</th><th>금액</th><th>관리</th></tr></thead>
           <tbody>
             {depositRequests.length === 0 ? (
@@ -26,6 +32,23 @@ export const RequestsView = ({ depositRequests, withdrawRequests, approveDeposit
                     {/* rejectDeposit이 없을 경우를 대비한 안전장치 */}
                     <button onClick={() => rejectDeposit ? rejectDeposit(r) : alert('거절 로직이 연결되지 않았습니다.')} style={{...iaStyles.giantBtn, background: '#ef4444', color: '#fff'}}>거절</button>
                   </td>
+=======
+          <thead>
+            <tr><th>정보</th><th>금액</th><th>승인</th></tr>
+          </thead>
+          <tbody>
+            {depositRequests.length === 0 ? (
+              <tr><td colSpan="3" style={{ padding: 20, color: "#555" }}>없음</td></tr>
+            ) : (
+              depositRequests.map(r => (
+                <tr key={r.id} style={{ borderBottom: "1px solid #222" }}>
+                  <td>
+                    <b>{r.userId}</b><br />
+                    <span style={{ fontSize: 12, color: "#888" }}>{r.depositName}</span>
+                  </td>
+                  <td style={{ color: "#00ff00", fontSize: 18, fontWeight: "bold" }}>{r.amount.toLocaleString()}</td>
+                  <td><button onClick={() => approveDeposit(r)} style={iaStyles.giantBtn}>승인</button></td>
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
                 </tr>
               ))
             )}
@@ -38,6 +61,7 @@ export const RequestsView = ({ depositRequests, withdrawRequests, approveDeposit
           ▼ 출금 신청 ({withdrawRequests.length})
         </h3>
         <table style={iaStyles.table}>
+<<<<<<< HEAD
           <thead><tr><th>정보</th><th>금액</th><th>관리</th></tr></thead>
           <tbody>
             {withdrawRequests.length === 0 ? (
@@ -50,6 +74,29 @@ export const RequestsView = ({ depositRequests, withdrawRequests, approveDeposit
                   <td style={{display: 'flex', gap: '5px'}}>
                     <button onClick={() => approveWithdraw(r)} style={{...iaStyles.giantBtn, background: '#34D399', color: '#000'}}>승인</button>
                     <button onClick={() => rejectWithdraw ? rejectWithdraw(r) : alert('거절 로직이 연결되지 않았습니다.')} style={{...iaStyles.giantBtn, background: '#ef4444', color: '#fff'}}>거절</button>
+=======
+          <thead>
+            <tr><th>정보</th><th>금액</th><th>완료</th></tr>
+          </thead>
+          <tbody>
+            {withdrawRequests.length === 0 ? (
+              <tr><td colSpan="3" style={{ padding: 20, color: "#555" }}>없음</td></tr>
+            ) : (
+              withdrawRequests.map(r => (
+                <tr key={r.id} style={{ borderBottom: "1px solid #222" }}>
+                  <td>
+                    <b>{r.userId}</b><br />
+                    <span style={{ fontSize: 12, color: "#888" }}>{r.bankInfo?.bank}</span>
+                  </td>
+                  <td style={{ color: "#ff3b30", fontSize: 18, fontWeight: "bold" }}>{r.amount.toLocaleString()}</td>
+                  <td>
+                    <button
+                      onClick={() => approveWithdraw(r)}
+                      style={{ ...iaStyles.giantBtn, background: "#ff3b30", color: "#fff" }}
+                    >
+                      처리
+                    </button>
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
                   </td>
                 </tr>
               ))
@@ -61,7 +108,11 @@ export const RequestsView = ({ depositRequests, withdrawRequests, approveDeposit
   </div>
 );
 
+<<<<<<< HEAD
 // --- 2. 완료된 장부 뷰 (상태를 '완료'로 강제 렌더링) ---
+=======
+// --- 2. 완료된 장부 뷰 ---
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
 export const FinanceView = ({ financeHistory }) => (
   <div style={iaStyles.card}>
     <h1 style={iaStyles.bigTabTitle}>📜 자금 입/출금 완료 장부</h1>
@@ -73,6 +124,7 @@ export const FinanceView = ({ financeHistory }) => (
         {financeHistory.length === 0 ? (
           <tr><td colSpan="5" style={{ padding: 30, textAlign: "center" }}>내역 없음</td></tr>
         ) : (
+<<<<<<< HEAD
           financeHistory.map(f => {
             // 팬딩 오류 방지: 장부에 넘어왔으면 기본적으로 '완료'로 표기. (거절은 별도 표기)
             const displayStatus = f.status === 'pending' ? '완료' : (f.status || '완료');
@@ -95,20 +147,51 @@ export const FinanceView = ({ financeHistory }) => (
               </tr>
             );
           })
+=======
+          financeHistory.map(f => (
+            <tr key={f.id} style={{ borderBottom: "1px solid #222" }}>
+              <td style={{ color: "#888", fontSize: 13 }}>{new Date(f.completedAt).toLocaleString()}</td>
+              <td style={{ fontWeight: "bold" }}>{f.userId}</td>
+              <td>
+                <span
+                  style={{
+                    background: f.type === "입금" ? "rgba(0,255,0,0.1)" : "rgba(255,59,48,0.1)",
+                    color: f.type === "입금" ? "#00ff00" : "#ff3b30",
+                    padding: "3px 8px",
+                    borderRadius: "5px",
+                    fontSize: 12,
+                    fontWeight: "bold"
+                  }}
+                >
+                  {f.type}
+                </span>
+              </td>
+              <td style={{ fontSize: 16, fontWeight: "bold" }}>{f.amount.toLocaleString()}</td>
+              <td style={{ color: "#4cd137", fontWeight: "bold" }}>{f.status}</td>
+            </tr>
+          ))
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
         )}
       </tbody>
     </table>
   </div>
 );
 
+<<<<<<< HEAD
 // --- 3. 이벤트 조작 뷰 (유지) ---
 export const EventControlView = ({ currentInfo, targetRound, setTargetRound, queue, deleteQueue, handleApplyManipulation }) => {
   const [selected, setSelected] = useState([]);
   const isLocked = !currentInfo || currentInfo.timeLeft <= 5;
+=======
+// --- 3. 이벤트 조작 뷰 ---
+export const EventControlView = ({ currentInfo, targetRound, setTargetRound, queue, deleteQueue, handleApplyManipulation }) => {
+  const [selected, setSelected] = useState([]);
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
 
   return (
     <div style={iaStyles.card}>
       <h1 style={iaStyles.bigTabTitle}>🎯 실시간 이벤트 제어</h1>
+<<<<<<< HEAD
       <div style={{...iaStyles.monitorBox, border: isLocked ? "2px solid #ff3b30" : "1px solid #333", transition: 'all 0.3s'}}>
         <div>현재 진행중: <b style={{color: '#fff'}}>{currentInfo?.currentRound || '대기중'}회차</b></div>
         <div>추첨까지: <b style={{ color: isLocked ? "#ff3b30" : "#00ff00", fontSize: '24px' }}>{currentInfo?.timeLeft || 0}초</b></div>
@@ -117,6 +200,28 @@ export const EventControlView = ({ currentInfo, targetRound, setTargetRound, que
 
       <div style={{ marginTop: 30, opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}>
         <input type="number" placeholder="회차" value={targetRound || ""} onChange={(e) => setTargetRound(parseInt(e.target.value))} style={iaStyles.adminInput} />
+=======
+
+      <div style={iaStyles.monitorBox}>
+        <div>현재: <b>{currentInfo.currentRound}회</b></div>
+        <div>
+          남은 시간:{" "}
+          <b style={{ color: currentInfo.timeLeft <= 5 ? "#ff3b30" : "#00ff00" }}>
+            {currentInfo.timeLeft}초
+          </b>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 30 }}>
+        <input
+          type="number"
+          placeholder="회차"
+          value={targetRound}
+          onChange={(e) => setTargetRound(parseInt(e.target.value))}
+          style={iaStyles.adminInput}
+        />
+
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
         <div style={iaStyles.adminItemGrid}>
           {ITEM_CONFIG.map(item => (
             <div
@@ -128,6 +233,7 @@ export const EventControlView = ({ currentInfo, targetRound, setTargetRound, que
               style={{
                 ...iaStyles.adminItemCard,
                 border: selected.includes(item.name) ? `3px solid ${item.color}` : "3px solid #333",
+<<<<<<< HEAD
                 background: selected.includes(item.name) ? `${item.color}33` : "#1a1a1a", cursor: 'pointer'
               }}
             >
@@ -145,6 +251,25 @@ export const EventControlView = ({ currentInfo, targetRound, setTargetRound, que
           style={{ ...iaStyles.applyBtn, background: isLocked ? "#444" : "#ffb347", color: isLocked ? "#888" : "#000", cursor: isLocked ? 'not-allowed' : 'pointer' }}
           disabled={isLocked}
         >{isLocked ? "🔒 조작 불가 대기중" : "결과 조작 저장"}</button>
+=======
+                background: selected.includes(item.name) ? `${item.color}33` : "#1a1a1a"
+              }}
+            >
+              <span style={{ fontSize: 28 }}>{item.icon}</span><br />
+              <b>{item.name}</b>
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={() => {
+            handleApplyManipulation(selected).then(res => res && setSelected([]));
+          }}
+          style={iaStyles.applyBtn}
+        >
+          결과 조작 저장
+        </button>
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
       </div>
 
       <div style={{ marginTop: 20 }}>
@@ -159,6 +284,7 @@ export const EventControlView = ({ currentInfo, targetRound, setTargetRound, que
   );
 };
 
+<<<<<<< HEAD
 // --- 4. 회원 관리 뷰 (수정, 비번, 삭제 3버튼 구조 & 로컬 숨김 처리) ---
 export const UsersView = ({ users, updateFullUserInfo, handleChangeUserPassword }) => {
   const [term, setTerm] = useState("");
@@ -167,10 +293,17 @@ export const UsersView = ({ users, updateFullUserInfo, handleChangeUserPassword 
   const filtered = users.filter(u => 
     !hiddenUsers.includes(u.id) && (u.id || "").toLowerCase().includes(term.toLowerCase())
   );
+=======
+// --- 4. 회원 관리 뷰 ---
+export const UsersView = ({ users, updateFullUserInfo, handleChangeUserPassword }) => {
+  const [term, setTerm] = useState("");
+  const filtered = users.filter(u => (u.id || "").toLowerCase().includes(term.toLowerCase()));
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
 
   return (
     <div style={iaStyles.card}>
       <h1 style={iaStyles.bigTabTitle}>💰 회원 관리</h1>
+<<<<<<< HEAD
       <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
         <span style={{ fontSize: 24 }}>🔍</span>
         <input
@@ -178,22 +311,70 @@ export const UsersView = ({ users, updateFullUserInfo, handleChangeUserPassword 
           value={term}
           onChange={(e) => setTerm(e.target.value)}
           style={{...iaStyles.searchInputField, width: '100%'}}
+=======
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <span style={{ fontSize: 24 }}>🔍</span>
+        <input
+          placeholder="아이디 검색..."
+          value={term}
+          onChange={(e) => setTerm(e.target.value)}
+          style={iaStyles.searchInputField}
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
         />
       </div>
 
       <table style={iaStyles.table}>
+<<<<<<< HEAD
         <thead><tr><th>상태</th><th>아이디</th><th>다이아</th><th>변경값</th><th>액션</th></tr></thead>
         <tbody>
           {filtered.map(u => (
             <tr key={u.id} style={{ borderBottom: "1px solid #222" }}>
               <td>{u.lastActive && (Date.now() - u.lastActive < 60000) ? <span style={{ color: "#0f0" }}>●</span> : <span style={{ color: "#444" }}>●</span>}</td>
+=======
+        <thead>
+          <tr><th>상태</th><th>아이디</th><th>다이아</th><th>변경값</th><th>액션</th></tr>
+        </thead>
+        <tbody>
+          {filtered.map(u => (
+            <tr key={u.id} style={{ borderBottom: "1px solid #222" }}>
+              <td>
+                {u.lastActive && (Date.now() - u.lastActive < 60000) ? (
+                  <span style={{ color: "#0f0" }}>●</span>
+                ) : (
+                  <span style={{ color: "#444" }}>●</span>
+                )}
+              </td>
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
               <td style={{ fontWeight: "bold", fontSize: 18 }}>{u.id}</td>
               <td style={{ color: "#ffb347" }}>💎 {u.diamond?.toLocaleString()}</td>
               <td><input id={`pt-${u.id}`} defaultValue={u.diamond} style={iaStyles.giantInput} /></td>
               <td style={{ display: "flex", gap: 5, alignItems: "center", padding: "10px 0" }}>
+<<<<<<< HEAD
                 <button onClick={() => updateFullUserInfo(u.id, document.getElementById(`pt-${u.id}`).value, u.refCode, u.referral)} style={iaStyles.giantBtn}>수정</button>
                 <button onClick={() => handleChangeUserPassword(u.id)} style={{ ...iaStyles.giantBtn, background: "#5856d6", color: "#fff" }}>비번</button>
                 <button onClick={() => setHiddenUsers([...hiddenUsers, u.id])} style={{ ...iaStyles.giantBtn, background: "#ef4444", color: "#fff" }}>삭제</button>
+=======
+                <button
+                  onClick={() =>
+                    updateFullUserInfo(
+                      u.id,
+                      document.getElementById(`pt-${u.id}`).value,
+                      u.refCode,
+                      u.referral
+                    )
+                  }
+                  style={iaStyles.giantBtn}
+                >
+                  수정
+                </button>
+                <button
+                  onClick={() => handleChangeUserPassword(u.id)}
+                  style={{ ...iaStyles.giantBtn, background: "#5856d6", color: "#fff" }}
+                >
+                  비번
+                </button>
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
               </td>
             </tr>
           ))}
@@ -203,6 +384,7 @@ export const UsersView = ({ users, updateFullUserInfo, handleChangeUserPassword 
   );
 };
 
+<<<<<<< HEAD
 // --- 5. 실장 관리 뷰 (유지) ---
 export const AgentsView = ({ agents, users, newAgentName, setNewAgentName, newAgentCode, setNewAgentCode, addAgent, deleteAgent }) => (
   <div style={iaStyles.card}>
@@ -218,13 +400,66 @@ export const AgentsView = ({ agents, users, newAgentName, setNewAgentName, newAg
         {agents.map(a => {
           const code = (a.code || a.id || "").toString();
           const myUsers = users.filter(u => (u.referral || "") === code);
+=======
+/* ------------------------------------------------------------------ */
+/* 5. 실장 관리 뷰 (🔥 Firestore 완전 대응) */
+/* ------------------------------------------------------------------ */
+export const AgentsView = ({
+  agents,
+  users,
+  newAgentName,
+  setNewAgentName,
+  newAgentCode,
+  setNewAgentCode,
+  addAgent,
+  deleteAgent, // ✅ Firestore 삭제 함수 (useAdminLogic에서 내려줘야 함)
+}) => (
+  <div style={iaStyles.card}>
+    <h1 style={iaStyles.bigTabTitle}>👔 실장 관리</h1>
+
+    <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+      <input
+        placeholder="이름"
+        value={newAgentName}
+        onChange={(e) => setNewAgentName(e.target.value)}
+        style={iaStyles.giantInput}
+      />
+      <input
+        placeholder="코드"
+        value={newAgentCode}
+        onChange={(e) => setNewAgentCode(e.target.value)}
+        style={iaStyles.giantInput}
+      />
+      <button onClick={addAgent} style={iaStyles.giantBtn}>등록</button>
+    </div>
+
+    <table style={iaStyles.table}>
+      <thead>
+        <tr><th>이름</th><th>코드</th><th>인원</th><th>명단</th><th>삭제</th></tr>
+      </thead>
+      <tbody>
+        {agents.map(a => {
+          // Firestore 문서 id를 code로 쓰는 구조를 기본으로.
+          const code = (a.code || a.id || "").toString();
+          const myUsers = users.filter(u => (u.referral || "") === code);
+
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
           return (
             <tr key={code} style={{ borderBottom: "1px solid #222" }}>
               <td style={{ color: "#ffb347", fontSize: 18 }}>{a.name}</td>
               <td>{code}</td>
               <td style={{ color: "#00ff00" }}>{myUsers.length}</td>
+<<<<<<< HEAD
               <td style={{ fontSize: 12, color: "#888", maxWidth: 300 }}>{myUsers.map(u => u.id).join(", ")}</td>
               <td><button onClick={() => deleteAgent(code)} style={iaStyles.delBtn}>삭제</button></td>
+=======
+              <td style={{ fontSize: 12, color: "#888", maxWidth: 300 }}>
+                {myUsers.map(u => u.id).join(", ")}
+              </td>
+              <td>
+                <button onClick={() => deleteAgent(code)} style={iaStyles.delBtn}>삭제</button>
+              </td>
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
             </tr>
           );
         })}
@@ -233,6 +468,7 @@ export const AgentsView = ({ agents, users, newAgentName, setNewAgentName, newAg
   </div>
 );
 
+<<<<<<< HEAD
 // --- 6. 추천인 관리 뷰 (검색 기능 및 삭제 버튼 추가) ---
 export const ReferralsView = ({ users, updateFullUserInfo }) => {
   const [refSearch, setRefSearch] = useState("");
@@ -262,11 +498,79 @@ export const ReferralsView = ({ users, updateFullUserInfo }) => {
                    updateFullUserInfo(u.id, u.diamond, "", "");
                 }} style={{...iaStyles.giantBtn, background: '#ef4444', color: '#fff'}}>삭제</button>
               </td>
+=======
+export const ReferralsView = ({ users, updateFullUserInfo }) => (
+  <div style={iaStyles.card}>
+    <h1 style={iaStyles.bigTabTitle}>🤝 추천인 코드</h1>
+    <table style={iaStyles.table}>
+      <thead>
+        <tr><th>아이디</th><th>내 코드</th><th>추천인</th><th>저장</th></tr>
+      </thead>
+      <tbody>
+        {users.map(u => (
+          <tr key={u.id} style={{ borderBottom: "1px solid #222" }}>
+            <td>{u.id}</td>
+            <td><input id={`rc-${u.id}`} defaultValue={u.refCode || ""} style={iaStyles.giantInput} /></td>
+            <td><input id={`rf-${u.id}`} defaultValue={u.referral || ""} style={{ ...iaStyles.giantInput, color: "#0ff" }} /></td>
+            <td>
+              <button
+                onClick={() =>
+                  updateFullUserInfo(
+                    u.id,
+                    u.diamond,
+                    document.getElementById(`rc-${u.id}`).value,
+                    document.getElementById(`rf-${u.id}`).value
+                  )
+                }
+                style={iaStyles.giantBtn}
+              >
+                저장
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+export const HistoryView = ({ gameHistory }) => (
+  <div style={iaStyles.card}>
+    <h1 style={iaStyles.bigTabTitle}>📋 게임 결과</h1>
+    <table style={iaStyles.table}>
+      <thead><tr><th>회차</th><th>결과</th></tr></thead>
+      <tbody>
+        {gameHistory.map(h => (
+          <tr key={h.round} style={{ borderBottom: "1px solid #222" }}>
+            <td style={{ color: "#ffb347" }}>{h.round}회</td>
+            <td>{h.winItems?.join(" / ")}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+export const SponsorshipsView = ({ sponsorships }) => (
+  <div style={iaStyles.card}>
+    <h1 style={iaStyles.bigTabTitle}>💎 후원(베팅) 내역</h1>
+    <div style={{ maxHeight: 600, overflowY: "auto" }}>
+      <table style={iaStyles.table}>
+        <thead><tr><th>회차</th><th>ID</th><th>금액</th><th>결과</th></tr></thead>
+        <tbody>
+          {sponsorships.map((s, i) => (
+            <tr key={i} style={{ borderBottom: "1px solid #222" }}>
+              <td style={{ color: "#ffb347" }}>{s.round}</td>
+              <td><b>{s.userId}</b></td>
+              <td style={{ color: "#0f0" }}>{s.betAmount?.toLocaleString()}</td>
+              <td>{s.win === true ? "승리" : (s.win === false ? "패배" : "진행중")}</td>
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+<<<<<<< HEAD
   );
 };
 
@@ -437,3 +741,7 @@ export const SponsorshipsView = ({ sponsorships, currentInfo }) => {
     </div>
   );
 };
+=======
+  </div>
+);
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a

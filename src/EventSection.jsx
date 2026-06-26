@@ -1,6 +1,13 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
+<<<<<<< HEAD
 import { useEventEngine, allItems } from "./useEventEngine"; 
+=======
+// ★ allItems(ITEM_CONFIG)를 가져옵니다.
+import { useEventEngine, allItems } from "./useEventEngine"; 
+
+// ★ 파이어베이스 서버 연동 (원본 유지)
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
 import { db } from "./firebase"; 
 import { collection, addDoc } from "firebase/firestore";
 
@@ -9,6 +16,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
   const [displayPoint, setDisplayPoint] = useState(userPoint);
   const scrollRef = useRef(null); 
 
+<<<<<<< HEAD
   const isKo = t && t.home === "홈페이지";
 
   const getLocalizedText = (inputName) => {
@@ -28,6 +36,40 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     return inputName;
   };
 
+=======
+  // [번역 변수] 한국어 여부 판별
+  const isKo = t && t.home === "홈페이지";
+
+  // ★ [핵심] 텍스트/결과값 자동 번역 헬퍼
+  // 입력값이 "🚀 로켓" 같은 문자열이든, "로켓" 같은 이름이든 자동으로 영문/한글 변환
+  const getLocalizedText = (inputName) => {
+    if (!inputName) return "";
+    
+    // 1. "🚀 로켓" 처럼 아이콘이 포함된 문자열인 경우 분리
+    const parts = inputName.split(" ");
+    let pureName = inputName;
+    let icon = "";
+    
+    if (parts.length > 1 && isNaN(parts[0])) { // 아이콘이 있는 경우 (간단 체크)
+        icon = parts[0] + " ";
+        pureName = parts[1];
+    }
+
+    // 2. Config에서 해당 아이템 찾기 (한글 name으로 검색)
+    const targetItem = allItems.find(item => item.name === pureName);
+
+    // 3. 아이템을 찾았으면 언어 설정에 맞게 반환
+    if (targetItem) {
+        const localizedName = isKo ? targetItem.name : targetItem.nameEn;
+        return icon + localizedName;
+    }
+
+    // 4. 못 찾았으면 원본 그대로 반환
+    return inputName;
+  };
+
+  // 엔진 연결
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
   const { 
     round, timeLeft, totalHistory, myHistory, myPendingBet, setMyPendingBet, 
     isDrawing, drawingItems, showResult, setShowResult, liveNoti, stats, updatePointWithAnim 
@@ -60,6 +102,10 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
   const handleDonate = async () => {
     const perAmount = parseInt(betAmount);
     const totalCost = perAmount * selectedItems.length;
+<<<<<<< HEAD
+=======
+    
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
     if (selectedItems.length === 0) return alert(isKo ? "아이템을 선택해주세요." : "Please select items.");
     if (!perAmount || perAmount <= 0) return alert(isKo ? "금액을 입력해주세요." : "Please enter amount.");
     if (totalCost > displayPoint) return alert(isKo ? "보유 다이아를 확인해주세요." : "Check your diamond balance.");
@@ -67,6 +113,10 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     const newPoint = displayPoint - totalCost;
     setDisplayPoint(newPoint); 
     updatePointWithAnim(newPoint); 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
     setMyPendingBet({ round: round, items: [...selectedItems], perAmount, totalCost });
 
     try {
@@ -150,6 +200,10 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
             <div style={localDs.lastResultBar}>
               <span style={localDs.lastLabel}>{round - 1}{isKo ? "회차 결과:" : " Result:"}</span>
               <div style={{display:'flex', gap:'5px'}}>
+<<<<<<< HEAD
+=======
+                {/* 결과 히스토리: "🚀 로켓" 문자열을 "🚀 Rocket"으로 변환 */}
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
                 {totalHistory[0]?.winItems.map((itemStr, idx) => (
                   <span key={idx} style={localDs.resTag}>{getLocalizedText(itemStr)}</span>
                 )) || (isKo ? "대기중" : "Waiting")}
@@ -168,6 +222,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
             const isSelected = selectedItems.includes(item.name);
             return (
               <motion.div key={item.name} whileTap={myPendingBet ? {} : { scale: 0.95 }} 
+<<<<<<< HEAD
                 onClick={() => !myPendingBet && setSelectedItems(prev => prev.includes(item.name) ? prev.filter(i => i !== item.name) : [...prev, item.name].slice(0, 2))}
                 style={{...localDs.itemCard, opacity: myPendingBet ? 0.5 : 1, background: isSelected ? `linear-gradient(145deg, ${item.color}88, #111)` : "#161616", border: isSelected ? `2px solid ${item.color}` : "2px solid #252525"}}>
                 <div style={localDs.multiplier}>{item.label}</div>
@@ -176,6 +231,19 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                 <div style={localDs.itemInfoText}>
                   <span style={localDs.itemName}>{isKo ? item.name : item.nameEn}</span>
                   <span style={localDs.itemDesc}>{isKo ? item.desc : item.descEn}</span>
+=======
+                // 선택 로직은 내부적으로 'item.name'(한글)을 사용 (DB 저장용)
+                onClick={() => !myPendingBet && setSelectedItems(prev => prev.includes(item.name) ? prev.filter(i => i !== item.name) : [...prev, item.name].slice(0, 2))}
+                style={{...localDs.itemCard, opacity: myPendingBet ? 0.5 : 1, background: isSelected ? `linear-gradient(145deg, ${item.color}88, #111)` : "#161616", border: isSelected ? `2px solid ${item.color}` : "2px solid #252525"}}>
+                <div style={localDs.multiplier}>{item.label}</div>
+                {/* 통계 키값은 한글이지만, 표시는 숫자이므로 상관없음 */}
+                <div style={localDs.statBadge}>{stats[item.name] || 0}%</div>
+                <div style={localDs.itemIcon}>{item.icon}</div>
+                <div style={localDs.itemInfoText}>
+                    {/* ★ 여기 이름과 설명이 언어 설정에 따라 바뀜 */}
+                    <span style={localDs.itemName}>{isKo ? item.name : item.nameEn}</span>
+                    <span style={localDs.itemDesc}>{isKo ? item.desc : item.descEn}</span>
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
                 </div>
                 {isSelected && <div style={{...localDs.checkBadge, background: item.color}}>✓</div>}
               </motion.div>
@@ -197,15 +265,26 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
             {(activeTab === 'mine' ? myHistory : totalHistory).sort((a, b) => b.round - a.round).slice(0, 20).map((h, i) => (
               <div key={i} style={localDs.histItem}>
                 <div style={localDs.histLeft}>
+<<<<<<< HEAD
                   <div style={localDs.histRound}>{h.round}{isKo ? "회차" : " Rd"}</div>
                   <div style={localDs.histDetail}>{h.date}</div>
+=======
+                    <div style={localDs.histRound}>{h.round}{isKo ? "회차" : " Rd"}</div>
+                    <div style={localDs.histDetail}>{h.date}</div>
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
                 </div>
                 <div style={localDs.histRight}>
                   {activeTab === 'mine' ? (
                     <div style={{ color: h.earn > 0 ? '#34D399' : '#FB7185', fontWeight: 'bold' }}>{h.earn > 0 ? `+${h.earn.toLocaleString()}` : `-${h.cost.toLocaleString()}`}</div>
                   ) : (
+<<<<<<< HEAD
                     <div style={localDs.histWinIcons}>
                       {h.winItems?.map(str => getLocalizedText(str)).join(" ")}
+=======
+                    // 결과 아이콘+텍스트 번역 표시
+                    <div style={localDs.histWinIcons}>
+                        {h.winItems?.map(str => getLocalizedText(str)).join(" ")}
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
                     </div>
                   )}
                 </div>
@@ -227,6 +306,10 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                 <div style={localDs.pendingInfo}>
                   <div style={localDs.pendingTitle}>{round}{isKo ? "회차 참여 중..." : " Round Joined..."}</div>
                   <div style={localDs.pendingDetail}>
+<<<<<<< HEAD
+=======
+                    {/* 참여중인 아이템 이름 번역 */}
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
                     {isKo ? "선택:" : "Pick:"} <b style={{color:'#fff'}}>{myPendingBet.items.map(name => getLocalizedText(name)).join(", ")}</b> | {myPendingBet.totalCost.toLocaleString()} DIA
                   </div>
                 </div>
@@ -239,6 +322,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
               </div>
             ) : (
               <>
+<<<<<<< HEAD
                 {/* 선택 아이템 + 초기화 */}
                 <div style={localDs.panelTop}>
                   <span style={localDs.selectionText}>
@@ -277,6 +361,32 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                     {isKo ? "베팅 합계:" : "Total Bet:"} <b style={{color: '#ffb347'}}>{currentTotalCost.toLocaleString()} DIA</b>
                   </div>
                 )}
+=======
+                <div style={localDs.panelTop}>
+                    <span style={localDs.selectionText}>
+                        {/* 선택된 아이템 이름 번역 */}
+                        {isKo ? "선택됨:" : "Selected:"} <b style={{color: '#ffb347'}}>{selectedItems.map(name => getLocalizedText(name)).join(", ")}</b>
+                    </span>
+                    <button style={localDs.clearBtn} onClick={() => setSelectedItems([])}>{isKo ? "초기화" : "Reset"}</button>
+                </div>
+                <div style={localDs.amountPresets}>
+                  {['10%', '50%', 'MAX', 'CLEAR'].map(label => (
+                    <button key={label} onClick={() => {
+                      if(label==='CLEAR') setBetAmount("");
+                      else {
+                        let a = (label==='10%') ? Math.floor(displayPoint*0.1) : (label==='50%') ? Math.floor(displayPoint*0.5) : Math.floor(displayPoint/selectedItems.length);
+                        setBetAmount(a > 0 ? a.toString() : "");
+                      }
+                    }} style={localDs.presetBtn}>{label}</button>
+                  ))}
+                </div>
+                <div style={localDs.betInputGroup}>
+                  <input type="number" value={betAmount} onChange={e => setBetAmount(e.target.value)} style={localDs.mainInput} placeholder={isKo ? "금액 입력" : "Enter amount"} />
+                  <button style={localDs.finalBtn} onClick={handleDonate} disabled={!betAmount}>
+                    {currentTotalCost > 0 ? `${currentTotalCost.toLocaleString()} DIA ${isKo ? "후원하기" : "BET"}` : (isKo ? "후원하기" : "BET")}
+                  </button>
+                </div>
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
               </>
             )}
           </motion.div>
@@ -292,7 +402,12 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                 {showResult.isWin ? (isKo ? "🎉 당첨 성공!" : "🎉 YOU WIN!") : showResult.isDraw ? (isKo ? "⚖️ 본전 방어!" : "⚖️ DRAW!") : (isKo ? "😢 아쉬워요" : "😢 YOU LOSE")}
               </div>
               <div style={{fontSize: '50px', margin: '20px 0'}}>
+<<<<<<< HEAD
                 {showResult.winItems.map(str => getLocalizedText(str)).join(" ")}
+=======
+                  {/* 결과 모달 아이템 이름 번역 */}
+                  {showResult.winItems.map(str => getLocalizedText(str)).join(" ")}
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
               </div>
               <div style={localDs.modalInfoBox}>
                 <div>{isKo ? "투자" : "Bet"}: {showResult.betTotal.toLocaleString()}</div>
@@ -310,10 +425,41 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
   );
 }
 
+<<<<<<< HEAD
 const localDs = {
   screenContainer: { position: 'relative', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#0c0c0c', overflow: 'hidden', fontFamily: '-apple-system, sans-serif' },
   fixedHeader: { flex: '0 0 auto', height: '70px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', backgroundColor: '#0c0c0c', zIndex: 10, paddingTop: 'env(safe-area-inset-top)' },
   scrollBody: { flex: 1, overflowY: 'auto', padding: '20px 20px 200px', WebkitOverflowScrolling: 'touch' },
+=======
+// [스타일 정의: 원본 100% 유지]
+const localDs = {
+  screenContainer: { 
+    position: 'relative', 
+    height: '100vh', 
+    display: 'flex', 
+    flexDirection: 'column', 
+    backgroundColor: '#0c0c0c', 
+    overflow: 'hidden',
+    fontFamily: '-apple-system, sans-serif'
+  },
+  fixedHeader: { 
+    flex: '0 0 auto', 
+    height: '70px', 
+    display: 'flex', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    padding: '0 20px', 
+    backgroundColor: '#0c0c0c', 
+    zIndex: 10,
+    paddingTop: 'env(safe-area-inset-top)' 
+  },
+  scrollBody: { 
+    flex: 1, 
+    overflowY: 'auto', 
+    padding: '20px 20px 140px', 
+    WebkitOverflowScrolling: 'touch'
+  },
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
   navLeft: { display: "flex", alignItems: "center", gap: "12px", cursor: 'pointer' },
   navTitle: { fontSize: "17px", fontWeight: "900", color: "#fff" },
   backBtn: { fontSize: "22px", color: '#666' },
@@ -362,6 +508,7 @@ const localDs = {
   bottomPanel: { position: "absolute", bottom: 20, left: 15, right: 15, background: "#1c1c1e", padding: "20px", borderRadius: "30px", border: "1px solid #333", zIndex: 100, boxShadow: '0 -10px 40px rgba(0,0,0,0.5)' },
   panelTop: { display: 'flex', justifyContent: 'space-between', marginBottom: '15px', alignItems: 'center' },
   selectionText: { fontSize: '13px', color: '#888' },
+<<<<<<< HEAD
   clearBtn: { background: 'none', border: 'none', color: '#ff3b30', fontSize: '13px', fontWeight: '700', cursor: 'pointer' },
   // ✅ 수정된 베팅 입력 영역
   betInputGroup: { display: 'flex', gap: '8px', alignItems: 'center' },
@@ -370,15 +517,31 @@ const localDs = {
   finalBtn: { background: '#ffb347', color: '#000', border: 'none', padding: '0 18px', height: '52px', borderRadius: '16px', fontWeight: '900', fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap' },
   // ✅ 베팅 합계 바
   totalCostBar: { marginTop: '12px', textAlign: 'center', fontSize: '13px', color: '#888', padding: '10px', background: 'rgba(255,179,71,0.05)', borderRadius: '12px', border: '1px solid rgba(255,179,71,0.1)' },
+=======
+  clearBtn: { background: 'none', border: 'none', color: '#ff3b30', fontSize: '13px', fontWeight: '700' },
+  amountPresets: { display: 'flex', gap: '8px', marginBottom: '15px' },
+  presetBtn: { flex: 1, background: '#2c2c2e', border: 'none', color: '#fff', padding: '10px', borderRadius: '12px', fontSize: '11px', fontWeight: '700' },
+  betInputGroup: { display: 'flex', gap: '10px' },
+  mainInput: { flex: 1, background: '#000', border: '1px solid #444', borderRadius: '16px', padding: '15px', color: '#fff', fontSize: '18px', fontWeight: '800' },
+  finalBtn: { background: '#ffb347', color: '#000', border: 'none', padding: '0 25px', borderRadius: '16px', fontWeight: '900' },
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
   pendingContainer: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
   pendingInfo: { display: 'flex', flexDirection: 'column', gap: '4px' },
   pendingTitle: { fontSize: '15px', fontWeight: '900', color: '#ffb347' },
   pendingDetail: { fontSize: '12px', color: '#888' },
+<<<<<<< HEAD
   cancelBtn: { background: '#ff3b30', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '13px', cursor: 'pointer' },
+=======
+  cancelBtn: { background: '#ff3b30', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '13px' },
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
   modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' },
   modalCard: { background: '#222', padding: '40px 30px', borderRadius: '35px', textAlign: 'center', width: '100%', maxWidth: '320px', border: '1px solid #333' },
   modalTitle: { fontSize: '20px', fontWeight: '900', color: '#fff' },
   modalInfoBox: { background: '#161616', padding: '15px', borderRadius: '15px', margin: '20px 0', display: 'flex', justifyContent: 'space-around', fontSize: '12px', color: '#aaa' },
   modalAmount: { fontSize: '32px', fontWeight: '900', marginBottom: '25px' },
+<<<<<<< HEAD
   modalCloseBtn: { width: '100%', background: '#fff', color: '#000', border: 'none', padding: '18px', borderRadius: '18px', fontWeight: '900', fontSize: '16px', cursor: 'pointer' },
+=======
+  modalCloseBtn: { width: '100%', background: '#fff', color: '#000', border: 'none', padding: '18px', borderRadius: '18px', fontWeight: '900', fontSize: '16px' },
+>>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
 };
