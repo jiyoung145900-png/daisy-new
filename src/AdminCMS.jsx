@@ -129,15 +129,10 @@ export default function AdminCMS({
     }
   };
 
-<<<<<<< HEAD
-  const handleSaveSystemSettings = async () => {
-    setLoading(true);
-=======
   // ✅ [수정] 시스템 설정(텔레그램/비밀번호)만 따로 저장하는 함수
   const handleSaveSystemSettings = async () => {
     setLoading(true);
     // syncToFirebase를 통해 텔레그램 링크와 관리자 비밀번호만 전송
->>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
     const success = await syncToFirebase({ 
       telegramLink: telegramLink, 
       adminPw: adminPw 
@@ -148,23 +143,6 @@ export default function AdminCMS({
     }
   };
 
-<<<<<<< HEAD
-  // ✅ 사이트 타이틀/설명 저장
-  const handleSaveHeroText = async () => {
-    setLoading(true);
-    const success = await syncToFirebase({ hero });
-    setLoading(false);
-    if (success) {
-      alert("사이트 이름 및 설명이 저장되었습니다! ✅");
-    }
-  };
-
-  return (
-    <div style={cmsStyles.cms}>
-      <div style={cmsStyles.toggleArea}>
-        <button 
-          onClick={() => setAdminPreviewMode("landing")} 
-=======
   return (
     <div style={cmsStyles.cms}>
       {/* ❶ 프리뷰 전환 탭 - 기능 복구 */}
@@ -174,7 +152,6 @@ export default function AdminCMS({
             console.log("Landing Mode Clicked");
             setAdminPreviewMode("landing");
           }} 
->>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
           style={{
             ...cmsStyles.tabBtn, 
             background: adminPreviewMode === "landing" ? "#ffb347" : "#222", 
@@ -183,14 +160,10 @@ export default function AdminCMS({
           }}
         >❶ 랜딩페이지 보기</button>
         <button 
-<<<<<<< HEAD
-          onClick={() => setAdminPreviewMode("dashboard")} 
-=======
           onClick={() => {
             console.log("Dashboard Mode Clicked");
             setAdminPreviewMode("dashboard");
           }} 
->>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
           style={{
             ...cmsStyles.tabBtn, 
             background: adminPreviewMode === "dashboard" ? "#ffb347" : "#222", 
@@ -206,34 +179,6 @@ export default function AdminCMS({
         {/* SECTION 1: 랜딩 페이지 설정 */}
         <div style={cmsStyles.sectionBox}>
           <label style={cmsStyles.sectionLabel}>❶ 랜딩 페이지 배경 설정</label>
-<<<<<<< HEAD
-
-          {/* ✅ 추가: 사이트 이름 & 설명 */}
-          <div style={cmsStyles.fieldGroup}>
-            <label style={cmsStyles.fieldLabel}>사이트 이름 (메인 타이틀)</label>
-            <input
-              type="text"
-              style={cmsStyles.textInput}
-              placeholder="예: BANADA"
-              value={hero?.title?.ko ?? ""}
-              onChange={e => setHero({...hero, title: {...(hero.title ?? {}), ko: e.target.value, en: e.target.value}})}
-            />
-            <label style={{...cmsStyles.fieldLabel, marginTop: 10}}>사이트 설명 (서브타이틀)</label>
-            <input
-              type="text"
-              style={cmsStyles.textInput}
-              placeholder="예: 선택된 사람들을 위한 프라이빗 커넥션"
-              value={hero?.desc?.ko ?? ""}
-              onChange={e => setHero({...hero, desc: {...(hero.desc ?? {}), ko: e.target.value, en: e.target.value}})}
-            />
-            <button
-              onClick={handleSaveHeroText}
-              style={{...cmsStyles.modalOpenBtn, background: '#E91E63', marginTop: 8}}
-            >사이트 이름 즉시저장</button>
-          </div>
-
-=======
->>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
           <div style={{display: 'flex', gap: 5, marginBottom: 15}}>
             <button onClick={() => setHero({...hero, mode: "image"})} style={{...cmsStyles.modeBtn, background: hero.mode === 'image' ? '#fff' : '#333', color: hero.mode === 'image' ? '#000' : '#888'}}>이미지 모드</button>
             <button onClick={() => setHero({...hero, mode: "video"})} style={{...cmsStyles.modeBtn, background: hero.mode === 'video' ? '#fff' : '#333', color: hero.mode === 'video' ? '#000' : '#888'}}>동영상 모드</button>
@@ -303,28 +248,11 @@ export default function AdminCMS({
           <button onClick={() => openIndependent && openIndependent()} style={{...cmsStyles.modalOpenBtn, background: '#9C27B0', marginTop: 10}}>회원 포인트 관리 (독립 어드민)</button>
         </div>
 
-<<<<<<< HEAD
-        {/* SECTION 4: 시스템 설정 */}
-=======
         {/* SECTION 4: 시스템 설정 (텔레그램/비밀번호) */}
->>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
         <div style={cmsStyles.sectionBox}>
           <label style={cmsStyles.sectionLabel}>❹ 시스템 설정</label>
           <div style={cmsStyles.fieldGroup}>
             <label style={cmsStyles.fieldLabel}>텔레그램 상담 링크 아이디</label>
-<<<<<<< HEAD
-            <input type="text" style={cmsStyles.textInput} placeholder="@TelegramID" value={telegramLink || ""} onChange={e => setTelegramLink(e.target.value)} />
-          </div>
-          <div style={cmsStyles.fieldGroup}>
-            <label style={cmsStyles.fieldLabel}>관리자 접속 비밀번호</label>
-            <input type="text" style={cmsStyles.textInput} placeholder="새 비밀번호 입력" value={adminPw || ""} onChange={e => setAdminPw(e.target.value)} />
-          </div>
-          <button onClick={handleSaveSystemSettings} style={{...cmsStyles.modalOpenBtn, background: '#4CAF50', marginTop: 5}}>시스템 설정 즉시저장</button>
-        </div>
-
-        <button 
-          style={{...cmsStyles.saveExitBtn, background: loading ? "#ffb347" : "#fff", cursor: loading ? "wait" : "pointer"}} 
-=======
             <input 
               type="text" 
               style={cmsStyles.textInput} 
@@ -355,7 +283,6 @@ export default function AdminCMS({
             background: loading ? "#ffb347" : "#fff",
             cursor: loading ? "wait" : "pointer"
           }} 
->>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
           onClick={async () => {
             if (loading) return;
             setLoading(true);
@@ -393,10 +320,7 @@ export default function AdminCMS({
                 <input style={{...modalStyles.input, flex: 2}} placeholder="매니저 이름" value={newM.name} onChange={e=>setNewM({...newM, name: e.target.value})} />
                 <input style={{...modalStyles.input, flex: 1}} placeholder="나이" value={newM.age} onChange={e=>setNewM({...newM, age: e.target.value})} />
               </div>
-<<<<<<< HEAD
-=======
               
->>>>>>> 1f5b9257c9059ed70f6052d32871d9264cfe2b9a
               <div style={{display:'flex', gap: 8, marginBottom: 10, marginTop:10}}>
                 <input style={modalStyles.input} placeholder="키 (cm)" value={newM.height} onChange={e=>setNewM({...newM, height: e.target.value})} />
                 <input style={modalStyles.input} placeholder="몸무게 (kg)" value={newM.weight} onChange={e=>setNewM({...newM, weight: e.target.value})} />
