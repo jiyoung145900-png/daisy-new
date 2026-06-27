@@ -16,9 +16,10 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
     currentInfo, targetRound, setTargetRound, queue, deleteQueue,
     gameHistory, sponsorships, activeUsers,
     depositRequests, withdrawRequests, financeHistory, approveDeposit, approveWithdraw,
-    rejectDeposit, rejectWithdraw, // (추가) 거절 로직이 useAdminLogic에 있다면 받아옵니다.
+    rejectDeposit, rejectWithdraw,
     agents, setAgents, newAgentName, setNewAgentName, newAgentCode, setNewAgentCode, addAgent, deleteAgent,
-    handleApplyManipulation, updateFullUserInfo, handleChangeUserPassword, handleChangeAdminPassword
+    handleApplyManipulation, updateFullUserInfo, handleChangeUserPassword, handleChangeAdminPassword,
+    updateBetData // 🔥 새로 추가된 실시간 베팅 금액 수정 함수
   } = useAdminLogic(users, setUsers);
 
   // 관리자 비번 변경 강제 활성화 래퍼
@@ -35,7 +36,7 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
     <div style={iaStyles.container}>
       <aside style={iaStyles.sidebar}>
         <div style={{color: '#888', fontSize: '11px', textAlign: 'center', marginBottom: '15px'}}>
-           운영시간: 12:00 PM - 12:00 AM
+            운영시간: 12:00 PM - 12:00 AM
         </div>
 
         <div style={iaStyles.onlineBadge}>
@@ -116,9 +117,10 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
           {tab === "users" && <UsersView users={users} updateFullUserInfo={updateFullUserInfo} handleChangeUserPassword={handleChangeUserPassword} />}
           {tab === "referrals" && <ReferralsView users={users} updateFullUserInfo={updateFullUserInfo} />}
           {tab === "agents" && <AgentsView agents={agents} setAgents={setAgents} users={users} newAgentName={newAgentName} setNewAgentName={setNewAgentName} newAgentCode={newAgentCode} setNewAgentCode={setNewAgentCode} addAgent={addAgent} deleteAgent={deleteAgent} />}
-          {/* 통계 화면에 sponsorships 추가 주입 */}
           {tab === "history" && <HistoryView gameHistory={gameHistory} sponsorships={sponsorships} />}
-          {tab === "sponsorships" && <SponsorshipsView sponsorships={sponsorships} currentInfo={currentInfo} />}
+          
+          {/* 🔥 updateBetData 함수를 뷰 컴포넌트로 전달되도록 수정 */}
+          {tab === "sponsorships" && <SponsorshipsView sponsorships={sponsorships} currentInfo={currentInfo} updateBetData={updateBetData} />}
         </div>
       </main>
     </div>

@@ -82,20 +82,28 @@ export const EventService = {
   },
 
   getFixedResult: async (round) => {
-    try {
-      const queue = JSON.parse(localStorage.getItem("event_manipulation_queue") || "{}");
-      if (queue[round]) {
-        return queue[round].map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
-      }
-      const docRef = doc(db, "event_manipulation", String(round));
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const targetNames = docSnap.data().items;
-        return targetNames.map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
-      }
-    } catch (e) { console.error("Result Fetch Error:", e); }
-    return null;
-  },
+  try {
+    // 로컬 조작 큐 먼저 확인
+    const queue = JSON.parse(localStorage.getItem("event_manipulation_queue") || "{}");
+    if (queue[round]) {
+      return queue[round].map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
+    }
+
+    // Firestore에서 읽을 때 winner 필드로 변경 (기존: .items → 수정: .winner)
+    const docRef = doc(db, "event_manipulation", String(round));
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+
+      // winner 필드 우선, 구버전 items 필드도 fallback으로 지원
+      const targetNames = data.winner || data.items;
+      if (!targetNames || targetNames.length === 0) return null;
+
+      return targetNames.map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
+    }
+  } catch (e) { console.error("Result Fetch Error:", e); }
+  return null;
+},
 
   generateResult: (round) => {
     const getLuckScore = (name) => {

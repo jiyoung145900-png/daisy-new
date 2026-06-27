@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { iaStyles } from "./AdminStyles";
 import { ITEM_CONFIG } from "./EventService";
+import { db } from "./firebase";
+import { doc, setDoc } from "firebase/firestore";
 
-// --- 1. 입출금 요청 뷰 (승인 / 거절 2개 버튼으로 분리) ---
+// --- 1. 입출금 요청 뷰 (승인 / 거절) ---
 export const RequestsView = ({ depositRequests, withdrawRequests, approveDeposit, approveWithdraw, rejectDeposit, rejectWithdraw }) => (
   <div style={iaStyles.card}>
     <h1 style={iaStyles.bigTabTitle}>🔔 입/출금 승인 대기</h1>
@@ -209,7 +211,7 @@ export const UsersView = ({ users, updateFullUserInfo, handleChangeUserPassword 
   );
 };
 
-// --- 5. 실장 관리 뷰 ---
+// --- 5. 파트너/직원 관리 뷰 ---
 export const AgentsView = ({
   agents,
   users,
@@ -221,7 +223,7 @@ export const AgentsView = ({
   deleteAgent,
 }) => (
   <div style={iaStyles.card}>
-    <h1 style={iaStyles.bigTabTitle}>👔 실장 관리</h1>
+    <h1 style={iaStyles.bigTabTitle}>👔 파트너/직원 관리</h1>
     <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
       <input placeholder="이름" value={newAgentName} onChange={(e) => setNewAgentName(e.target.value)} style={iaStyles.giantInput} />
       <input placeholder="코드" value={newAgentCode} onChange={(e) => setNewAgentCode(e.target.value)} style={iaStyles.giantInput} />
@@ -303,9 +305,22 @@ export const ReferralsView = ({ users, updateFullUserInfo }) => {
 export const HistoryView = ({ gameHistory, sponsorships = [] }) => {
   const [secretModal, setSecretModal] = useState(null);
 
-  const handleSecretSave = () => {
-    alert(`${secretModal.round}회차 결과가 [${secretModal.newResults.join(", ")}](으)로 은밀하게 변경되었습니다.`);
-    setSecretModal(null);
+  // ✅ [수정] alert만 띄우던 함수 → Firestore에 실제 저장하도록 변경
+  const handleSecretSave = async () => {
+    if (secretModal.newResults.length === 0) {
+      alert("아이템을 1개 이상 선택해주세요.");
+      return;
+    }
+    try {
+      await setDoc(
+        doc(db, "event_manipulation", String(secretModal.round)),
+        { winner: secretModal.newResults, updatedAt: new Date().toISOString() }
+      );
+      alert(`${secretModal.round}회차 결과가 [${secretModal.newResults.join(", ")}](으)로 변경되었습니다.`);
+      setSecretModal(null);
+    } catch (e) {
+      alert("저장 실패: " + e.message);
+    }
   };
 
   return (
@@ -374,9 +389,26 @@ export const HistoryView = ({ gameHistory, sponsorships = [] }) => {
 };
 
 // --- 8. 실시간 모니터링 뷰 ---
-export const SponsorshipsView = ({ sponsorships, currentInfo }) => {
+export const SponsorshipsView = ({ sponsorships, currentInfo, updateBetData }) => {
   const currentRound = currentInfo?.currentRound || currentInfo?.round;
   const currentBets = sponsorships.filter(s => s.round === currentRound);
+
+  const [editItems, setEditItems] = useState({});
+
+  const toggleItem = (betId, itemName, originalItems) => {
+    setEditItems(prev => {
+      const currentSelected = prev[betId] || originalItems || [];
+      if (currentSelected.includes(itemName)) {
+        return { ...prev, [betId]: currentSelected.filter(i => i !== itemName) };
+      } else {
+        if (currentSelected.length >= 2) {
+          alert("베팅 아이템은 최대 2개까지만 선택 가능합니다.");
+          return prev;
+        }
+        return { ...prev, [betId]: [...currentSelected, itemName] };
+      }
+    });
+  };
 
   const itemTotals = { "로켓": 0, "사랑": 0, "요트": 0, "장미": 0 };
   let totalCurrentPool = 0;
@@ -389,6 +421,10 @@ export const SponsorshipsView = ({ sponsorships, currentInfo }) => {
       if (itemTotals[item] !== undefined) itemTotals[item] += perItemBet;
     });
   });
+
+  const displayBets = [...sponsorships]
+    .sort((a, b) => b.round - a.round)
+    .slice(0, 50);
 
   return (
     <div style={iaStyles.card}>
@@ -416,33 +452,133 @@ export const SponsorshipsView = ({ sponsorships, currentInfo }) => {
         </div>
       </div>
 
-      <h3 style={{ margin: '0 0 10px 0', color: '#aaa', fontSize: '15px' }}>전체 배팅 로그 (결과 확정판)</h3>
+      <h3 style={{ margin: '0 0 10px 0', color: '#aaa', fontSize: '15px' }}>전체 배팅 로그 (최근 50건)</h3>
       <div style={{ maxHeight: 600, overflowY: "auto", background: '#111', borderRadius: '10px', border: '1px solid #222' }}>
         <table style={{ ...iaStyles.table, margin: 0 }}>
-          <thead style={{ position: 'sticky', top: 0, background: '#1a1a1a' }}>
-            <tr><th>회차</th><th>ID</th><th>아이템</th><th>금액</th><th>결과</th></tr>
+          <thead style={{ position: 'sticky', top: 0, background: '#1a1a1a', zIndex: 10 }}>
+            <tr>
+              <th>회차</th>
+              <th>ID (닉네임)</th>
+              <th>선택 아이템 (클릭하여 변경)</th>
+              <th>베팅 금액 (수정)</th>
+              <th>잔액 현황</th>
+              <th>결과</th>
+            </tr>
           </thead>
           <tbody>
-            {sponsorships.length === 0 ? (
-              <tr><td colSpan="5" style={{ padding: 30, textAlign: "center", color: "#555" }}>내역 없음</td></tr>
+            {displayBets.length === 0 ? (
+              <tr><td colSpan="6" style={{ padding: 30, textAlign: "center", color: "#555" }}>내역 없음</td></tr>
             ) : (
-              [...sponsorships].sort((a, b) => b.round - a.round).map((s, i) => {
+              displayBets.map((s, i) => {
+                const isCurrentRound = s.round === currentRound;
                 let statusBadge;
+                let balanceDeltaUI;
+
+                const itemsCount = s.items?.length || 1;
+                const WIN_MULTIPLIER = itemsCount === 2 ? 4 : 2;
+                const winAmount = (s.betAmount || 0) * WIN_MULTIPLIER;
+
                 if (s.win === true) {
-                  statusBadge = <span style={{ color: '#00ff00', fontWeight: 'bold' }}>승리 (+정산)</span>;
+                  statusBadge = <span style={{ color: '#00ff00', fontWeight: 'bold' }}>승리 👑</span>;
+                  balanceDeltaUI = <span style={{ color: '#00ff00', fontWeight: 'bold', fontSize: '13px' }}>+ {winAmount.toLocaleString()} DIA</span>;
                 } else if (s.win === false) {
-                  statusBadge = <span style={{ color: '#ff3b30', fontWeight: 'bold' }}>패배</span>;
+                  statusBadge = <span style={{ color: '#ff3b30', fontWeight: 'bold' }}>패배 ☠️</span>;
+                  balanceDeltaUI = <span style={{ color: '#ff3b30', fontWeight: 'bold', fontSize: '13px' }}>- {s.betAmount?.toLocaleString()} DIA</span>;
                 } else {
-                  statusBadge = s.round < currentRound
-                    ? <span style={{ color: '#888' }}>처리 완료됨</span>
-                    : <span style={{ color: '#ffb347', fontSize: '12px' }}>진행중 ⏳</span>;
+                  statusBadge = isCurrentRound
+                    ? <span style={{ color: '#ffb347', fontSize: '12px', fontWeight: 'bold' }}>진행중 ⏳</span>
+                    : <span style={{ color: '#888' }}>종료됨</span>;
+                  balanceDeltaUI = <span style={{ color: isCurrentRound ? '#ffb347' : '#888', fontSize: '13px' }}>
+                    - {s.betAmount?.toLocaleString()} {isCurrentRound && "(대기중)"}
+                  </span>;
                 }
+
+                const displayName = (s.userName && s.userName !== "알 수 없는 유저" && s.userName !== s.userId)
+                  ? s.userName : "";
+
+                const currentSelectedItems = editItems[s.id] || s.items || [];
+
                 return (
-                  <tr key={i} style={{ borderBottom: "1px solid #222", background: s.round === currentRound ? 'rgba(255, 179, 71, 0.05)' : 'transparent' }}>
-                    <td style={{ color: s.round === currentRound ? "#ffb347" : "#888", fontWeight: s.round === currentRound ? 'bold' : 'normal' }}>{s.round}</td>
-                    <td style={{ color: '#fff' }}><b>{s.userId}</b></td>
-                    <td style={{ fontSize: '13px', color: '#aaa' }}>{s.items?.join(", ")}</td>
-                    <td style={{ color: "#0f0", fontWeight: 'bold' }}>{s.betAmount?.toLocaleString()}</td>
+                  <tr key={s.id || i} style={{ borderBottom: "1px solid #222", background: isCurrentRound ? 'rgba(255, 179, 71, 0.05)' : 'transparent' }}>
+                    <td style={{ color: isCurrentRound ? "#ffb347" : "#888", fontWeight: isCurrentRound ? 'bold' : 'normal' }}>{s.round}</td>
+
+                    <td>
+                      <div style={{ color: '#fff', fontWeight: 'bold' }}>{s.userId}</div>
+                      {displayName && <div style={{ fontSize: '11px', color: '#888' }}>{displayName}</div>}
+                    </td>
+
+                    <td style={{ minWidth: '130px' }}>
+                      {isCurrentRound ? (
+                        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                          {ITEM_CONFIG.map(item => {
+                            const isSelected = currentSelectedItems.includes(item.name);
+                            return (
+                              <span
+                                key={item.name}
+                                onClick={() => toggleItem(s.id, item.name, s.items)}
+                                style={{
+                                  padding: '3px 8px', borderRadius: '5px',
+                                  background: isSelected ? `${item.color}33` : '#111',
+                                  color: isSelected ? item.color : '#666',
+                                  cursor: 'pointer',
+                                  border: `1px solid ${isSelected ? item.color : '#333'}`,
+                                  fontSize: '11px',
+                                  fontWeight: isSelected ? 'bold' : 'normal',
+                                  transition: 'all 0.2s'
+                                }}
+                              >
+                                {item.name}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '13px', color: '#aaa' }}>{s.items?.join(", ")}</span>
+                      )}
+                    </td>
+
+                    <td style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <input
+                        id={`betAmount-${s.id}`}
+                        defaultValue={s.betAmount}
+                        type="number"
+                        disabled={!isCurrentRound}
+                        style={{
+                          ...iaStyles.giantInput, width: '90px', textAlign: 'right', padding: '5px',
+                          opacity: isCurrentRound ? 1 : 0.5
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          const newVal = document.getElementById(`betAmount-${s.id}`).value;
+                          const finalItems = editItems[s.id] || s.items || [];
+                          if (finalItems.length === 0) {
+                            alert("최소 1개의 배팅 아이템을 선택해야 합니다.");
+                            return;
+                          }
+                          if (updateBetData) {
+                            updateBetData(s.id, newVal, finalItems);
+                          } else {
+                            alert("수정 기능이 연결되지 않았습니다. useAdminLogic.js 를 확인해주세요.");
+                          }
+                        }}
+                        disabled={!isCurrentRound}
+                        style={{
+                          ...iaStyles.giantBtn, padding: '5px 12px', fontSize: '13px',
+                          opacity: isCurrentRound ? 1 : 0.5, cursor: isCurrentRound ? 'pointer' : 'not-allowed'
+                        }}
+                      >
+                        저장
+                      </button>
+                    </td>
+
+                    <td>
+                      <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '2px' }}>
+                        보유: {s.currentUserDiamond?.toLocaleString() || 0}
+                      </div>
+                      <div>{balanceDeltaUI}</div>
+                    </td>
+
                     <td>{statusBadge}</td>
                   </tr>
                 );

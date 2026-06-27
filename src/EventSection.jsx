@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { useEventEngine, allItems } from "./useEventEngine"; 
 import { db } from "./firebase"; 
-import { collection, addDoc } from "firebase/firestore";
+import { collection, addDoc, deleteDoc, doc } from "firebase/firestore";
 
 export default function EventSection({ user, userPoint = 0, confirmedImage, confirmedAvatarIdx, onBack, onUpdatePoint, t }) {
   const pointControls = useAnimation();
@@ -59,6 +59,21 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     return `https://api.dicebear.com/7.x/${avatarStyles[idx]}/svg?seed=${user?.id}_${idx}&backgroundColor=2a2a2e`;
   }, [confirmedImage, confirmedAvatarIdx, user?.id]);
 
+ // 1. handleCancelBet을 handleDonate 외부로 분리 (상단으로 이동)
+  const handleCancelBet = async () => {
+    if (!myPendingBet?.docId) return; // docId 확인
+    try {
+      await deleteDoc(doc(db, "event_bets", myPendingBet.docId));
+      const refunded = displayPoint + myPendingBet.totalCost;
+      setDisplayPoint(refunded);
+      updatePointWithAnim(refunded);
+      setMyPendingBet(null);
+    } catch (error) {
+      console.error("베팅 취소 실패:", error);
+      alert("취소 처리 중 오류가 발생했습니다.");
+    }
+  };
+
   const handleDonate = async () => {
     const perAmount = parseInt(betAmount);
     const totalCost = perAmount * selectedItems.length;
@@ -69,12 +84,15 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     const newPoint = displayPoint - totalCost;
     setDisplayPoint(newPoint); 
     updatePointWithAnim(newPoint); 
-    setMyPendingBet({ round: round, items: [...selectedItems], perAmount, totalCost });
 
     try {
-      await addDoc(collection(db, "event_bets"), {
+      // 2. 문서 추가 후 생성된 ID를 저장
+      const docRef = await addDoc(collection(db, "event_bets"), {
         round: round, userId: user.id, betAmount: totalCost, items: [...selectedItems], win: null, timestamp: new Date().toISOString()
       });
+      
+      // docId를 포함하여 상태 저장
+      setMyPendingBet({ round: round, items: [...selectedItems], perAmount, totalCost, docId: docRef.id });
     } catch (e) { console.error("서버 기록 실패:", e); }
 
     setSelectedItems([]);
@@ -232,12 +250,9 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                     {isKo ? "선택:" : "Pick:"} <b style={{color:'#fff'}}>{myPendingBet.items.map(name => getLocalizedText(name)).join(", ")}</b> | {myPendingBet.totalCost.toLocaleString()} DIA
                   </div>
                 </div>
-                <button style={localDs.cancelBtn} onClick={() => { 
-                  const refunded = displayPoint + myPendingBet.totalCost;
-                  setDisplayPoint(refunded);
-                  updatePointWithAnim(refunded);
-                  setMyPendingBet(null); 
-                }}>{isKo ? "취소" : "Cancel"}</button>
+                <button style={localDs.cancelBtn} onClick={handleCancelBet}>
+                  {isKo ? "취소" : "Cancel"}
+                </button>
               </div>
             ) : (
               <>

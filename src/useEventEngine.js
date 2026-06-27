@@ -4,7 +4,7 @@ import { EventService, soundManager, ITEM_CONFIG } from "./EventService";
 export { ITEM_CONFIG as allItems }; 
 
 export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
-  // --- Refs (원본 그대로 보존) ---
+  // --- Refs ---
   const isProcessingRef = useRef(false);
   const pointRef = useRef(userPoint);
   const betRef = useRef(null);
@@ -12,15 +12,41 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
 
   useEffect(() => { pointRef.current = userPoint; }, [userPoint]);
 
-  // --- State (원본 그대로) ---
+  // ✅ [수정] State 선언을 initEngine useEffect보다 위로 이동
+  // (initEngine 내부에서 setMyHistory, setMyPendingBet을 호출하므로 반드시 먼저 선언되어야 함)
   const [totalHistory, setTotalHistory] = useState([]);
-  
-  // ★ [복구/정산 엔진 삽입] 엔진 시작 시 과거 기록 복구 및 "부재중 베팅" 자동 정산 ★
+
+  const [myHistory, setMyHistory] = useState(() => {
+    const saved = localStorage.getItem(`event_my_history_${user?.id}`);
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [gameState, setGameState] = useState({
+    round: 0,
+    timeLeft: 60,
+    isDrawing: false
+  });
+
+  const [drawingItems, setDrawingItems] = useState(["🚀", "❤️"]);
+  const [myPendingBet, setMyPendingBet] = useState(null);
+  const [showResult, setShowResult] = useState(null);
+  const [liveNoti, setLiveNoti] = useState("이벤트가 활성화되었습니다!");
+
+  // --- [원본 기능: 포인트 업데이트] ---
+  const updatePointWithAnim = useCallback((newPoint) => {
+    if (onUpdatePoint) {
+      onUpdatePoint(newPoint);
+      if (pointControls) pointControls.start({ scale: [1, 1.2, 1], transition: { duration: 0.3 } });
+    }
+  }, [onUpdatePoint, pointControls]);
+
+  // ✅ [수정] initEngine useEffect를 State 선언 및 updatePointWithAnim 아래로 이동
+  // setMyHistory, setMyPendingBet, updatePointWithAnim이 모두 정의된 이후에 실행됨
   useEffect(() => {
     const initEngine = async () => {
       const { round: currentRound } = EventService.getCurrentRoundInfo();
       
-      // 1. [원본 로직] 전체 히스토리 복구
+      // 1. 전체 히스토리 복구
       const savedTotal = JSON.parse(localStorage.getItem("event_total_history") || "[]");
       const lastSavedRound = savedTotal.length > 0 ? savedTotal[0].round : currentRound - 1;
 
@@ -33,12 +59,11 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
         setTotalHistory(savedTotal);
       }
 
-      // 2. [추가] 부재중 베팅 자동 정산 및 기록 생성 로직
+      // 2. 부재중 베팅 자동 정산
       const savedBet = localStorage.getItem(`pending_bet_${user?.id}`);
       if (savedBet) {
         const parsedBet = JSON.parse(savedBet);
 
-        // 사용자가 없는 사이 결과가 이미 나왔다면?
         if (parsedBet.round < currentRound) {
           const fixedResult = await EventService.getFixedResult(parsedBet.round);
           const winObjs = fixedResult || EventService.generateResult(parsedBet.round);
@@ -48,22 +73,20 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
           const matchedCount = items.filter(name => winNames.includes(name)).length;
           let winAmount = 0;
           
-          // [사용자님의 원본 정산 공식 100% 동일 적용]
           if (items.length === 1) { 
-             if (matchedCount >= 1) winAmount = perAmount * 2; 
+            if (matchedCount >= 1) winAmount = perAmount * 2; 
           } else if (items.length === 2) {
             if (matchedCount === 1) winAmount = totalCost; 
             else if (matchedCount === 2) winAmount = totalCost * 4; 
           }
 
-          // 기록 생성
           const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
           const newRecord = {
             round: parsedBet.round, selected: [...items], winNames, winIcons: winObjs.map(i => i.icon),
             earn: winAmount, cost: totalCost, date: currentTime, status: "자동정산"
           };
 
-          // 내 히스토리에 즉시 반영
+          // ✅ 이제 setMyHistory가 위에 선언되어 있으므로 안전하게 호출 가능
           setMyHistory(prev => {
             if (prev.find(h => h.round === parsedBet.round)) return prev;
             const updated = [newRecord, ...prev].slice(0, 100);
@@ -71,44 +94,20 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
             return updated;
           });
 
-          // 당첨금 자동 지급
           if (winAmount > 0) {
             updatePointWithAnim(pointRef.current + winAmount);
           }
           localStorage.removeItem(`pending_bet_${user?.id}`);
         } else {
           // 아직 진행 중인 회차라면 베팅 상태 유지
+          // ✅ 이제 setMyPendingBet도 안전하게 호출 가능
           betRef.current = parsedBet;
           setMyPendingBet(parsedBet);
         }
       }
     };
     initEngine();
-  }, [user?.id]);
-
-  const [myHistory, setMyHistory] = useState(() => {
-    const saved = localStorage.getItem(`event_my_history_${user?.id}`);
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [gameState, setGameState] = useState({
-    round: 0,
-    timeLeft: 60,
-    isDrawing: false
-  });
-  
-  const [drawingItems, setDrawingItems] = useState(["🚀", "❤️"]);
-  const [myPendingBet, setMyPendingBet] = useState(null);
-  const [showResult, setShowResult] = useState(null);
-  const [liveNoti, setLiveNoti] = useState("이벤트가 활성화되었습니다!");
-
-  // --- [원본 기능: 포인트 업데이트] ---
-  const updatePointWithAnim = useCallback((newPoint) => {
-    if (onUpdatePoint) {
-      onUpdatePoint(newPoint);
-      if(pointControls) pointControls.start({ scale: [1, 1.2, 1], transition: { duration: 0.3 } });
-    }
-  }, [onUpdatePoint, pointControls]);
+  }, [user?.id]); // updatePointWithAnim은 의존성에서 의도적으로 제외 (마운트 1회만 실행)
 
   // --- [원본 기능: 관리자 다이아 수정 리스너] ---
   useEffect(() => {
@@ -131,7 +130,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     return () => window.removeEventListener("event_history_update", handleHistoryUpdate);
   }, []);
 
-  // ★ [수정] 베팅 시 로컬 스토리지에 즉시 백업 ★
+  // 베팅 시 로컬 스토리지에 즉시 백업
   const handleSetMyPendingBet = (bet) => {
     betRef.current = bet;
     setMyPendingBet(bet);
@@ -150,19 +149,16 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     setGameState(prev => ({ ...prev, isDrawing: true, timeLeft: 0 }));
     soundManager.play("draw");
 
-    // 셔플 애니메이션 (원본 로직 그대로)
     const shuffleInterval = setInterval(() => {
       const randomIcons = EventService.generateResult(Math.random()).map(i => i.icon);
       setDrawingItems(randomIcons);
     }, 120);
 
-    // 애니메이션 도중 서버에서 조작 데이터가 있는지 확인
     const fixedResult = await EventService.getFixedResult(targetRound);
 
     setTimeout(() => {
       clearInterval(shuffleInterval);
       
-      // 서버 조작 우선, 없으면 수학적 고정 결과 사용
       const winObjs = fixedResult || EventService.generateResult(targetRound);
       const winNames = winObjs.map(i => i.name);
       const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -180,7 +176,6 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
         return updated;
       });
 
-      // --- [원본 베팅 정산 로직: 100% 동일 보존] ---
       const activeBet = betRef.current;
       if (activeBet && activeBet.round === targetRound) {
         const { items, perAmount, totalCost } = activeBet;
@@ -188,7 +183,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
         let winAmount = 0;
 
         if (items.length === 1) { 
-           if (matchedCount >= 1) winAmount = perAmount * 2; 
+          if (matchedCount >= 1) winAmount = perAmount * 2; 
         } else if (items.length === 2) {
           if (matchedCount === 1) winAmount = totalCost; 
           else if (matchedCount === 2) winAmount = totalCost * 4; 
@@ -253,7 +248,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     return () => clearInterval(interval);
   }, [handleRoundEnd]);
 
-  // --- [원본 기능: 라이브 알림 생성기 (원본 로직 100%)] ---
+  // --- [원본 기능: 라이브 알림 생성기] ---
   useEffect(() => {
     const generateRandomUser = () => {
       const type = Math.random();
