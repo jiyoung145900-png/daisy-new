@@ -183,6 +183,7 @@ export default function Dashboard({
           <MyPageSection 
             t={t} user={user} onBack={() => setActiveTab('home')} onLogout={() => setShowLogoutConfirm(true)} 
             confirmedImage={appAvatarImage} confirmedAvatarIdx={appAvatarIdx} onAvatarChange={onAvatarChange} s={s} 
+            telegramLink={telegramLink}
           />
         );
       default: return null;

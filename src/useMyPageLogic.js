@@ -17,6 +17,7 @@ const broadcast = new BroadcastChannel("daisy_global_channel");
 
 export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
   const [userInfo, setUserInfo] = useState(user || null);
+  const [globalSettings, setGlobalSettings] = useState({}); // ✅ [추가됨] 시스템 전역 설정(텔레그램 등)을 담을 상태
 
   const [isCheckedIn, setIsCheckedIn] = useState(() => {
     if (!user) return false;
@@ -33,7 +34,19 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     if (user) setUserInfo(user);
   }, [user]);
 
-  // ✅ [NEW] Real-time subscription to the true source of truth: users/{id}
+  // ✅ [추가됨] AdminCMS에서 저장하는 전체 설정(텔레그램 링크 등) 실시간 구독
+  useEffect(() => {
+    // 보통 설정 데이터는 'settings' 컬렉션의 'global' 문서에 저장됩니다.
+    const configRef = doc(db, "settings", "global"); 
+    const unsub = onSnapshot(configRef, (snap) => {
+      if (snap.exists()) {
+        setGlobalSettings(snap.data());
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // ✅ Real-time subscription to the true source of truth: users/{id}
   useEffect(() => {
     if (!user?.id) return;
 
@@ -338,7 +351,8 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
   };
 
   return {
-    userInfo,
+    // ✅ [수정됨] userInfo 객체 안에 globalSettings (텔레그램 링크 등)를 덮어씌워서 병합 반환
+    userInfo: userInfo ? { ...globalSettings, ...userInfo } : globalSettings,
     isCheckedIn,
     myDeposits,
     myWithdraws,

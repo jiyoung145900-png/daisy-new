@@ -12,7 +12,18 @@ import {
   PasswordView, PinView, DepositView, WithdrawView, HistoryView, SettingsView, TransactionHistoryView 
 } from "./MyPageViews.jsx"; 
 
-export default function MyPage({ user, onBack, onLogout, confirmedImage, confirmedAvatarIdx, onAvatarChange, onUpdatePoint, t }) {
+// ★ [수정완료] telegramLink 와 t 등 모든 인자(props)를 빠짐없이 받도록 세팅
+export default function MyPage({ 
+  user, 
+  telegramLink, // <- Dashboard.jsx에서 넘어온 텔레그램 전체 링크
+  onBack, 
+  onLogout, 
+  confirmedImage, 
+  confirmedAvatarIdx, 
+  onAvatarChange, 
+  onUpdatePoint, 
+  t             // <- 빠지면 에러나는 번역 함수 (복구 완료)
+}) {
   const [view, setView] = useState("main");
   const isKo = t.home === "홈페이지";
   
@@ -113,7 +124,8 @@ export default function MyPage({ user, onBack, onLogout, confirmedImage, confirm
             <span style={myStyles.menuTitle}>📋 &nbsp; {isKo ? "이용 내역" : "History"}</span>
             <span style={myStyles.arrow}>❯</span>
           </div>
-          <div style={myStyles.menuItem} onClick={() => window.open('https://t.me/daisy_support', '_blank')}>
+          {/* ★ [수정완료] App.jsx의 telegramLink가 전체 URL 형식이므로 그대로 띄우게 연결했습니다. */}
+          <div style={myStyles.menuItem} onClick={() => window.open(telegramLink || 'https://t.me/daisy_support', '_blank')}>
             <span style={myStyles.menuTitle}>💬 &nbsp; {isKo ? "1:1 실시간 상담" : "1:1 Support"}</span>
             <span style={myStyles.arrow}>❯</span>
           </div>
