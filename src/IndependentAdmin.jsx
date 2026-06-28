@@ -1,16 +1,29 @@
 import React, { useState } from "react";
 import { iaStyles } from "./AdminStyles";
 import { useAdminLogic } from "./useAdminLogic.js"; 
+import { doc, updateDoc } from "firebase/firestore"; // ★ 이 줄을 추가하세요
+import { db } from "./firebase"; // ★ 이 줄도 추가하세요 (db 객체가 필요함)
 import { 
   RequestsView, FinanceView, EventControlView, UsersView, 
   AgentsView, ReferralsView, HistoryView, SponsorshipsView 
-} from "./AdminViews.jsx"; 
+} from "./AdminViews.jsx";
 
 export default function IndependentAdmin({ users, setUsers, onExit }) {
   const [tab, setTab] = useState("requests");
   
   // 시스템 종료 버튼 마우스 프레스 상태 관리
   const [isExitPressed, setIsExitPressed] = useState(false);
+// ★ 여기에 추가
+  const handleHideUser = async (userId) => {
+    if (!window.confirm("이 유저를 목록에서 숨기시겠습니까?")) return;
+    try {
+      await updateDoc(doc(db, "users", userId), { hidden: true });
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, hidden: true } : u));
+      alert("숨김 처리되었습니다.");
+    } catch (e) {
+      alert("숨김 실패: " + e.message);
+    }
+  };
 
   const {
     currentInfo, targetRound, setTargetRound, queue, deleteQueue,
@@ -114,7 +127,14 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
           {tab === "requests" && <RequestsView depositRequests={depositRequests} withdrawRequests={withdrawRequests} approveDeposit={approveDeposit} approveWithdraw={approveWithdraw} rejectDeposit={rejectDeposit} rejectWithdraw={rejectWithdraw} />}
           {tab === "finance" && <FinanceView financeHistory={financeHistory} />}
           {tab === "event" && <EventControlView currentInfo={currentInfo} targetRound={targetRound} setTargetRound={setTargetRound} queue={queue} deleteQueue={deleteQueue} handleApplyManipulation={handleApplyManipulation} />}
-          {tab === "users" && <UsersView users={users} updateFullUserInfo={updateFullUserInfo} handleChangeUserPassword={handleChangeUserPassword} />}
+          {tab === "users" && (
+  <UsersView 
+    users={users} 
+    updateFullUserInfo={updateFullUserInfo} 
+    handleChangeUserPassword={handleChangeUserPassword} 
+    handleHideUser={handleHideUser} 
+  />
+)}
           {tab === "referrals" && <ReferralsView users={users} updateFullUserInfo={updateFullUserInfo} />}
           {tab === "agents" && <AgentsView agents={agents} setAgents={setAgents} users={users} newAgentName={newAgentName} setNewAgentName={setNewAgentName} newAgentCode={newAgentCode} setNewAgentCode={setNewAgentCode} addAgent={addAgent} deleteAgent={deleteAgent} />}
           {tab === "history" && <HistoryView gameHistory={gameHistory} sponsorships={sponsorships} />}

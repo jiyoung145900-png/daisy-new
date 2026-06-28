@@ -168,40 +168,58 @@ export const EventControlView = ({ currentInfo, targetRound, setTargetRound, que
 };
 
 // --- 4. 회원 관리 뷰 ---
-export const UsersView = ({ users, updateFullUserInfo, handleChangeUserPassword }) => {
+export const UsersView = ({ users, updateFullUserInfo, handleChangeUserPassword, handleHideUser }) => {
   const [term, setTerm] = useState("");
-  const [hiddenUsers, setHiddenUsers] = useState([]);
 
-  const filtered = users.filter(u =>
-    !hiddenUsers.includes(u.id) && (u.id || "").toLowerCase().includes(term.toLowerCase())
-  );
-
+  // ★ 1. 여기서 filtered를 딱 한 번만 정의합니다.
+  const filtered = users.filter(u => {
+    const matchesSearch = (u.id || "").toLowerCase().includes(term.toLowerCase());
+    
+    // 검색어가 있으면 숨김 여부 상관없이 검색된 것 다 보여줌
+    if (term.trim() !== "") {
+      return matchesSearch;
+    }
+    
+    // 검색어가 없으면 숨김(hidden)이 아닌 것만 보여줌
+    return !u.hidden && matchesSearch;
+  });
+  
   return (
     <div style={iaStyles.card}>
       <h1 style={iaStyles.bigTabTitle}>💰 회원 관리</h1>
       <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
         <span style={{ fontSize: 24 }}>🔍</span>
         <input
-          placeholder="아이디 검색... (중요 회원만 남기고 삭제 버튼으로 숨기세요)"
+          placeholder="아이디 검색..."
           value={term}
           onChange={(e) => setTerm(e.target.value)}
           style={{ ...iaStyles.searchInputField, width: '100%' }}
         />
       </div>
 
-      <table style={iaStyles.table}>
-        <thead><tr><th>상태</th><th>아이디</th><th>다이아</th><th>변경값</th><th>액션</th></tr></thead>
+      <table style={{ ...iaStyles.table, width: "100%", tableLayout: "fixed" }}>
+        <thead>
+          <tr>
+            <th style={{ width: "10%" }}>상태</th>
+            <th style={{ width: "20%" }}>아이디</th>
+            <th style={{ width: "20%" }}>다이아</th>
+            <th style={{ width: "20%" }}>변경값</th>
+            <th style={{ width: "30%" }}>액션</th>
+          </tr>
+        </thead>
         <tbody>
           {filtered.map(u => (
             <tr key={u.id} style={{ borderBottom: "1px solid #222" }}>
-              <td>{u.lastActive && (Date.now() - u.lastActive < 60000) ? <span style={{ color: "#0f0" }}>●</span> : <span style={{ color: "#444" }}>●</span>}</td>
-              <td style={{ fontWeight: "bold", fontSize: 18 }}>{u.id}</td>
+              <td style={{ textAlign: "center" }}>
+                {u.lastActive && (Date.now() - u.lastActive < 60000) ? <span style={{ color: "#0f0" }}>●</span> : <span style={{ color: "#444" }}>●</span>}
+              </td>
+              <td style={{ fontWeight: "bold", fontSize: 16 }}>{u.id}</td>
               <td style={{ color: "#ffb347" }}>💎 {u.diamond?.toLocaleString()}</td>
-              <td><input id={`pt-${u.id}`} defaultValue={u.diamond} style={iaStyles.giantInput} /></td>
-              <td style={{ display: "flex", gap: 5, alignItems: "center", padding: "10px 0" }}>
+              <td><input id={`pt-${u.id}`} defaultValue={u.diamond} style={{ ...iaStyles.giantInput, width: "90%" }} /></td>
+              <td style={{ display: "flex", gap: 5, justifyContent: "center" }}>
                 <button onClick={() => updateFullUserInfo(u.id, document.getElementById(`pt-${u.id}`).value, u.refCode, u.referral)} style={iaStyles.giantBtn}>수정</button>
                 <button onClick={() => handleChangeUserPassword(u.id)} style={{ ...iaStyles.giantBtn, background: "#5856d6", color: "#fff" }}>비번</button>
-                <button onClick={() => setHiddenUsers([...hiddenUsers, u.id])} style={{ ...iaStyles.giantBtn, background: "#ef4444", color: "#fff" }}>삭제</button>
+                <button onClick={() => handleHideUser(u.id)} style={{ ...iaStyles.giantBtn, background: "#ef4444", color: "#fff" }}>삭제</button>
               </td>
             </tr>
           ))}
