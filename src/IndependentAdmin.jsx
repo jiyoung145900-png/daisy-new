@@ -31,7 +31,7 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
     depositRequests, withdrawRequests, financeHistory, approveDeposit, approveWithdraw,
     rejectDeposit, rejectWithdraw,
     agents, setAgents, newAgentName, setNewAgentName, newAgentCode, setNewAgentCode, addAgent, deleteAgent,
-    handleApplyManipulation, updateFullUserInfo, handleChangeUserPassword, handleChangeAdminPassword,
+    handleApplyManipulation, updateFullUserInfo, updateUserTier, handleChangeUserPassword, handleChangeAdminPassword,
     updateBetData // 🔥 새로 추가된 실시간 베팅 금액 수정 함수
   } = useAdminLogic(users, setUsers);
 
@@ -131,6 +131,7 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
   <UsersView 
     users={users} 
     updateFullUserInfo={updateFullUserInfo} 
+    updateUserTier={updateUserTier}
     handleChangeUserPassword={handleChangeUserPassword} 
     handleHideUser={handleHideUser} 
   />

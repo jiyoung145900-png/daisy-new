@@ -9,6 +9,7 @@ export default function AdminCMS({
   onExit, members, setMembers,
   slideImages, setSlideImages, videos, setVideos,
   adminPw, setAdminPw, telegramLink, setTelegramLink,
+  noticeText, setNoticeText,
   saveToFirebase, 
   syncToFirebase,
   openIndependent, 
@@ -129,17 +130,18 @@ export default function AdminCMS({
     }
   };
 
-  // ✅ [수정] 시스템 설정(텔레그램/비밀번호)만 따로 저장하는 함수
+  // ✅ [수정] 시스템 설정(텔레그램/비밀번호/공지 티커)만 따로 저장하는 함수
   const handleSaveSystemSettings = async () => {
     setLoading(true);
-    // syncToFirebase를 통해 텔레그램 링크와 관리자 비밀번호만 전송
+    // syncToFirebase를 통해 텔레그램 링크, 관리자 비밀번호, 공지 티커 문구를 전송
     const success = await syncToFirebase({ 
       telegramLink: telegramLink, 
-      adminPw: adminPw 
+      adminPw: adminPw,
+      noticeText: noticeText
     });
     setLoading(false);
     if (success) {
-      alert("텔레그램 아이디 및 관리자 비밀번호가 즉시 저장되었습니다! ✅");
+      alert("텔레그램 아이디, 관리자 비밀번호, 공지 티커가 즉시 저장되었습니다! ✅");
     }
   };
 
@@ -207,6 +209,22 @@ export default function AdminCMS({
         {/* SECTION 2: 홈페이지 설정 */}
         <div style={{...cmsStyles.sectionBox, borderColor: '#FFD700'}}>
           <label style={{...cmsStyles.sectionLabel, color: '#FFD700'}}>❷ 홈페이지 설정</label>
+
+          {/* ★ [추가] 상단 공지 티커 문구 설정 */}
+          <div style={cmsStyles.fieldGroup}>
+            <label style={cmsStyles.fieldLabel}>상단 공지 티커 문구 (홈 화면 상단에 흐르는 문구)</label>
+            <input 
+              type="text" 
+              style={cmsStyles.textInput} 
+              placeholder="예) 📢 데이지 클럽에 오신 것을 환영합니다!" 
+              value={noticeText || ""} 
+              onChange={e => setNoticeText(e.target.value)} 
+            />
+            <p style={{fontSize: 10, color: '#666', margin: '6px 0 0 0'}}>
+              하단의 "시스템 설정 즉시저장" 버튼을 눌러야 실제로 반영됩니다.
+            </p>
+          </div>
+
           <div style={cmsStyles.fieldGroup}>
             <label style={cmsStyles.fieldLabel}>상단 고정 로고 (Inner Logo)</label>
             <input type="file" accept="image/*" style={cmsStyles.fileInput} onChange={(e) => handleFileProcess(e, 'innerLogo', setInnerLogo)} />

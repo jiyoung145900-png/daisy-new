@@ -151,7 +151,7 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
   );
 };
 
-// --- 5. [신규] 입/출금 신청 내역 화면 (심사중/완료 상태 표시) ---
+// --- 5. [신규] 입/출금 신청 내역 화면 (심사중/완료/거절 상태 표시) ---
 export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
     return (
       <div style={myStyles.container}>
@@ -159,33 +159,48 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
         <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
           {data.length === 0 ? <div style={{ textAlign: 'center', color: '#666', marginTop: '50px' }}>{isKo ? "내역이 없습니다." : "No records."}</div> :
             data.map((h, i) => {
-              // 상태별 색상 및 텍스트 처리
+              // ✅ [수정] 상태별 색상 및 텍스트 처리 - 완료/심사중에 더해 거절 상태 추가
               const isDone = h.status === '완료';
-              const statusColor = isDone ? '#4cd137' : '#fbc531'; // 초록 vs 노랑
-              const statusBg = isDone ? 'rgba(76, 209, 55, 0.1)' : 'rgba(251, 197, 49, 0.1)';
-              const statusText = isDone ? (isKo ? '처리완료' : 'Done') : (isKo ? '심사중' : 'Pending');
+              const isRejected = h.status === '거절';
+              const statusColor = isRejected ? '#ef4444' : isDone ? '#4cd137' : '#fbc531'; // 빨강 / 초록 / 노랑
+              const statusBg = isRejected ? 'rgba(239, 68, 68, 0.1)' : isDone ? 'rgba(76, 209, 55, 0.1)' : 'rgba(251, 197, 49, 0.1)';
+              const statusText = isRejected ? (isKo ? '거절됨' : 'Rejected') : isDone ? (isKo ? '처리완료' : 'Done') : (isKo ? '심사중' : 'Pending');
 
               return (
-                <div key={i} style={{ background: '#1a1a1a', padding: '20px', borderRadius: '15px', marginBottom: '15px', border: '1px solid #333', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                  <div>
-                      <div style={{color: '#888', fontSize: '12px', marginBottom: '5px'}}>
-                          {new Date(h.timestamp || h.completedAt).toLocaleString()}
-                      </div>
-                      <div style={{color: '#fff', fontSize: '18px', fontWeight:'bold'}}>
-                          {h.amount?.toLocaleString()} DIA
-                      </div>
-                      {/* 추가 정보 표시 (입금자명 or 은행) */}
-                      <div style={{color: '#666', fontSize:'13px', marginTop:4}}>
-                          {h.depositName ? (isKo ? `입금자: ${h.depositName}` : `Name: ${h.depositName}`) : 
-                           (h.bankInfo ? `${h.bankInfo.bank} ${h.bankInfo.holder}` : '')}
-                      </div>
+                <div key={i} style={{ background: '#1a1a1a', padding: '20px', borderRadius: '15px', marginBottom: '15px', border: isRejected ? '1px solid rgba(239,68,68,0.4)' : '1px solid #333' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <div>
+                        <div style={{color: '#888', fontSize: '12px', marginBottom: '5px'}}>
+                            {new Date(h.timestamp || h.completedAt).toLocaleString()}
+                        </div>
+                        <div style={{color: '#fff', fontSize: '18px', fontWeight:'bold'}}>
+                            {h.amount?.toLocaleString()} DIA
+                        </div>
+                        {/* 추가 정보 표시 (입금자명 or 은행) */}
+                        <div style={{color: '#666', fontSize:'13px', marginTop:4}}>
+                            {h.depositName ? (isKo ? `입금자: ${h.depositName}` : `Name: ${h.depositName}`) : 
+                             (h.bankInfo ? `${h.bankInfo.bank} ${h.bankInfo.holder}` : '')}
+                        </div>
+                    </div>
+                    <div style={{
+                        padding: '6px 12px', borderRadius:'8px', fontSize:'13px', fontWeight:'bold',
+                        background: statusBg, color: statusColor, border: `1px solid ${statusColor}`
+                    }}>
+                        {statusText}
+                    </div>
                   </div>
-                  <div style={{
-                      padding: '6px 12px', borderRadius:'8px', fontSize:'13px', fontWeight:'bold',
-                      background: statusBg, color: statusColor, border: `1px solid ${statusColor}`
-                  }}>
-                      {statusText}
-                  </div>
+
+                  {/* ✅ [추가] 거절 사유 표시 - 관리자가 거절할 때 입력한 사유를 회원에게 그대로 보여줌 */}
+                  {isRejected && h.rejectReason && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(239,68,68,0.2)' }}>
+                      <div style={{ color: '#ef4444', fontSize: '11px', fontWeight: 'bold', marginBottom: 4 }}>
+                        {isKo ? '거절 사유' : 'Rejection Reason'}
+                      </div>
+                      <div style={{ color: '#ccc', fontSize: '13px', lineHeight: 1.5 }}>
+                        {h.rejectReason}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

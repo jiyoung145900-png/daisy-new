@@ -25,7 +25,8 @@ export default function Dashboard({
   videos = [], 
   videoCategories = [], 
   innerLogo, 
-  telegramLink = "https://t.me/your_address" 
+  telegramLink = "https://t.me/your_address",
+  noticeText = "" // ★ [추가] 홈 상단 공지 티커 문구
 }) {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedM, setSelectedM] = useState(null);
@@ -146,6 +147,7 @@ export default function Dashboard({
             setActiveTab={setActiveTab} openDetail={openDetail} 
             handleTelegram={handleTelegram} matchingCount={matchingCount}
             onClaimBonus={handleClaimBonus} // ★ 보너스 함수 전달
+            noticeText={noticeText} // ★ [추가] 공지 티커 문구 전달
           />
         );
       case 'manager':

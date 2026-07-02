@@ -27,10 +27,10 @@ export default function MyPage({
   const [view, setView] = useState("main");
   const isKo = t.home === "홈페이지";
   
-  // ★ [수정] myDeposits, myWithdraws (내역 데이터) 받아오기
+  // ★ [수정] myDeposits, myWithdraws (내역 데이터) 받아오기 / 데일리 보너스 관련 값 제거
   const { 
-    userInfo, isCheckedIn, myDeposits, myWithdraws,
-    handleDailyCheckIn, requestDeposit, requestWithdraw, updatePassword, updatePin, updateAvatar 
+    userInfo, myDeposits, myWithdraws,
+    requestDeposit, requestWithdraw, updatePassword, updatePin, updateAvatar 
   } = useMyPageLogic(user, onUpdatePoint, isKo);
 
   const [tempSelectedIdx, setTempSelectedIdx] = useState(confirmedAvatarIdx || 0);
@@ -38,7 +38,8 @@ export default function MyPage({
   const [showAvatarEditor, setShowAvatarEditor] = useState(false);
 
   if (!userInfo) return <div style={myStyles.loading}>SECRET MEMBERSHIP...</div>;
-  const tier = getTierInfo(userInfo.diamond);
+  // ★ [수정] 다이아 보유량 기반 자동계산 대신, 관리자가 지정한 userInfo.tier 값을 그대로 사용
+  const tier = getTierInfo(userInfo.tier);
 
   // --- 화면 라우팅 ---
   if (view === "profile") return <PasswordView onBack={()=>setView("settings")} isKo={isKo} onSubmit={updatePassword} userInfo={userInfo} />;
@@ -82,10 +83,6 @@ export default function MyPage({
           </div>
           <div style={myStyles.userTextMain}>
             <div style={myStyles.userIdMain}>{userInfo.name || userInfo.id} <span style={{...myStyles.vipBadge, background: tier.color, color:'#000'}}>{tier.name}</span></div>
-            <div style={myStyles.tierContainer}>
-              <div style={myStyles.tierText}>{isKo ? "다음 등급까지" : "Next Tier"}: {tier.next.toLocaleString()}</div>
-              <div style={myStyles.tierBarOuter}><div style={{...myStyles.tierBarInner, width: `${tier.per}%`, background: tier.color}}></div></div>
-            </div>
             <div style={myStyles.userNoMain}>UID: {userInfo.no || "000000"}</div>
           </div>
         </div>
@@ -97,9 +94,10 @@ export default function MyPage({
           <div style={myStyles.value}>💎 {userInfo.diamond?.toLocaleString() ?? 0}</div>
         </div>
         <div style={myStyles.divider}></div>
-        <div style={{...myStyles.balanceItem, cursor: isCheckedIn ? 'default' : 'pointer'}} onClick={handleDailyCheckIn}>
-          <div style={{...myStyles.label, color: isCheckedIn ? '#444' : '#D4AF37'}}>{isCheckedIn ? (isKo ? '수령 완료' : 'Claimed') : (isKo ? '데일리 보너스' : 'Daily Bonus')}</div>
-          <div style={myStyles.value}>{isCheckedIn ? '✅' : '🎁'}</div>
+        {/* ★ [수정] 데일리 보너스 버튼 자리를 빠른 출금 버튼으로 교체 - 기존 출금 로직/화면(WithdrawView) 그대로 재사용 */}
+        <div style={{...myStyles.balanceItem, cursor: 'pointer'}} onClick={() => setView("withdraw")}>
+          <div style={{...myStyles.label, color: '#D4AF37'}}>{isKo ? "빠른 출금" : "Quick Withdraw"}</div>
+          <div style={myStyles.value}>🏦</div>
         </div>
       </div>
 
@@ -125,7 +123,7 @@ export default function MyPage({
             <span style={myStyles.arrow}>❯</span>
           </div>
           {/* ★ [수정완료] App.jsx의 telegramLink가 전체 URL 형식이므로 그대로 띄우게 연결했습니다. */}
-          <div style={myStyles.menuItem} onClick={() => window.open(telegramLink || 'https://t.me/daisy_support', '_blank')}>
+          <div style={myStyles.menuItem} onClick={() => window.open(telegramLink || 'https://t.me/BANADA_support', '_blank')}>
             <span style={myStyles.menuTitle}>💬 &nbsp; {isKo ? "1:1 실시간 상담" : "1:1 Support"}</span>
             <span style={myStyles.arrow}>❯</span>
           </div>

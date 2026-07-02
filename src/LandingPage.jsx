@@ -251,13 +251,13 @@ export default function LandingPage({
             }}
           />
         ) : (
-          <strong style={styles.defaultLogo}>DAISY</strong>
+          <strong style={styles.defaultLogo}>BANADA</strong>
         )}
       </div>
 
       <div style={styles.mainContent}>
         <div style={styles.heroSection}>
-          <h1 style={styles.mainTitle}>{hero?.title?.[lang] ?? "DAISY"}</h1>
+          <h1 style={styles.mainTitle}>{hero?.title?.[lang] ?? "BANADA"}</h1>
           <p style={styles.subTitle}>{hero?.desc?.[lang] ?? ""}</p>
         </div>
 

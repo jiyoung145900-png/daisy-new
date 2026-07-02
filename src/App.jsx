@@ -45,8 +45,8 @@ const save = (k, v) => {
 
 // ★ Translations
 const translations = {
-  ko: { login: "로그인", signup: "회원가입", id: "아이디", pw: "비밀번호", ref: "추천인 코드", guest: "게스트로 시작", logout: "로그아웃", home: "홈페이지", manager: "매니저", event: "이벤트", video: "동영상", mypage: "마이페이지", welcome: "📢 데이지 클럽에 오신 것을 환영합니다!", desc_suffix: " 화면입니다.", prepare: "컨텐츠 준비 중입니다.", close: "닫기", input_id_pw: "아이디와 비밀번호를 입력하세요.", id_exists: "이미 존재하는 아이디입니다.", signup_ok: "가입이 완료되었습니다!", login_fail: "로그인 정보가 틀립니다." },
-  en: { login: "LOGIN", signup: "SIGN UP", id: "ID", pw: "PASSWORD", ref: "REFERRAL CODE", guest: "START AS GUEST", logout: "LOGOUT", home: "HOME", manager: "MODELS", event: "GAMES", video: "GALLERY", mypage: "MY PAGE", welcome: "📢 Welcome to DAISY CLUB!", desc_suffix: " Page Content.", prepare: "Coming Soon.", close: "CLOSE", input_id_pw: "Please enter ID and Password.", id_exists: "ID already exists.", signup_ok: "Sign up successful!", login_fail: "Login Failed" }
+  ko: { login: "로그인", signup: "회원가입", id: "아이디", pw: "비밀번호", ref: "추천인 코드", guest: "게스트로 시작", logout: "로그아웃", home: "홈페이지", manager: "매니저", event: "이벤트", video: "동영상", mypage: "마이페이지", welcome: "📢 BANADA에 오신 것을 환영합니다!", desc_suffix: " 화면입니다.", prepare: "컨텐츠 준비 중입니다.", close: "닫기", input_id_pw: "아이디와 비밀번호를 입력하세요.", id_exists: "이미 존재하는 아이디입니다.", signup_ok: "가입이 완료되었습니다!", login_fail: "로그인 정보가 틀립니다." },
+  en: { login: "LOGIN", signup: "SIGN UP", id: "ID", pw: "PASSWORD", ref: "REFERRAL CODE", guest: "START AS GUEST", logout: "LOGOUT", home: "HOME", manager: "MODELS", event: "GAMES", video: "GALLERY", mypage: "MY PAGE", welcome: "📢 Welcome to BANADA!", desc_suffix: " Page Content.", prepare: "Coming Soon.", close: "CLOSE", input_id_pw: "Please enter ID and Password.", id_exists: "ID already exists.", signup_ok: "Sign up successful!", login_fail: "Login Failed" }
 };
 
 export default function App() {
@@ -66,17 +66,20 @@ export default function App() {
   const [adminPw, setAdminPw] = useState(() => load("adminPw", "123456"));
   const [gamePw, setGamePw] = useState(() => load("gamePw", "1234")); 
 
-  const [telegramLink, setTelegramLink] = useState(() => load("telegramLink", "https://t.me/DAISY_CORE_OFFICIAL"));
+  const [telegramLink, setTelegramLink] = useState(() => load("telegramLink", "https://t.me/BANADA_OFFICIAL"));
   const [showPopup, setShowPopup] = useState(true);
   const [members, setMembers] = useState(() => load("members", []));
   const [slideImages, setSlideImages] = useState(() => load("slideImages", []));
-  const [hero, setHero] = useState(() => load("hero", { mode: "image", imageSrc: null, title: { ko: "DAISY CORE", en: "DAISY CORE" }, desc: { ko: "선택된 사람들을 위한 프라이빗 커넥션", en: "Private connections for the chosen few" } }));
+  const [hero, setHero] = useState(() => load("hero", { mode: "image", imageSrc: null, title: { ko: "BANADA", en: "BANADA" }, desc: { ko: "선택된 사람들을 위한 프라이빗 커넥션", en: "Private connections for the chosen few" } }));
   const [videoURL, setVideoURL] = useState(() => load("videoURL", null));
   const [videos, setVideos] = useState(() => load("videos", []));
   const [logo, setLogo] = useState(() => load("logo", null));
   const [logoSize, setLogoSize] = useState(() => load("logoSize", 140));
   const [logoPos, setLogoPos] = useState(() => load("logoPos", { x: 0, y: 0 }));
   const [innerLogo, setInnerLogo] = useState(() => load("innerLogo", null));
+
+  // ★ [추가] 홈 상단 공지 티커 문구
+  const [noticeText, setNoticeText] = useState(() => load("noticeText", "📢 BANADA에 오신 것을 환영합니다!"));
 
   const [adminPreviewMode, setAdminPreviewMode] = useState("dashboard");
   const t = useMemo(() => translations[lang] || translations.ko, [lang]);
@@ -101,6 +104,8 @@ export default function App() {
 
         if (data.gamePw) setGamePw(data.gamePw);
         if (data.telegramLink) setTelegramLink(data.telegramLink);
+        // ★ [추가] 공지 티커 실시간 반영
+        if (data.noticeText !== undefined) setNoticeText(data.noticeText);
         
         // users는 별도 onSnapshot으로 관리하거나 필요시 로드
         // (여기서는 users state가 로컬 캐시 역할도 함)
@@ -115,7 +120,7 @@ export default function App() {
       const finalData = {
         hero, videoURL, logo, logoSize, logoPos,
         members, slideImages, videos, innerLogo,
-        adminPw, gamePw, telegramLink, 
+        adminPw, gamePw, telegramLink, noticeText,
         // users는 너무 커질 수 있으므로 settings/global에 통째로 넣지 않는 게 좋지만, 
         // 기존 구조 호환을 위해 일단 유지하거나 생략 가능.
         ...updates 
@@ -162,9 +167,9 @@ export default function App() {
     save("members", members); save("hero", hero); save("logo", logo); 
     save("logoSize", logoSize); save("logoPos", logoPos); save("slideImages", slideImages); 
     save("videoURL", videoURL); save("videos", videos); save("innerLogo", innerLogo); 
-    save("telegramLink", telegramLink);
+    save("telegramLink", telegramLink); save("noticeText", noticeText);
     // adminPw, gamePw 저장 코드 제거함
-  }, [lang, loggedIn, isAdmin, isGuest, users, currentUser, hero, logo, logoSize, logoPos, members, slideImages, videoURL, videos, innerLogo, telegramLink]);
+  }, [lang, loggedIn, isAdmin, isGuest, users, currentUser, hero, logo, logoSize, logoPos, members, slideImages, videoURL, videos, innerLogo, telegramLink, noticeText]);
 
   // ★ [수정됨] 로그인 액션 (DB 연동)
   const handleLoginAction = async (id, pw) => {
@@ -346,6 +351,7 @@ export default function App() {
           appAvatarImage={appAvatarImage} appAvatarIdx={appAvatarIdx} onAvatarChange={refreshAvatar}
           t={t} lang={lang} isGuest={isGuest} members={members} regions={REGIONS} slideImages={slideImages}
           videos={videos} videoCategories={VIDEO_CATS} innerLogo={innerLogo} telegramLink={telegramLink}
+          noticeText={noticeText}
           onLogout={handleLogout} dashStyles={dashStyles} 
         />
       )}
@@ -360,6 +366,7 @@ export default function App() {
           videos={videos} setVideos={setVideos} videoCategories={VIDEO_CATS} 
           innerLogo={innerLogo} setInnerLogo={setInnerLogo} onExit={handleLogout} styles={styles}
           adminPw={adminPw} setAdminPw={setAdminPw} telegramLink={telegramLink} setTelegramLink={setTelegramLink}
+          noticeText={noticeText} setNoticeText={setNoticeText}
           openIndependent={() => setIsIndependentAdmin(true)} 
           saveToFirebase={saveToFirebase}
           syncToFirebase={syncToFirebase} 

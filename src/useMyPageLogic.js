@@ -9,7 +9,6 @@ import {
   query,
   where,
   onSnapshot,
-  increment,
   serverTimestamp,
 } from "firebase/firestore";
 
@@ -19,11 +18,7 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
   const [userInfo, setUserInfo] = useState(user || null);
   const [globalSettings, setGlobalSettings] = useState({}); // ✅ [추가됨] 시스템 전역 설정(텔레그램 등)을 담을 상태
 
-  const [isCheckedIn, setIsCheckedIn] = useState(() => {
-    if (!user) return false;
-    const today = new Date().toDateString();
-    return localStorage.getItem(`last_checkin_${user.id}`) === today;
-  });
+  // ★ [제거됨] 데일리 보너스 관련 isCheckedIn 상태 삭제
 
   // ★ State for transaction history
   const [myDeposits, setMyDeposits] = useState([]);
@@ -40,7 +35,13 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     const configRef = doc(db, "settings", "global"); 
     const unsub = onSnapshot(configRef, (snap) => {
       if (snap.exists()) {
-        setGlobalSettings(snap.data());
+        // ⚠️ [보안 수정] settings/global 문서에는 adminPw, gamePw 같은
+        // 민감한 값도 함께 들어있음. 마이페이지에서 필요한 값만 골라서 저장.
+        const data = snap.data();
+        setGlobalSettings({
+          telegramLink: data.telegramLink ?? "",
+          noticeText: data.noticeText ?? "",
+        });
       }
     });
     return () => unsub();
@@ -108,9 +109,10 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     let historyAll = [];
 
     const mergeAndSet = () => {
+      // ✅ [수정] finance_history 원본 status가 "거절"이면 그대로 유지, 그 외(승인 완료건)는 "완료"로 표시
       const doneDeps = historyAll
         .filter((h) => h.type === "입금")
-        .map((h) => ({ ...h, status: "완료" }));
+        .map((h) => ({ ...h, status: h.status === "거절" ? "거절" : "완료" }));
       const allDeps = [...pendingDeps, ...doneDeps].sort(
         (a, b) =>
           new Date(b.timestamp || b.completedAt) -
@@ -120,7 +122,7 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
 
       const doneWdrs = historyAll
         .filter((h) => h.type === "출금")
-        .map((h) => ({ ...h, status: "완료" }));
+        .map((h) => ({ ...h, status: h.status === "거절" ? "거절" : "완료" }));
       const allWdrs = [...pendingWdrs, ...doneWdrs].sort(
         (a, b) =>
           new Date(b.timestamp || b.completedAt) -
@@ -184,54 +186,6 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     },
     [isKo]
   );
-
-  // ✅ Daily Bonus (users/{id}.diamond increment) - NEVER decreases
-  const handleDailyCheckIn = async () => {
-    if (isCheckedIn) return;
-    if (!userInfo?.id) return;
-
-    try {
-      const bonus = Math.floor(Math.random() * (2000 - 100 + 1)) + 100;
-
-      const userRef = doc(db, "users", userInfo.id);
-
-      // ✅ atomic increment
-      await updateDoc(userRef, {
-        diamond: increment(bonus),
-        lastCheckInAt: serverTimestamp(),
-      });
-
-      // UI immediate update
-      const optimistic = (userInfo.diamond || 0) + bonus;
-      setUserInfo((prev) => ({ ...prev, diamond: optimistic }));
-
-      localStorage.setItem(
-        `last_checkin_${userInfo.id}`,
-        new Date().toDateString()
-      );
-      setIsCheckedIn(true);
-
-      if (onUpdatePoint) onUpdatePoint(optimistic);
-      broadcast.postMessage({
-        type: "POINT_UPDATE",
-        userId: userInfo.id,
-        point: optimistic,
-      });
-
-      const msg = isKo
-        ? `데일리 보너스 ${bonus} 다이아가 지급되었습니다.`
-        : `Daily bonus ${bonus} diamonds paid.`;
-      playFemaleVoice(msg);
-      alert(
-        isKo
-          ? `축하합니다! ${bonus.toLocaleString()} DIA가 지급되었습니다.`
-          : `Congrats! ${bonus.toLocaleString()} DIA paid.`
-      );
-    } catch (e) {
-      console.error(e);
-      alert(isKo ? "보너스 지급 실패(서버 오류)" : "Bonus failed (server error)");
-    }
-  };
 
   // Deposit Request
   const requestDeposit = async (name, amount) => {
@@ -351,12 +305,11 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
   };
 
   return {
-    // ✅ [수정됨] userInfo 객체 안에 globalSettings (텔레그램 링크 등)를 덮어씌워서 병합 반환
+    // ✅ [보안 수정] globalSettings에는 이제 telegramLink, noticeText만 들어있어서
+    // adminPw / gamePw가 클라이언트에 노출되지 않음
     userInfo: userInfo ? { ...globalSettings, ...userInfo } : globalSettings,
-    isCheckedIn,
     myDeposits,
     myWithdraws,
-    handleDailyCheckIn,
     requestDeposit,
     requestWithdraw,
     updatePassword,

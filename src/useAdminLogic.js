@@ -210,6 +210,15 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     });
   };
 
+  // ✅ [추가] 회원 등급(SILVER/GOLD/PLATINUM/DIAMOND) 관리자 직접 지정
+  const updateUserTier = async (userId, tier) => {
+    try {
+      await updateDoc(doc(db, "users", userId), { tier });
+    } catch (e) {
+      alert("등급 변경 실패: " + e.message);
+    }
+  };
+
   const handleChangeUserPassword = async (userId) => {
     const pw = prompt("새 비밀번호:");
     if (pw) await updateDoc(doc(db, "users", userId), { password: pw });
@@ -241,17 +250,39 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     await deleteDoc(doc(db, "withdraw_requests", req.id));
   };
 
-  // 입금 거절
+  // 입금 거절 (✅ [수정] 거절 사유를 입력받아 finance_history에 기록으로 남김 -> 회원 마이페이지에서 확인 가능)
   const rejectDeposit = async (req) => {
-    if (window.confirm("정말 이 입금 요청을 거절하시겠습니까?")) {
+    const reason = window.prompt("거절 사유를 입력해주세요 (회원의 신청 내역에 표시됩니다):");
+    if (reason === null) return; // 취소 누르면 아무 처리 안 함
+    try {
+      await addDoc(collection(db, "finance_history"), {
+        ...req,
+        type: "입금",
+        status: "거절",
+        rejectReason: reason.trim() || "사유 미입력",
+        completedAt: new Date().toISOString(),
+      });
       await deleteDoc(doc(db, "deposit_requests", req.id));
+    } catch (e) {
+      alert("거절 처리 실패: " + e.message);
     }
   };
 
-  // 출금 거절
+  // 출금 거절 (✅ [수정] 거절 사유를 입력받아 finance_history에 기록으로 남김 -> 회원 마이페이지에서 확인 가능)
   const rejectWithdraw = async (req) => {
-    if (window.confirm("정말 이 출금 요청을 거절하시겠습니까?")) {
+    const reason = window.prompt("거절 사유를 입력해주세요 (회원의 신청 내역에 표시됩니다):");
+    if (reason === null) return; // 취소 누르면 아무 처리 안 함
+    try {
+      await addDoc(collection(db, "finance_history"), {
+        ...req,
+        type: "출금",
+        status: "거절",
+        rejectReason: reason.trim() || "사유 미입력",
+        completedAt: new Date().toISOString(),
+      });
       await deleteDoc(doc(db, "withdraw_requests", req.id));
+    } catch (e) {
+      alert("거절 처리 실패: " + e.message);
     }
   };
 
@@ -276,6 +307,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     deleteAgent,              // ✅ 추가
     handleChangeAdminPassword, // ✅ 추가
     handleApplyManipulation, updateFullUserInfo,
+    updateUserTier,            // ✅ 추가
     handleChangeUserPassword,
     updateBetData,
   };

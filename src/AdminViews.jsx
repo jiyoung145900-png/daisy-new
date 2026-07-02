@@ -3,6 +3,7 @@ import { iaStyles } from "./AdminStyles";
 import { ITEM_CONFIG } from "./EventService";
 import { db } from "./firebase";
 import { doc, setDoc } from "firebase/firestore";
+import { TIER_OPTIONS } from "./MyPage.utils";
 
 // --- 1. 입출금 요청 뷰 (승인 / 거절) ---
 export const RequestsView = ({ depositRequests, withdrawRequests, approveDeposit, approveWithdraw, rejectDeposit, rejectWithdraw }) => (
@@ -168,7 +169,7 @@ export const EventControlView = ({ currentInfo, targetRound, setTargetRound, que
 };
 
 // --- 4. 회원 관리 뷰 ---
-export const UsersView = ({ users, updateFullUserInfo, handleChangeUserPassword, handleHideUser }) => {
+export const UsersView = ({ users, updateFullUserInfo, updateUserTier, handleChangeUserPassword, handleHideUser }) => {
   const [term, setTerm] = useState("");
 
   // ★ 1. 여기서 filtered를 딱 한 번만 정의합니다.
@@ -200,11 +201,12 @@ export const UsersView = ({ users, updateFullUserInfo, handleChangeUserPassword,
       <table style={{ ...iaStyles.table, width: "100%", tableLayout: "fixed" }}>
         <thead>
           <tr>
-            <th style={{ width: "10%" }}>상태</th>
-            <th style={{ width: "20%" }}>아이디</th>
-            <th style={{ width: "20%" }}>다이아</th>
-            <th style={{ width: "20%" }}>변경값</th>
-            <th style={{ width: "30%" }}>액션</th>
+            <th style={{ width: "8%" }}>상태</th>
+            <th style={{ width: "16%" }}>아이디</th>
+            <th style={{ width: "14%" }}>다이아</th>
+            <th style={{ width: "14%" }}>변경값</th>
+            <th style={{ width: "13%" }}>등급</th>
+            <th style={{ width: "35%" }}>액션</th>
           </tr>
         </thead>
         <tbody>
@@ -216,6 +218,16 @@ export const UsersView = ({ users, updateFullUserInfo, handleChangeUserPassword,
               <td style={{ fontWeight: "bold", fontSize: 16 }}>{u.id}</td>
               <td style={{ color: "#ffb347" }}>💎 {u.diamond?.toLocaleString()}</td>
               <td><input id={`pt-${u.id}`} defaultValue={u.diamond} style={{ ...iaStyles.giantInput, width: "90%" }} /></td>
+              <td>
+                {/* ✅ [추가] 관리자가 직접 회원 등급을 지정 (선택 시 즉시 저장) */}
+                <select
+                  defaultValue={u.tier || "SILVER"}
+                  onChange={(e) => updateUserTier && updateUserTier(u.id, e.target.value)}
+                  style={{ ...iaStyles.giantInput, width: "100%", cursor: 'pointer' }}
+                >
+                  {TIER_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              </td>
               <td style={{ display: "flex", gap: 5, justifyContent: "center" }}>
                 <button onClick={() => updateFullUserInfo(u.id, document.getElementById(`pt-${u.id}`).value, u.refCode, u.referral)} style={iaStyles.giantBtn}>수정</button>
                 <button onClick={() => handleChangeUserPassword(u.id)} style={{ ...iaStyles.giantBtn, background: "#5856d6", color: "#fff" }}>비번</button>

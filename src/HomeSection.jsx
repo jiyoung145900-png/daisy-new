@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 
-const LEFT_TAGS = ["DAISY VIP", "PURE LUXURY", "SWEET BLOOM", "GOLDEN CLASS", "ELITE SELECT"];
+const LEFT_TAGS = ["BANADA VIP", "PURE LUXURY", "SWEET BLOOM", "GOLDEN CLASS", "ELITE SELECT"];
 
 export default function HomeSection({
   members = [],
@@ -10,6 +10,7 @@ export default function HomeSection({
   setActiveTab,
   openDetail,
   matchingCount = 0,
+  noticeText = "", // ★ [추가] 관리자가 설정하는 상단 공지 티커 문구
   t, // ★ Dashboard에서 전달받은 번역 객체
 }) {
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -80,7 +81,7 @@ export default function HomeSection({
             <img src={innerLogo} style={h.logoImg} alt="logo" />
           ) : (
             <h1 style={h.defaultLogo}>
-              DAISY<br />
+              BANADA<br />
               <span>LOUNGE</span>
             </h1>
           )}
@@ -94,11 +95,21 @@ export default function HomeSection({
         </div>
       </header>
 
+      {/* ===== NOTICE TICKER (관리자 설정 공지 문구) ===== */}
+      {noticeText && (
+        <div style={h.noticeTicker}>
+          <div className="notice-track">
+            <span style={h.noticeText}>{noticeText}</span>
+            <span style={h.noticeText}>{noticeText}</span>
+          </div>
+        </div>
+      )}
+
       {/* ===== INTRO TEXT (번역 적용) ===== */}
       <div style={h.introTextArea}>
         <div style={h.introSub}>WELCOME TO THE PRIVATE</div>
         <div style={h.introMain}>
-          {/* ★ 한글: 데이지에 오신 것을 환영합니다 / 영어: Welcome to DAISY CLUB! */}
+          {/* ★ 한글: BANADA에 오신 것을 환영합니다 / 영어: Welcome to BANADA! */}
           {t.welcome.replace("📢 ", "")} 
           <span style={h.introSparkle}>✦</span>
         </div>
@@ -161,8 +172,8 @@ export default function HomeSection({
         <div style={h.labelLeft}>
           <span className="shine-text" style={h.labelIcon}>✦</span>
           <span style={h.labelText}>
-            {/* ★ 한글: DAISY 매니저 / 영어: DAISY MODELS */}
-            DAISY {t.manager.toUpperCase()}
+            {/* ★ 한글: BANADA 매니저 / 영어: BANADA MODELS */}
+            BANADA {t.manager.toUpperCase()}
           </span>
         </div>
         <div onClick={() => setActiveTab && setActiveTab("manager")} style={h.moreBtn}>
@@ -238,6 +249,9 @@ export default function HomeSection({
       <style>{`
         .bg-pattern { position: absolute; inset: 0; background-image: radial-gradient(rgba(255,215,0,0.05) 1px, transparent 1px); background-size: 30px 30px; z-index: -1; }
         .bg-glow { position: absolute; top: -100px; left: 50%; transform: translateX(-50%); width: 150%; height: 600px; background: radial-gradient(circle, rgba(255,215,0,0.07) 0%, transparent 70%); z-index: -1; }
+
+        .notice-track { display: flex; width: max-content; white-space: nowrap; animation: noticeScroll 18s linear infinite; }
+        @keyframes noticeScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         
         .snap-container::-webkit-scrollbar { display: none; }
         
@@ -261,12 +275,14 @@ export default function HomeSection({
 
 const h = {
   container: { position: 'relative', overflow: 'hidden', backgroundColor: '#0a0a0a', paddingBottom: 50, minHeight: '100vh', color: '#fff' },
-  header: { padding: '50px 0 10px', textAlign: 'center' },
-  logoArea: { marginBottom: 20 },
-  logoImg: { maxWidth: '220px', filter: 'drop-shadow(0 0 10px rgba(255,215,0,0.3))' },
+  header: { padding: '25px 0 10px', textAlign: 'center' },
+  logoArea: { marginBottom: 8 },
+  logoImg: { maxWidth: '350px', filter: 'drop-shadow(0 0 10px rgba(255,215,0,0.3))' },
   defaultLogo: { fontSize: 36, color: '#fff', fontWeight: 900, letterSpacing: -1, lineHeight: 0.8 },
   statusBadge: { fontSize: 10, color: '#eee', background: 'rgba(255,255,255,0.07)', padding: '8px 16px', borderRadius: '30px', display: 'inline-flex', alignItems: 'center', gap: 5, border: '1px solid rgba(255,255,255,0.1)' },
   countText: { color: '#FFD700', letterSpacing: 1 },
+  noticeTicker: { width: '100%', overflow: 'hidden', background: 'rgba(255,215,0,0.06)', borderTop: '1px solid rgba(255,215,0,0.15)', borderBottom: '1px solid rgba(255,215,0,0.15)', padding: '10px 0', marginTop: 18 },
+  noticeText: { fontSize: 12, fontWeight: 700, color: '#FFD700', letterSpacing: 0.5, paddingRight: 60 },
   introTextArea: { textAlign: 'center', marginTop: 30, marginBottom: 15 },
   introSub: { fontSize: 10, color: '#FFD700', letterSpacing: 2, fontWeight: 600, opacity: 0.8, marginBottom: 5 },
   introMain: { fontSize: 18, fontWeight: 800, color: '#fff', letterSpacing: -0.5 },
