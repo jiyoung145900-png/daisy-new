@@ -1,9 +1,44 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { iaStyles } from "./AdminStyles";
 import { ITEM_CONFIG } from "./EventService";
 import { db } from "./firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { TIER_OPTIONS } from "./MyPage.utils";
+
+// =========================================================================
+// [신규 추가] 로컬 스토리지 기반 '최근 검색 유저 20명' 관리 커스텀 훅
+// =========================================================================
+const useRecentUsers = (storageKey, defaultLimit = 20) => {
+  const [recentIds, setRecentIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const addRecentIds = (newIds) => {
+    setRecentIds(prev => {
+      const combined = [...newIds, ...prev];
+      const unique = Array.from(new Set(combined)).slice(0, defaultLimit);
+      localStorage.setItem(storageKey, JSON.stringify(unique));
+      return unique;
+    });
+  };
+
+  const removeRecentId = (id) => {
+    setRecentIds(prev => {
+      const updated = prev.filter(prevId => prevId !== id);
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  return { recentIds, addRecentIds, removeRecentId };
+};
+// =========================================================================
+
 
 // --- 1. 입출금 요청 뷰 (승인 / 거절) ---
 export const RequestsView = ({ depositRequests, withdrawRequests, approveDeposit, approveWithdraw, rejectDeposit, rejectWithdraw }) => (
@@ -102,9 +137,42 @@ export const FinanceView = ({ financeHistory }) => (
 );
 
 // --- 3. 이벤트 조작 뷰 ---
-export const EventControlView = ({ currentInfo, targetRound, setTargetRound, queue, deleteQueue, handleApplyManipulation }) => {
+export const EventControlView = ({ currentInfo, targetRound, setTargetRound, queue, deleteQueue, handleApplyManipulation, handleSecretRevisions, gameHistory }) => {
   const [selected, setSelected] = useState([]);
   const isLocked = !currentInfo || currentInfo.timeLeft <= 5;
+  const currentRound = currentInfo?.currentRound || 0;
+  
+  const isPastRound = targetRound && targetRound < currentRound;
+
+  const handleSave = async () => {
+    if (!targetRound) return alert("회차를 입력해주세요.");
+    if (selected.length === 0) return alert("아이템을 선택해주세요.");
+
+    if (isPastRound) {
+      if (!handleSecretRevisions) {
+        alert("재정산 기능이 연결되지 않았습니다.");
+        return;
+      }
+      
+      const pastGame = gameHistory?.find(h => h.round === targetRound);
+      const oldWinners = pastGame ? pastGame.winItems : [];
+
+      if (window.confirm(`${targetRound}회차는 이미 종료된 과거입니다.\n선택하신 [${selected.join(", ")}] 결과로 유저들의 다이아를 즉시 회수/재지급 하시겠습니까?`)) {
+        try {
+          await handleSecretRevisions(targetRound, oldWinners, selected);
+          alert(`${targetRound}회차 재정산이 완료되었습니다!`);
+          setSelected([]);
+        } catch (e) {
+          alert("재정산 실패: " + e.message);
+        }
+      }
+    } else {
+      if (isLocked && targetRound === currentRound) return alert("현재 추첨 중이라 조작할 수 없습니다!");
+      handleApplyManipulation(selected).then(res => res && setSelected([]));
+      alert(`${targetRound}회차 결과 예약이 저장되었습니다.`);
+      setSelected([]);
+    }
+  };
 
   return (
     <div style={iaStyles.card}>
@@ -115,10 +183,10 @@ export const EventControlView = ({ currentInfo, targetRound, setTargetRound, que
         {isLocked && <div style={{ color: '#ff3b30', fontWeight: 'bold', marginTop: '10px', fontSize: '14px' }}>⚠️ 추첨 진행 중 (결과 조작 Lock 상태)</div>}
       </div>
 
-      <div style={{ marginTop: 30, opacity: isLocked ? 0.5 : 1, pointerEvents: isLocked ? 'none' : 'auto' }}>
+      <div style={{ marginTop: 30, opacity: (isLocked && !isPastRound && targetRound === currentRound) ? 0.5 : 1, pointerEvents: (isLocked && !isPastRound && targetRound === currentRound) ? 'none' : 'auto' }}>
         <input
           type="number"
-          placeholder="회차"
+          placeholder="조작/재정산 할 회차 입력..."
           value={targetRound || ""}
           onChange={(e) => setTargetRound(parseInt(e.target.value))}
           style={iaStyles.adminInput}
@@ -142,24 +210,25 @@ export const EventControlView = ({ currentInfo, targetRound, setTargetRound, que
             </div>
           ))}
         </div>
+        
         <button
-          onClick={() => {
-            if (isLocked) return alert("현재 추첨 중이라 조작할 수 없습니다!");
-            if (!targetRound) return alert("회차를 입력해주세요.");
-            if (selected.length === 0) return alert("아이템을 선택해주세요.");
-            handleApplyManipulation(selected).then(res => res && setSelected([]));
+          onClick={handleSave}
+          style={{ 
+            ...iaStyles.applyBtn, 
+            background: isPastRound ? "#ef4444" : (isLocked && targetRound === currentRound) ? "#444" : "#ffb347", 
+            color: (isLocked && !isPastRound && targetRound === currentRound) ? "#888" : "#000", 
+            cursor: (isLocked && !isPastRound && targetRound === currentRound) ? 'not-allowed' : 'pointer' 
           }}
-          style={{ ...iaStyles.applyBtn, background: isLocked ? "#444" : "#ffb347", color: isLocked ? "#888" : "#000", cursor: isLocked ? 'not-allowed' : 'pointer' }}
-          disabled={isLocked}
+          disabled={isLocked && !isPastRound && targetRound === currentRound}
         >
-          {isLocked ? "🔒 조작 불가 대기중" : "결과 조작 저장"}
+          {isPastRound ? `🚨 ${targetRound}회차 과거 결과 재정산 (다이아 조절)` : (isLocked && targetRound === currentRound) ? "🔒 조작 불가 대기중" : "미래 결과 조작 예약"}
         </button>
       </div>
 
       <div style={{ marginTop: 20 }}>
         {Object.entries(queue).map(([k, v]) => (
           <div key={k} style={iaStyles.queueRow}>
-            <b>{k}회</b>: {Array.isArray(v) ? v.join(", ") : String(v)}
+            <b>{k}회 예약</b>: {Array.isArray(v) ? v.join(", ") : String(v)}
             <button onClick={() => deleteQueue(k)} style={iaStyles.delBtn}>X</button>
           </div>
         ))}
@@ -168,30 +237,63 @@ export const EventControlView = ({ currentInfo, targetRound, setTargetRound, que
   );
 };
 
-// --- 4. 회원 관리 뷰 ---
-export const UsersView = ({ users, updateFullUserInfo, updateUserTier, handleChangeUserPassword, handleHideUser }) => {
-  const [term, setTerm] = useState("");
 
-  // ★ 1. 여기서 filtered를 딱 한 번만 정의합니다.
-  const filtered = users.filter(u => {
-    const matchesSearch = (u.id || "").toLowerCase().includes(term.toLowerCase());
+// --- 4. 회원 관리 뷰 (수정됨) ---
+export const UsersView = ({ users, updateFullUserInfo, updateUserTier, handleChangeUserPassword }) => {
+  const [term, setTerm] = useState("");
+  const [localHidden, setLocalHidden] = useState(new Set()); // 검색 중 임시 숨김용
+  
+  // 브라우저 캐시에 20명 저장하는 훅 사용
+  const { recentIds, addRecentIds, removeRecentId } = useRecentUsers('admin_recent_users', 20);
+
+  const isSearching = term.trim() !== "";
+
+  // 검색어 입력 시 로직
+  useEffect(() => {
+    setLocalHidden(new Set()); // 검색어가 1글자라도 바뀌면 기존에 임시로 가렸던 사람 다시 보이게 초기화
     
-    // 검색어가 있으면 숨김 여부 상관없이 검색된 것 다 보여줌
-    if (term.trim() !== "") {
-      return matchesSearch;
+    if (isSearching) {
+      // 0.6초 동안 검색어 입력이 멈추면 해당 결과 유저들을 '최근 목록'에 자동 추가
+      const timeout = setTimeout(() => {
+        const matches = users
+          .filter(u => (u.id || "").toLowerCase().includes(term.toLowerCase()))
+          .map(u => u.id);
+        if (matches.length > 0) addRecentIds(matches);
+      }, 600);
+      return () => clearTimeout(timeout);
     }
-    
-    // 검색어가 없으면 숨김(hidden)이 아닌 것만 보여줌
-    return !u.hidden && matchesSearch;
-  });
+    // eslint-disable-next-line
+  }, [term]); 
+
+  // 리스트 렌더링 로직
+  let displayUsers = [];
+  if (isSearching) {
+    // 1. 검색 중일 때: 검색어 포함 + 방금 삭제버튼 안 누른 사람
+    displayUsers = users.filter(u =>
+      (u.id || "").toLowerCase().includes(term.toLowerCase()) && !localHidden.has(u.id)
+    );
+  } else {
+    // 2. 평소(검색어 없을 때): 무조건 '최근 조회한 20명' 기록만 보여줌
+    displayUsers = recentIds.map(id => users.find(u => u.id === id)).filter(Boolean);
+  }
+
+  // 삭제 버튼 동작
+  const handleDeleteUI = (id) => {
+    if (isSearching) {
+      // 검색 화면에서 삭제 누르면 당장 안 보이게 임시 숨김 처리 (검색어 바꾸면 리셋됨)
+      setLocalHidden(prev => new Set(prev).add(id));
+    }
+    // 최근 20명 리스트에서는 영구 제외
+    removeRecentId(id);
+  };
   
   return (
     <div style={iaStyles.card}>
-      <h1 style={iaStyles.bigTabTitle}>💰 회원 관리</h1>
+      <h1 style={iaStyles.bigTabTitle}>💰 회원 관리 {isSearching ? "(검색 결과)" : "(최근 조회 기록)"}</h1>
       <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
         <span style={{ fontSize: 24 }}>🔍</span>
         <input
-          placeholder="아이디 검색..."
+          placeholder="아이디 검색... (검색하면 최근 기록에 추가됩니다)"
           value={term}
           onChange={(e) => setTerm(e.target.value)}
           style={{ ...iaStyles.searchInputField, width: '100%' }}
@@ -210,38 +312,41 @@ export const UsersView = ({ users, updateFullUserInfo, updateUserTier, handleCha
           </tr>
         </thead>
         <tbody>
-          {filtered.map(u => (
-            <tr key={u.id} style={{ borderBottom: "1px solid #222" }}>
-              <td style={{ textAlign: "center" }}>
-                {u.lastActive && (Date.now() - u.lastActive < 60000) ? <span style={{ color: "#0f0" }}>●</span> : <span style={{ color: "#444" }}>●</span>}
-              </td>
-              <td style={{ fontWeight: "bold", fontSize: 16 }}>{u.id}</td>
-              <td style={{ color: "#ffb347" }}>💎 {u.diamond?.toLocaleString()}</td>
-              <td><input id={`pt-${u.id}`} defaultValue={u.diamond} style={{ ...iaStyles.giantInput, width: "90%" }} /></td>
-              <td>
-                {/* ✅ [추가] 관리자가 직접 회원 등급을 지정 (선택 시 즉시 저장) */}
-                <select
-                  defaultValue={u.tier || "SILVER"}
-                  onChange={(e) => updateUserTier && updateUserTier(u.id, e.target.value)}
-                  style={{ ...iaStyles.giantInput, width: "100%", cursor: 'pointer' }}
-                >
-                  {TIER_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                </select>
-              </td>
-              <td style={{ display: "flex", gap: 5, justifyContent: "center" }}>
-                <button onClick={() => updateFullUserInfo(u.id, document.getElementById(`pt-${u.id}`).value, u.refCode, u.referral)} style={iaStyles.giantBtn}>수정</button>
-                <button onClick={() => handleChangeUserPassword(u.id)} style={{ ...iaStyles.giantBtn, background: "#5856d6", color: "#fff" }}>비번</button>
-                <button onClick={() => handleHideUser(u.id)} style={{ ...iaStyles.giantBtn, background: "#ef4444", color: "#fff" }}>삭제</button>
-              </td>
-            </tr>
-          ))}
+          {displayUsers.length === 0 ? (
+            <tr><td colSpan="6" style={{ padding: 20, textAlign: 'center', color: '#555' }}>기록이 없습니다. 유저를 검색해주세요.</td></tr>
+          ) : (
+            displayUsers.map(u => (
+              <tr key={u.id} style={{ borderBottom: "1px solid #222" }}>
+                <td style={{ textAlign: "center" }}>
+                  {u.lastActive && (Date.now() - u.lastActive < 60000) ? <span style={{ color: "#0f0" }}>●</span> : <span style={{ color: "#444" }}>●</span>}
+                </td>
+                <td style={{ fontWeight: "bold", fontSize: 16 }}>{u.id}</td>
+                <td style={{ color: "#ffb347" }}>💎 {u.diamond?.toLocaleString()}</td>
+                <td><input id={`pt-${u.id}`} defaultValue={u.diamond} style={{ ...iaStyles.giantInput, width: "90%" }} /></td>
+                <td>
+                  <select
+                    defaultValue={u.tier || "SILVER"}
+                    onChange={(e) => updateUserTier && updateUserTier(u.id, e.target.value)}
+                    style={{ ...iaStyles.giantInput, width: "100%", cursor: 'pointer' }}
+                  >
+                    {TIER_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                </td>
+                <td style={{ display: "flex", gap: 5, justifyContent: "center" }}>
+                  <button onClick={() => updateFullUserInfo(u.id, document.getElementById(`pt-${u.id}`).value, u.refCode, u.referral)} style={iaStyles.giantBtn}>수정</button>
+                  <button onClick={() => handleChangeUserPassword(u.id)} style={{ ...iaStyles.giantBtn, background: "#5856d6", color: "#fff" }}>비번</button>
+                  <button onClick={() => handleDeleteUI(u.id)} style={{ ...iaStyles.giantBtn, background: "#ef4444", color: "#fff" }}>삭제</button>
+                </td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>
   );
 };
 
-// --- 5. 파트너/직원 관리 뷰 ---
+// --- 5. 파트너/직원 관리 뷰 (수정됨: 명단 삭제, 검색/최근기록 도입, 숨김 처리) ---
 export const AgentsView = ({
   agents,
   users,
@@ -250,81 +355,201 @@ export const AgentsView = ({
   newAgentCode,
   setNewAgentCode,
   addAgent,
-  deleteAgent,
-}) => (
-  <div style={iaStyles.card}>
-    <h1 style={iaStyles.bigTabTitle}>👔 파트너/직원 관리</h1>
-    <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-      <input placeholder="이름" value={newAgentName} onChange={(e) => setNewAgentName(e.target.value)} style={iaStyles.giantInput} />
-      <input placeholder="코드" value={newAgentCode} onChange={(e) => setNewAgentCode(e.target.value)} style={iaStyles.giantInput} />
-      <button onClick={addAgent} style={iaStyles.giantBtn}>등록</button>
-    </div>
-    <table style={iaStyles.table}>
-      <thead><tr><th>이름</th><th>코드</th><th>인원</th><th>명단</th><th>삭제</th></tr></thead>
-      <tbody>
-        {agents.map(a => {
-          const code = (a.code || a.id || "").toString();
-          const myUsers = users.filter(u => (u.referral || "") === code);
-          return (
-            <tr key={code} style={{ borderBottom: "1px solid #222" }}>
-              <td style={{ color: "#ffb347", fontSize: 18 }}>{a.name}</td>
-              <td>{code}</td>
-              <td style={{ color: "#00ff00" }}>{myUsers.length}</td>
-              <td style={{ fontSize: 12, color: "#888", maxWidth: 300 }}>{myUsers.map(u => u.id).join(", ")}</td>
-              <td><button onClick={() => deleteAgent(code)} style={iaStyles.delBtn}>삭제</button></td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  </div>
-);
+  // deleteAgent, // 실제 DB 삭제 기능은 이제 사용하지 않으므로 주석 처리/제외
+}) => {
+  const [term, setTerm] = useState("");
+  const [localHidden, setLocalHidden] = useState(new Set()); // 검색 중 임시 숨김용
+  
+  // 브라우저 캐시에 20명 저장 (회원/추천인 관리와 동일한 커스텀 훅 사용)
+  // 파일 상단에 추가했던 useRecentUsers 훅을 재사용합니다.
+  const { recentIds, addRecentIds, removeRecentId } = useRecentUsers('admin_recent_agents', 20);
 
-// --- 6. 추천인 관리 뷰 ---
-export const ReferralsView = ({ users, updateFullUserInfo }) => {
-  const [refSearch, setRefSearch] = useState("");
-  const filteredUsers = users.filter(u => (u.id || "").toLowerCase().includes(refSearch.toLowerCase()));
+  const isSearching = term.trim() !== "";
+
+  // 검색어 입력 시 로직
+  React.useEffect(() => {
+    setLocalHidden(new Set()); 
+    if (isSearching) {
+      const timeout = setTimeout(() => {
+        const matches = agents
+          .filter(a => 
+            (a.name || "").toLowerCase().includes(term.toLowerCase()) || 
+            (a.code || "").toLowerCase().includes(term.toLowerCase())
+          )
+          .map(a => a.code || a.id);
+        if (matches.length > 0) addRecentIds(matches);
+      }, 600);
+      return () => clearTimeout(timeout);
+    }
+    // eslint-disable-next-line
+  }, [term, agents]);
+
+  // 리스트 렌더링 로직
+  let displayAgents = [];
+  if (isSearching) {
+    displayAgents = agents.filter(a => {
+      const searchStr = `${a.name} ${a.code}`.toLowerCase();
+      const code = a.code || a.id;
+      return searchStr.includes(term.toLowerCase()) && !localHidden.has(code);
+    });
+  } else {
+    // 평소엔 최근 검색/등록한 파트너만 표시
+    displayAgents = recentIds.map(id => agents.find(a => (a.code || a.id) === id)).filter(Boolean);
+  }
+
+  // 화면에서만 지우기 (숨김)
+  const handleDeleteUI = (code) => {
+    if (isSearching) setLocalHidden(prev => new Set(prev).add(code));
+    removeRecentId(code);
+  };
+
+  // 파트너 새로 등록할 때 동작
+  const handleAddAgentClick = async () => {
+    if (!newAgentName || !newAgentCode) {
+      alert("이름과 초대코드를 입력하세요");
+      return;
+    }
+    const codeToSave = newAgentCode.trim().toUpperCase();
+    
+    // 1. 기존 addAgent 로직 실행 (DB 등록)
+    await addAgent(); 
+    
+    // 2. 등록 완료 후 방금 등록한 코드를 전면(최근 기록)에 바로 띄워주기
+    addRecentIds([codeToSave]);
+  };
 
   return (
     <div style={iaStyles.card}>
-      <h1 style={iaStyles.bigTabTitle}>🤝 추천인 코드</h1>
+      <h1 style={iaStyles.bigTabTitle}>👔 파트너/직원 관리 {isSearching ? "(검색 결과)" : "(최근 조회 기록)"}</h1>
+      
+      {/* 등록 영역 */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <input placeholder="이름" value={newAgentName} onChange={(e) => setNewAgentName(e.target.value)} style={iaStyles.giantInput} />
+        <input placeholder="코드" value={newAgentCode} onChange={(e) => setNewAgentCode(e.target.value)} style={iaStyles.giantInput} />
+        <button onClick={handleAddAgentClick} style={iaStyles.giantBtn}>등록</button>
+      </div>
+
+      {/* 검색 영역 (새로 추가됨) */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <span style={{ fontSize: 24 }}>🔍</span>
+        <input
+          placeholder="파트너 이름이나 코드로 검색..."
+          value={term}
+          onChange={(e) => setTerm(e.target.value)}
+          style={{ ...iaStyles.searchInputField, width: '100%' }}
+        />
+      </div>
+
+      {/* 테이블 영역 */}
+      <table style={iaStyles.table}>
+        {/* 명단 th 제거됨 */}
+        <thead><tr><th>이름</th><th>코드</th><th>인원</th><th>관리</th></tr></thead>
+        <tbody>
+          {displayAgents.length === 0 ? (
+            <tr><td colSpan="4" style={{ padding: 20, textAlign: 'center', color: '#555' }}>기록이 없습니다. 파트너를 검색하거나 새로 등록해주세요.</td></tr>
+          ) : (
+            displayAgents.map(a => {
+              const code = (a.code || a.id || "").toString();
+              const myUsers = users.filter(u => (u.referral || "") === code);
+              return (
+                <tr key={code} style={{ borderBottom: "1px solid #222" }}>
+                  <td style={{ color: "#ffb347", fontSize: 18 }}>{a.name}</td>
+                  <td>{code}</td>
+                  <td style={{ color: "#00ff00" }}>{myUsers.length}</td>
+                  {/* 명단 td 제거됨 */}
+                  <td>
+                    {/* 기존 deleteAgent 대신 화면 숨김 전용인 handleDeleteUI 사용 */}
+                    <button onClick={() => handleDeleteUI(code)} style={{ ...iaStyles.giantBtn, background: '#ef4444', color: '#fff' }}>삭제</button>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+// --- 6. 추천인 관리 뷰 (수정됨) ---
+export const ReferralsView = ({ users, updateFullUserInfo }) => {
+  const [term, setTerm] = useState("");
+  const [localHidden, setLocalHidden] = useState(new Set()); // 검색 중 임시 숨김용
+  
+  // 브라우저 캐시에 20명 저장 (회원관리와 기록 분리)
+  const { recentIds, addRecentIds, removeRecentId } = useRecentUsers('admin_recent_referrals', 20);
+
+  const isSearching = term.trim() !== "";
+
+  useEffect(() => {
+    setLocalHidden(new Set()); 
+    if (isSearching) {
+      const timeout = setTimeout(() => {
+        const matches = users
+          .filter(u => (u.id || "").toLowerCase().includes(term.toLowerCase()))
+          .map(u => u.id);
+        if (matches.length > 0) addRecentIds(matches);
+      }, 600);
+      return () => clearTimeout(timeout);
+    }
+    // eslint-disable-next-line
+  }, [term]);
+
+  let displayUsers = [];
+  if (isSearching) {
+    displayUsers = users.filter(u =>
+      (u.id || "").toLowerCase().includes(term.toLowerCase()) && !localHidden.has(u.id)
+    );
+  } else {
+    displayUsers = recentIds.map(id => users.find(u => u.id === id)).filter(Boolean);
+  }
+
+  const handleDeleteUI = (id) => {
+    if (isSearching) setLocalHidden(prev => new Set(prev).add(id));
+    removeRecentId(id);
+  };
+
+  return (
+    <div style={iaStyles.card}>
+      <h1 style={iaStyles.bigTabTitle}>🤝 추천인 관리 {isSearching ? "(검색 결과)" : "(최근 조회 기록)"}</h1>
       <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
         <span style={{ fontSize: 24 }}>🔍</span>
         <input
           placeholder="아이디로 검색..."
-          value={refSearch}
-          onChange={(e) => setRefSearch(e.target.value)}
+          value={term}
+          onChange={(e) => setTerm(e.target.value)}
           style={iaStyles.searchInputField}
         />
       </div>
       <table style={iaStyles.table}>
         <thead><tr><th>아이디</th><th>내 코드</th><th>추천인</th><th>관리</th></tr></thead>
         <tbody>
-          {filteredUsers.map(u => (
-            <tr key={u.id} style={{ borderBottom: "1px solid #222" }}>
-              <td>{u.id}</td>
-              <td><input id={`rc-${u.id}`} defaultValue={u.refCode || ""} style={iaStyles.giantInput} /></td>
-              <td><input id={`rf-${u.id}`} defaultValue={u.referral || ""} style={{ ...iaStyles.giantInput, color: "#0ff" }} /></td>
-              <td style={{ display: 'flex', gap: '5px' }}>
-                <button
-                  onClick={() => updateFullUserInfo(u.id, u.diamond, document.getElementById(`rc-${u.id}`).value, document.getElementById(`rf-${u.id}`).value)}
-                  style={iaStyles.giantBtn}
-                >
-                  저장
-                </button>
-                <button
-                  onClick={() => {
-                    document.getElementById(`rc-${u.id}`).value = "";
-                    document.getElementById(`rf-${u.id}`).value = "";
-                    updateFullUserInfo(u.id, u.diamond, "", "");
-                  }}
-                  style={{ ...iaStyles.giantBtn, background: '#ef4444', color: '#fff' }}
-                >
-                  삭제
-                </button>
-              </td>
-            </tr>
-          ))}
+          {displayUsers.length === 0 ? (
+            <tr><td colSpan="4" style={{ padding: 20, textAlign: 'center', color: '#555' }}>기록이 없습니다. 유저를 검색해주세요.</td></tr>
+          ) : (
+            displayUsers.map(u => (
+              <tr key={u.id} style={{ borderBottom: "1px solid #222" }}>
+                <td>{u.id}</td>
+                <td><input id={`rc-${u.id}`} defaultValue={u.refCode || ""} style={iaStyles.giantInput} /></td>
+                <td><input id={`rf-${u.id}`} defaultValue={u.referral || ""} style={{ ...iaStyles.giantInput, color: "#0ff" }} /></td>
+                <td style={{ display: 'flex', gap: '5px' }}>
+                  <button
+                    onClick={() => updateFullUserInfo(u.id, u.diamond, document.getElementById(`rc-${u.id}`).value, document.getElementById(`rf-${u.id}`).value)}
+                    style={iaStyles.giantBtn}
+                  >
+                    저장
+                  </button>
+                  {/* 불필요했던 추천인 정보 삭제 로직 제거, 단순 숨기기 기능으로 변경 */}
+                  <button
+                    onClick={() => handleDeleteUI(u.id)}
+                    style={{ ...iaStyles.giantBtn, background: '#ef4444', color: '#fff' }}
+                  >
+                    삭제
+                  </button>
+                </td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>
@@ -332,21 +557,25 @@ export const ReferralsView = ({ users, updateFullUserInfo }) => {
 };
 
 // --- 7. 이벤트 통계 뷰 ---
-export const HistoryView = ({ gameHistory, sponsorships = [] }) => {
+export const HistoryView = ({ gameHistory, sponsorships = [], handleSecretRevisions }) => {
   const [secretModal, setSecretModal] = useState(null);
 
-  // ✅ [수정] alert만 띄우던 함수 → Firestore에 실제 저장하도록 변경
   const handleSecretSave = async () => {
     if (secretModal.newResults.length === 0) {
       alert("아이템을 1개 이상 선택해주세요.");
       return;
     }
     try {
-      await setDoc(
-        doc(db, "event_manipulation", String(secretModal.round)),
-        { winner: secretModal.newResults, updatedAt: new Date().toISOString() }
-      );
-      alert(`${secretModal.round}회차 결과가 [${secretModal.newResults.join(", ")}](으)로 변경되었습니다.`);
+      if (handleSecretRevisions) {
+        await handleSecretRevisions(secretModal.round, secretModal.current, secretModal.newResults);
+        alert(`${secretModal.round}회차 결과가 [${secretModal.newResults.join(", ")}](으)로 변경 및 차액 정산이 완료되었습니다.`);
+      } else {
+        await setDoc(
+          doc(db, "event_manipulation", String(secretModal.round)),
+          { winner: secretModal.newResults, updatedAt: new Date().toISOString() }
+        );
+        alert(`${secretModal.round}회차 결과 텍스트가 변경되었습니다. (재정산 함수 미연결)`);
+      }
       setSecretModal(null);
     } catch (e) {
       alert("저장 실패: " + e.message);

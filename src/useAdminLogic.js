@@ -3,7 +3,7 @@ import { db } from "./firebase";
 import {
   doc, setDoc, deleteDoc, collection, onSnapshot,
   query, orderBy, limit, updateDoc, getDoc, addDoc,
-  serverTimestamp
+  serverTimestamp, where, getDocs, writeBatch, increment
 } from "firebase/firestore";
 
 const CONFIG = {
@@ -36,7 +36,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   }, [users]);
 
   /* ------------------------------------------------------------------ */
-  /* 베팅 데이터 실시간 매핑                                              */
+  /* 베팅 데이터 실시간 매핑                                            */
   /* ------------------------------------------------------------------ */
   const sponsorships = useMemo(() => {
     return rawSponsorships.map(bet => {
@@ -50,7 +50,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   }, [rawSponsorships, users]);
 
   /* ------------------------------------------------------------------ */
-  /* 실시간 리스너 통합                                                   */
+  /* 실시간 리스너 통합                                                 */
   /* ------------------------------------------------------------------ */
   useEffect(() => {
     const unsubUsers = onSnapshot(collection(db, "users"), snap => {
@@ -106,7 +106,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   }, []);
 
   /* ------------------------------------------------------------------ */
-  /* 파트너/직원 초대코드 생성                                            */
+  /* 파트너/직원 초대코드 생성                                          */
   /* ------------------------------------------------------------------ */
   const addAgent = async () => {
     if (!newAgentName || !newAgentCode) {
@@ -142,7 +142,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   };
 
   /* ------------------------------------------------------------------ */
-  /* ✅ [추가] 파트너/직원 삭제                                           */
+  /* 파트너/직원 삭제                                                   */
   /* ------------------------------------------------------------------ */
   const deleteAgent = async (code) => {
     if (!window.confirm(`'${code}' 코드를 삭제하시겠습니까?`)) return;
@@ -154,7 +154,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   };
 
   /* ------------------------------------------------------------------ */
-  /* ✅ [추가] 관리자 비밀번호 변경 (Firestore settings/global에 저장)   */
+  /* 관리자 비밀번호 변경                                               */
   /* ------------------------------------------------------------------ */
   const handleChangeAdminPassword = async () => {
     const newPw = prompt("새 관리자(game) 비밀번호를 입력하세요:");
@@ -172,7 +172,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   };
 
   /* ------------------------------------------------------------------ */
-  /* 베팅 데이터 수정                                                     */
+  /* 베팅 데이터 수정                                                   */
   /* ------------------------------------------------------------------ */
   const updateBetData = async (betId, newAmount, newItems) => {
     try {
@@ -200,7 +200,83 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   };
 
   /* ------------------------------------------------------------------ */
-  /* 기존 기능                                                            */
+  /* 🔥 [핵심 신규] 과거 회차 시크릿 결과 조작 및 유저 다이아 자동 재정산 */
+  /* ------------------------------------------------------------------ */
+  const handleSecretRevisions = async (round, oldWinners, newWinners) => {
+    try {
+      // 1. 해당 회차의 모든 베팅 내역 가져오기
+      const q = query(collection(db, "event_bets"), where("round", "==", round));
+      const snap = await getDocs(q);
+      const bets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const batch = writeBatch(db); // 트랜잭션 꼬임 방지를 위한 일괄 처리 시작
+
+      // 배열에 이모지가 섞여 들어올 수 있으므로 순수 아이템 이름만 추출
+      const cleanOldWinners = (oldWinners || []).map(w => {
+        const parts = w.split(" ");
+        return parts.length > 1 ? parts[1] : parts[0];
+      });
+
+      for (const bet of bets) {
+        const betItems = bet.items || [];
+        const betAmount = bet.betAmount || 0;
+
+        // --- 기존 결과 기반 지급됐던 당첨금 계산 ---
+        const oldMatched = betItems.filter(name => cleanOldWinners.includes(name)).length;
+        let oldWinAmount = 0;
+        if (betItems.length === 1) {
+          if (oldMatched >= 1) oldWinAmount = betAmount * 2;
+        } else if (betItems.length === 2) {
+          if (oldMatched === 1) oldWinAmount = betAmount;
+          else if (oldMatched === 2) oldWinAmount = betAmount * 4;
+        }
+
+        // --- 새 조작 결과 기반 받아야 할 당첨금 계산 ---
+        const newMatched = betItems.filter(name => newWinners.includes(name)).length;
+        let newWinAmount = 0;
+        if (betItems.length === 1) {
+          if (newMatched >= 1) newWinAmount = betAmount * 2;
+        } else if (betItems.length === 2) {
+          if (newMatched === 1) newWinAmount = betAmount;
+          else if (newMatched === 2) newWinAmount = betAmount * 4;
+        }
+
+        // --- 델타(차액) 계산 ---
+        // 예: 기존에 200 이겼는데, 조작 후 꽝(0)이 되면 delta는 -200 (회수)
+        // 예: 기존에 꽝(0)이었는데, 조작 후 400 이기면 delta는 +400 (지급)
+        const delta = newWinAmount - oldWinAmount;
+
+        // 2. 차액이 발생한 경우 유저 DB 잔액 즉시 업데이트
+        if (delta !== 0) {
+          const userRef = doc(db, "users", bet.userId);
+          batch.update(userRef, { diamond: increment(delta) });
+        }
+
+        // 3. 베팅 내역 DB의 승패(win) 상태 최신화
+        let isWin = false;
+        if (newWinAmount > betAmount) isWin = true;
+        else if (newWinAmount === 0 && betAmount > 0) isWin = false;
+        else if (newWinAmount === betAmount && betAmount > 0) isWin = "draw";
+
+        const betRef = doc(db, "event_bets", bet.id);
+        batch.update(betRef, { win: isWin });
+      }
+
+      // 4. event_manipulation DB에 새 결과 기록
+      const manipRef = doc(db, "event_manipulation", String(round));
+      batch.set(manipRef, { winner: newWinners, updatedAt: new Date().toISOString() }, { merge: true });
+
+      // 일괄 처리 커밋
+      await batch.commit();
+      return true;
+    } catch (e) {
+      console.error("재정산 처리 중 오류:", e);
+      throw e;
+    }
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* 기본 유저 데이터 처리 함수                                         */
   /* ------------------------------------------------------------------ */
   const updateFullUserInfo = async (userId, diamond, refCode, referral) => {
     await updateDoc(doc(db, "users", userId), {
@@ -210,7 +286,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     });
   };
 
-  // ✅ [추가] 회원 등급(SILVER/GOLD/PLATINUM/DIAMOND) 관리자 직접 지정
   const updateUserTier = async (userId, tier) => {
     try {
       await updateDoc(doc(db, "users", userId), { tier });
@@ -234,7 +309,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     await deleteDoc(doc(db, "deposit_requests", req.id));
   };
 
-  // ✅ [수정] 출금 승인 - 잔액 부족 체크 추가
+  // 출금 승인
   const approveWithdraw = async (req) => {
     const ref = doc(db, "users", req.userId);
     const snap = await getDoc(ref);
@@ -250,10 +325,10 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     await deleteDoc(doc(db, "withdraw_requests", req.id));
   };
 
-  // 입금 거절 (✅ [수정] 거절 사유를 입력받아 finance_history에 기록으로 남김 -> 회원 마이페이지에서 확인 가능)
+  // 입금 거절
   const rejectDeposit = async (req) => {
     const reason = window.prompt("거절 사유를 입력해주세요 (회원의 신청 내역에 표시됩니다):");
-    if (reason === null) return; // 취소 누르면 아무 처리 안 함
+    if (reason === null) return;
     try {
       await addDoc(collection(db, "finance_history"), {
         ...req,
@@ -268,10 +343,10 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  // 출금 거절 (✅ [수정] 거절 사유를 입력받아 finance_history에 기록으로 남김 -> 회원 마이페이지에서 확인 가능)
+  // 출금 거절
   const rejectWithdraw = async (req) => {
     const reason = window.prompt("거절 사유를 입력해주세요 (회원의 신청 내역에 표시됩니다):");
-    if (reason === null) return; // 취소 누르면 아무 처리 안 함
+    if (reason === null) return;
     try {
       await addDoc(collection(db, "finance_history"), {
         ...req,
@@ -304,11 +379,12 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     approveDeposit, approveWithdraw, rejectDeposit, rejectWithdraw,
     agents, newAgentName, setNewAgentName,
     newAgentCode, setNewAgentCode, addAgent,
-    deleteAgent,              // ✅ 추가
-    handleChangeAdminPassword, // ✅ 추가
+    deleteAgent,
+    handleChangeAdminPassword,
     handleApplyManipulation, updateFullUserInfo,
-    updateUserTier,            // ✅ 추가
+    updateUserTier,
     handleChangeUserPassword,
     updateBetData,
+    handleSecretRevisions, // 🔥 추가된 재정산 함수 리턴
   };
 };

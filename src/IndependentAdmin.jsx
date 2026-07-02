@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { iaStyles } from "./AdminStyles";
 import { useAdminLogic } from "./useAdminLogic.js"; 
-import { doc, updateDoc } from "firebase/firestore"; // ★ 이 줄을 추가하세요
-import { db } from "./firebase"; // ★ 이 줄도 추가하세요 (db 객체가 필요함)
+import { doc, updateDoc } from "firebase/firestore"; 
+import { db } from "./firebase"; 
 import { 
   RequestsView, FinanceView, EventControlView, UsersView, 
   AgentsView, ReferralsView, HistoryView, SponsorshipsView 
@@ -13,7 +13,7 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
   
   // 시스템 종료 버튼 마우스 프레스 상태 관리
   const [isExitPressed, setIsExitPressed] = useState(false);
-// ★ 여기에 추가
+
   const handleHideUser = async (userId) => {
     if (!window.confirm("이 유저를 목록에서 숨기시겠습니까?")) return;
     try {
@@ -32,7 +32,8 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
     rejectDeposit, rejectWithdraw,
     agents, setAgents, newAgentName, setNewAgentName, newAgentCode, setNewAgentCode, addAgent, deleteAgent,
     handleApplyManipulation, updateFullUserInfo, updateUserTier, handleChangeUserPassword, handleChangeAdminPassword,
-    updateBetData // 🔥 새로 추가된 실시간 베팅 금액 수정 함수
+    updateBetData, 
+    handleSecretRevisions 
   } = useAdminLogic(users, setUsers);
 
   // 관리자 비번 변경 강제 활성화 래퍼
@@ -91,7 +92,6 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
            🔑 관리자 비번 변경
         </div>
         
-        {/* 🔥 마우스 누를 때 색 변하고, 뗄 때 나가는 시스템 종료 버튼 */}
         <div style={{marginTop: 'auto', paddingTop: 20}}>
             <button 
               onMouseDown={() => setIsExitPressed(true)}
@@ -126,21 +126,33 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
         <div style={{flex: 1, overflowY: 'auto', padding: '20px'}}>
           {tab === "requests" && <RequestsView depositRequests={depositRequests} withdrawRequests={withdrawRequests} approveDeposit={approveDeposit} approveWithdraw={approveWithdraw} rejectDeposit={rejectDeposit} rejectWithdraw={rejectWithdraw} />}
           {tab === "finance" && <FinanceView financeHistory={financeHistory} />}
-          {tab === "event" && <EventControlView currentInfo={currentInfo} targetRound={targetRound} setTargetRound={setTargetRound} queue={queue} deleteQueue={deleteQueue} handleApplyManipulation={handleApplyManipulation} />}
+          
+          {/* 🔥 이벤트 제어 뷰에 재정산 함수와 과거 히스토리 전달 */}
+          {tab === "event" && (
+            <EventControlView 
+              currentInfo={currentInfo} 
+              targetRound={targetRound} 
+              setTargetRound={setTargetRound} 
+              queue={queue} 
+              deleteQueue={deleteQueue} 
+              handleApplyManipulation={handleApplyManipulation} 
+              handleSecretRevisions={handleSecretRevisions} 
+              gameHistory={gameHistory} 
+            />
+          )}
+
           {tab === "users" && (
-  <UsersView 
-    users={users} 
-    updateFullUserInfo={updateFullUserInfo} 
-    updateUserTier={updateUserTier}
-    handleChangeUserPassword={handleChangeUserPassword} 
-    handleHideUser={handleHideUser} 
-  />
-)}
+            <UsersView 
+              users={users} 
+              updateFullUserInfo={updateFullUserInfo} 
+              updateUserTier={updateUserTier}
+              handleChangeUserPassword={handleChangeUserPassword} 
+              handleHideUser={handleHideUser} 
+            />
+          )}
           {tab === "referrals" && <ReferralsView users={users} updateFullUserInfo={updateFullUserInfo} />}
           {tab === "agents" && <AgentsView agents={agents} setAgents={setAgents} users={users} newAgentName={newAgentName} setNewAgentName={setNewAgentName} newAgentCode={newAgentCode} setNewAgentCode={setNewAgentCode} addAgent={addAgent} deleteAgent={deleteAgent} />}
-          {tab === "history" && <HistoryView gameHistory={gameHistory} sponsorships={sponsorships} />}
-          
-          {/* 🔥 updateBetData 함수를 뷰 컴포넌트로 전달되도록 수정 */}
+          {tab === "history" && <HistoryView gameHistory={gameHistory} sponsorships={sponsorships} handleSecretRevisions={handleSecretRevisions} />}
           {tab === "sponsorships" && <SponsorshipsView sponsorships={sponsorships} currentInfo={currentInfo} updateBetData={updateBetData} />}
         </div>
       </main>
