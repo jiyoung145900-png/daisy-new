@@ -63,6 +63,19 @@ class AudioController {
         osc.frequency.linearRampToValueAtTime(100, now + 0.4);
         gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
         osc.start(now); osc.stop(now + 0.4);
+      } else if (type === "impact") {
+        // 💥 결과 공개 순간의 "붐!" 사운드 (저음 킥)
+        osc.type = "square"; osc.frequency.setValueAtTime(420, now);
+        osc.frequency.exponentialRampToValueAtTime(45, now + 0.35);
+        gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+        osc.start(now); osc.stop(now + 0.4);
+        // 하이 핑 레이어
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.connect(gain2); gain2.connect(ctx.destination);
+        osc2.type = "sine"; osc2.frequency.setValueAtTime(1800, now + 0.05);
+        gain2.gain.setValueAtTime(0.12, now + 0.05); gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc2.start(now + 0.05); osc2.stop(now + 0.3);
       }
     } catch (e) {}
   }
@@ -82,28 +95,25 @@ export const EventService = {
   },
 
   getFixedResult: async (round) => {
-  try {
-    // 로컬 조작 큐 먼저 확인
-    const queue = JSON.parse(localStorage.getItem("event_manipulation_queue") || "{}");
-    if (queue[round]) {
-      return queue[round].map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
-    }
+    try {
+      // 로컬 조작 큐 먼저 확인 (관리자 연동 유지)
+      const queue = JSON.parse(localStorage.getItem("event_manipulation_queue") || "{}");
+      if (queue[round]) {
+        return queue[round].map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
+      }
 
-    // Firestore에서 읽을 때 winner 필드로 변경 (기존: .items → 수정: .winner)
-    const docRef = doc(db, "event_manipulation", String(round));
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-
-      // winner 필드 우선, 구버전 items 필드도 fallback으로 지원
-      const targetNames = data.winner || data.items;
-      if (!targetNames || targetNames.length === 0) return null;
-
-      return targetNames.map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
-    }
-  } catch (e) { console.error("Result Fetch Error:", e); }
-  return null;
-},
+      // Firestore: winner 필드 우선, 구버전 items 필드 fallback (관리자 연동 유지)
+      const docRef = doc(db, "event_manipulation", String(round));
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const targetNames = data.winner || data.items;
+        if (!targetNames || targetNames.length === 0) return null;
+        return targetNames.map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
+      }
+    } catch (e) { console.error("Result Fetch Error:", e); }
+    return null;
+  },
 
   generateResult: (round) => {
     const getLuckScore = (name) => {
@@ -123,23 +133,28 @@ export const EventService = {
     return shuffled.slice(0, 2).map(({luckScore, ...rest}) => rest); 
   },
 
-  getMissedHistory: async (lastRound, currentRound) => {
-    const missed = [];
-    const start = Math.max(lastRound + 1, currentRound - 30); 
-    for (let r = start; r < currentRound; r++) {
-      const fixed = await EventService.getFixedResult(r); 
-      const winItems = fixed || EventService.generateResult(r);
-      const timeAtRound = new Date(CONFIG.START_TIME + (r - CONFIG.BASE_ROUND) * CONFIG.ROUND_DURATION * 1000);
-      missed.push({
-        round: r,
-        winItems: winItems.map(i => `${i.icon} ${i.name}`), 
-        date: timeAtRound.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
-      });
-    }
-    return missed;
+  // ✅ [수정] 최대 100회까지 백필 + Promise.all 병렬 조회 (기존: 30회 제한 + 순차 조회)
+  getMissedHistory: async (lastRound, currentRound, maxCount = 100) => {
+    const start = Math.max(lastRound + 1, currentRound - maxCount);
+    const rounds = [];
+    for (let r = start; r < currentRound; r++) rounds.push(r);
+    if (rounds.length === 0) return [];
+
+    const results = await Promise.all(
+      rounds.map(async (r) => {
+        const fixed = await EventService.getFixedResult(r);
+        const winItems = fixed || EventService.generateResult(r);
+        const timeAtRound = new Date(CONFIG.START_TIME + (r - CONFIG.BASE_ROUND) * CONFIG.ROUND_DURATION * 1000);
+        return {
+          round: r,
+          winItems: winItems.map(i => `${i.icon} ${i.name}`),
+          date: timeAtRound.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+        };
+      })
+    );
+    return results; // 오름차순 (과거 → 최신)
   },
 
-  // ✅ 수정: totalWins 계산 버그 수정 (history.length * 2 → 실제 카운트 기반)
   calculateStats: (history) => {
     const totalRounds = history.length;
     if (totalRounds === 0) return {};

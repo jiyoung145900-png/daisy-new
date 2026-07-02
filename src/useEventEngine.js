@@ -12,8 +12,6 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
 
   useEffect(() => { pointRef.current = userPoint; }, [userPoint]);
 
-  // ✅ [수정] State 선언을 initEngine useEffect보다 위로 이동
-  // (initEngine 내부에서 setMyHistory, setMyPendingBet을 호출하므로 반드시 먼저 선언되어야 함)
   const [totalHistory, setTotalHistory] = useState([]);
 
   const [myHistory, setMyHistory] = useState(() => {
@@ -32,6 +30,9 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
   const [showResult, setShowResult] = useState(null);
   const [liveNoti, setLiveNoti] = useState("이벤트가 활성화되었습니다!");
 
+  // ✨ [신규] 결과 공개 순간 임팩트 트리거 (숫자가 바뀔 때마다 UI에서 폭발 연출 재생)
+  const [impactTick, setImpactTick] = useState(0);
+
   // --- [원본 기능: 포인트 업데이트] ---
   const updatePointWithAnim = useCallback((newPoint) => {
     if (onUpdatePoint) {
@@ -40,18 +41,19 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     }
   }, [onUpdatePoint, pointControls]);
 
-  // ✅ [수정] initEngine useEffect를 State 선언 및 updatePointWithAnim 아래로 이동
-  // setMyHistory, setMyPendingBet, updatePointWithAnim이 모두 정의된 이후에 실행됨
   useEffect(() => {
     const initEngine = async () => {
       const { round: currentRound } = EventService.getCurrentRoundInfo();
       
       // 1. 전체 히스토리 복구
+      // ✅ [버그 수정] 기존: 저장 기록이 없으면 lastSavedRound = currentRound - 1 로 잡혀서
+      //    "currentRound > lastSavedRound + 1" 조건이 항상 false → 백필이 아예 안 됨 → 통계 0%, 회차별 결과 빈 화면
+      //    수정: 저장 기록이 없으면 최근 100회를 전부 백필하도록 기준점을 currentRound - 101 로 설정
       const savedTotal = JSON.parse(localStorage.getItem("event_total_history") || "[]");
-      const lastSavedRound = savedTotal.length > 0 ? savedTotal[0].round : currentRound - 1;
+      const lastSavedRound = savedTotal.length > 0 ? savedTotal[0].round : currentRound - 101;
 
       if (currentRound > lastSavedRound + 1) {
-        const missed = await EventService.getMissedHistory(lastSavedRound, currentRound);
+        const missed = await EventService.getMissedHistory(lastSavedRound, currentRound, 100);
         const updatedTotal = [...missed.reverse(), ...savedTotal].slice(0, 100);
         setTotalHistory(updatedTotal);
         localStorage.setItem("event_total_history", JSON.stringify(updatedTotal));
@@ -86,7 +88,6 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
             earn: winAmount, cost: totalCost, date: currentTime, status: "자동정산"
           };
 
-          // ✅ 이제 setMyHistory가 위에 선언되어 있으므로 안전하게 호출 가능
           setMyHistory(prev => {
             if (prev.find(h => h.round === parsedBet.round)) return prev;
             const updated = [newRecord, ...prev].slice(0, 100);
@@ -99,8 +100,6 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
           }
           localStorage.removeItem(`pending_bet_${user?.id}`);
         } else {
-          // 아직 진행 중인 회차라면 베팅 상태 유지
-          // ✅ 이제 setMyPendingBet도 안전하게 호출 가능
           betRef.current = parsedBet;
           setMyPendingBet(parsedBet);
         }
@@ -163,7 +162,11 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       const winNames = winObjs.map(i => i.name);
       const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
       
+      // 💥 [신규] 결과 확정 순간: 임팩트 폭발 연출 + 붐 사운드
       setDrawingItems(winObjs.map(v => v.icon));
+      setImpactTick(t => t + 1);
+      soundManager.play("impact");
+      if (navigator.vibrate) navigator.vibrate(80);
       
       setTotalHistory(prev => {
         const newHistoryItem = { 
@@ -192,23 +195,6 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
         const isSuccess = winAmount > totalCost;
         const isDraw = winAmount === totalCost && totalCost > 0;
 
-        if (isSuccess) { 
-          soundManager.play("win");
-          if (navigator.vibrate) navigator.vibrate([100, 50, 150]); 
-        } else if (!isDraw && totalCost > 0) { 
-          soundManager.play("lose");
-        }
-
-        updatePointWithAnim(pointRef.current + winAmount);
-        
-        setShowResult({ 
-          winItems: winObjs.map(v => `${v.icon} ${v.name}`), 
-          winAmount, 
-          betTotal: totalCost, 
-          isWin: isSuccess, 
-          isDraw 
-        });
-        
         setMyHistory(prev => {
           const updated = [{
             round: targetRound, selected: [...items], winNames, winIcons: winObjs.map(i => i.icon),
@@ -217,12 +203,32 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
           localStorage.setItem(`event_my_history_${user?.id}`, JSON.stringify(updated));
           return updated;
         });
+
+        // ✨ [수정] 임팩트가 먼저 터지고 → 0.8초 뒤에 결과 모달 등장 (드라마틱한 순서)
+        setTimeout(() => {
+          if (isSuccess) { 
+            soundManager.play("win");
+            if (navigator.vibrate) navigator.vibrate([100, 50, 150]); 
+          } else if (!isDraw && totalCost > 0) { 
+            soundManager.play("lose");
+          }
+
+          updatePointWithAnim(pointRef.current + winAmount);
+          
+          setShowResult({ 
+            winItems: winObjs.map(v => `${v.icon} ${v.name}`), 
+            winAmount, 
+            betTotal: totalCost, 
+            isWin: isSuccess, 
+            isDraw 
+          });
+        }, 800);
       }
 
       setTimeout(() => {
         handleSetMyPendingBet(null);
         isProcessingRef.current = false;
-      }, 2000);
+      }, 2600);
 
     }, 3000); 
   }, [user?.id, updatePointWithAnim]);
@@ -289,6 +295,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     setShowResult,
     liveNoti,
     stats,
+    impactTick,
     updatePointWithAnim
   };
 }

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { useEventEngine, allItems } from "./useEventEngine"; 
+import { EventBanner, ImpactBurst } from "./EventComponents";
 import { db } from "./firebase"; 
 import { collection, addDoc, deleteDoc, doc } from "firebase/firestore";
 
@@ -30,14 +31,12 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
 
   const { 
     round, timeLeft, totalHistory, myHistory, myPendingBet, setMyPendingBet, 
-    isDrawing, drawingItems, showResult, setShowResult, liveNoti, stats, updatePointWithAnim 
+    isDrawing, drawingItems, showResult, setShowResult, liveNoti, stats, impactTick, updatePointWithAnim 
   } = useEventEngine(user, userPoint, onUpdatePoint, pointControls);
 
-  const [selectedItems, useStateSelectedItems] = useState([]);
+  const [selectedItems, setSelectedItems] = useState([]);
   const [betAmount, setBetAmount] = useState("");
   const [activeTab, setActiveTab] = useState("mine");
-
-  const setSelectedItems = useStateSelectedItems; // Alias for consistency if needed
 
   useEffect(() => { setDisplayPoint(userPoint); }, [userPoint]);
 
@@ -59,9 +58,8 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     return `https://api.dicebear.com/7.x/${avatarStyles[idx]}/svg?seed=${user?.id}_${idx}&backgroundColor=2a2a2e`;
   }, [confirmedImage, confirmedAvatarIdx, user?.id]);
 
- // 1. handleCancelBet을 handleDonate 외부로 분리 (상단으로 이동)
   const handleCancelBet = async () => {
-    if (!myPendingBet?.docId) return; // docId 확인
+    if (!myPendingBet?.docId) return;
     try {
       await deleteDoc(doc(db, "event_bets", myPendingBet.docId));
       const refunded = displayPoint + myPendingBet.totalCost;
@@ -86,12 +84,9 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     updatePointWithAnim(newPoint); 
 
     try {
-      // 2. 문서 추가 후 생성된 ID를 저장
       const docRef = await addDoc(collection(db, "event_bets"), {
         round: round, userId: user.id, betAmount: totalCost, items: [...selectedItems], win: null, timestamp: new Date().toISOString()
       });
-      
-      // docId를 포함하여 상태 저장
       setMyPendingBet({ round: round, items: [...selectedItems], perAmount, totalCost, docId: docRef.id });
     } catch (e) { console.error("서버 기록 실패:", e); }
 
@@ -131,57 +126,22 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
           </motion.div>
         </div>
 
-        {/* 메인 배너 */}
-        <motion.div 
-          style={{...localDs.eventBanner, background: isDrawing ? "linear-gradient(135deg, #1a1a1a 0%, #000 100%)" : localDs.eventBanner.background}} 
-          animate={isDrawing ? { x: [-1, 1, -1, 1, 0], transition: { repeat: Infinity, duration: 0.1 } } : {}}
-        >
-          <div style={localDs.radarContainer}>
-            {isDrawing && [0, 1, 2].map((i) => (
-              <motion.div key={`radar-${i}`} style={localDs.radarCircle} initial={{ width: 0, height: 0, opacity: 0.8 }} animate={{ width: 600, height: 600, opacity: 0 }} transition={{ duration: 3, repeat: Infinity, delay: i * 1, ease: "easeOut" }} />
-            ))}
-          </div>
-
-          <AnimatePresence>
-            {isDrawing && (
-              <>
-                <motion.div style={{ position: 'absolute', left: '-10%', fontSize: '80px', zIndex: 5, pointerEvents: 'none' }} initial={{ x: 0, opacity: 0 }} animate={{ x: 300, opacity: [0, 1, 0], scale: [0.5, 1.2, 0.8] }} exit={{ opacity: 0 }} transition={{ duration: 2.5, repeat: Infinity, ease: "circIn" }}>⭐</motion.div>
-                <motion.div style={{ position: 'absolute', right: '-10%', fontSize: '80px', zIndex: 5, pointerEvents: 'none' }} initial={{ x: 0, opacity: 0 }} animate={{ x: -300, opacity: [0, 1, 0], scale: [0.5, 1.2, 0.8] }} exit={{ opacity: 0 }} transition={{ duration: 2.5, repeat: Infinity, ease: "circIn", delay: 1.25 }}>❤️</motion.div>
-              </>
-            )}
-          </AnimatePresence>
-
-          <div style={localDs.bannerContent}>
-            <div style={localDs.bannerTop}>
-              <div style={{...localDs.liveBadge, background: isDrawing ? '#ffb347' : '#ff3b30'}}>{isDrawing ? "DRAWING" : "LIVE"}</div>
-              <span style={localDs.roundInfo}>
-                {isKo ? `제 ${round}회차` : `Round ${round}`} {myPendingBet ? (isKo ? "(참여완료)" : "(Joined)") : ""}
-              </span>
-            </div>
-            <div style={localDs.timerDisplay}>
-              {isDrawing ? (
-                <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', margin: '15px 0' }}>
-                  {drawingItems.map((icon, idx) => (
-                    <motion.div key={idx} initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1.2, opacity: 1 }} style={{ fontSize: '50px' }}>{icon}</motion.div>
-                  ))}
-                </div>
-              ) : <h2 style={localDs.timeLeftNum}>{`${Math.floor(timeLeft/60)}:${(timeLeft%60).toString().padStart(2,'0')}`}</h2>}
-            </div>
-            <div style={localDs.lastResultBar}>
-              <span style={localDs.lastLabel}>{round - 1}{isKo ? "회차 결과:" : " Result:"}</span>
-              <div style={{display:'flex', gap:'5px'}}>
-                {totalHistory[0]?.winItems.map((itemStr, idx) => (
-                  <span key={idx} style={localDs.resTag}>{getLocalizedText(itemStr)}</span>
-                )) || (isKo ? "대기중" : "Waiting")}
-              </div>
-            </div>
-          </div>
-        </motion.div>
+        {/* 메인 배너 (대기중 반짝임 + 추첨 + 임팩트 연출) */}
+        <EventBanner
+          round={round}
+          timeLeft={timeLeft}
+          isDrawing={isDrawing}
+          drawingItems={drawingItems}
+          impactTick={impactTick}
+          isKo={isKo}
+          joined={!!myPendingBet}
+          lastResultItems={totalHistory[0]?.winItems?.map(getLocalizedText)}
+        />
 
         {/* 아이템 그리드 */}
         <div style={localDs.sectionLabel}>
           <span style={localDs.labelBar} /> {isKo ? "아이템 선택" : "Select Item"} 
-          <small style={localDs.subLabel}>{isKo ? "최근 100회 통계" : "Last 100 Stats"}</small>
+          <small style={localDs.subLabel}>{isKo ? `최근 ${totalHistory.length}회 통계` : `Last ${totalHistory.length} Stats`}</small>
         </div>
         <div style={localDs.grid}>
           {allItems.map((item) => {
@@ -191,7 +151,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                 onClick={() => !myPendingBet && setSelectedItems(prev => prev.includes(item.name) ? prev.filter(i => i !== item.name) : [...prev, item.name].slice(0, 2))}
                 style={{...localDs.itemCard, opacity: myPendingBet ? 0.5 : 1, background: isSelected ? `linear-gradient(145deg, ${item.color}88, #111)` : "#161616", border: isSelected ? `2px solid ${item.color}` : "2px solid #252525"}}>
                 <div style={localDs.multiplier}>{item.label}</div>
-                <div style={localDs.statBadge}>{stats[item.name] || 0}%</div>
+                {!isSelected && <div style={localDs.statBadge}>{stats[item.name] ?? 0}%</div>}
                 <div style={localDs.itemIcon}>{item.icon}</div>
                 <div style={localDs.itemInfoText}>
                   <span style={localDs.itemName}>{isKo ? item.name : item.nameEn}</span>
@@ -214,8 +174,13 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
             </button>
           </div>
           <div style={localDs.tabContent}>
-            {(activeTab === 'mine' ? myHistory : totalHistory).sort((a, b) => b.round - a.round).slice(0, 20).map((h, i) => (
-              <div key={i} style={localDs.histItem}>
+            {/* ✅ 회차별 결과는 최근 50경기까지 표시, 내 기록은 20개 */}
+            {(activeTab === 'mine' ? myHistory : totalHistory)
+              .slice()
+              .sort((a, b) => b.round - a.round)
+              .slice(0, activeTab === 'total' ? 50 : 20)
+              .map((h, i) => (
+              <div key={`${h.round}-${i}`} style={localDs.histItem}>
                 <div style={localDs.histLeft}>
                   <div style={localDs.histRound}>{h.round}{isKo ? "회차" : " Rd"}</div>
                   <div style={localDs.histDetail}>{h.date}</div>
@@ -232,7 +197,11 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
               </div>
             ))}
             {(activeTab === 'mine' ? myHistory : totalHistory).length === 0 && (
-              <div style={localDs.emptyText}>{isKo ? "기록이 없습니다." : "No records found."}</div>
+              <div style={localDs.emptyText}>
+                {activeTab === 'total'
+                  ? (isKo ? "기록 불러오는 중..." : "Loading records...")
+                  : (isKo ? "기록이 없습니다." : "No records found.")}
+              </div>
             )}
           </div>
         </div>
@@ -261,10 +230,10 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                   <span style={localDs.selectionText}>
                     {isKo ? "선택됨:" : "Selected:"} <b style={{color: '#ffb347'}}>{selectedItems.map(name => getLocalizedText(name)).join(", ")}</b>
                   </span>
-                  <button style={localDs.clearBtn} onClick={() => setSelectedItems([])}>{isKo ? "초기화" : "Reset"}</button>
+                  <button style={localDs.clearBtn} onClick={() => { setSelectedItems([]); setBetAmount(""); }}>{isKo ? "초기화" : "Reset"}</button>
                 </div>
 
-                {/* 베팅 입력 영역 */}
+                {/* 베팅 입력 영역 (✅ 지우기 버튼 제거 → 입력창 + 베팅 버튼만) */}
                 <div style={localDs.betInputGroup}>
                   <input
                     type="number"
@@ -273,12 +242,6 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                     style={localDs.mainInput}
                     placeholder={isKo ? "금액 입력" : "Enter amount"}
                   />
-                  <button
-                    style={localDs.clearInputBtn}
-                    onClick={() => setBetAmount("")}
-                  >
-                    {isKo ? "지우기" : "Clear"}
-                  </button>
                   <button
                     style={{...localDs.finalBtn, opacity: !betAmount ? 0.5 : 1}}
                     onClick={handleDonate}
@@ -300,24 +263,77 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
         )}
       </AnimatePresence>
 
-      {/* 4. 결과 모달 */}
+      {/* 4. 결과 공개 임팩트 (화면 전체 폭발 파티클) */}
+      <ImpactBurst impactTick={impactTick} />
+
+      {/* 5. 결과 모달 (스프링 팝 + 당첨 시 골드 글로우 + 파티클) */}
       <AnimatePresence>
         {showResult && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={localDs.modalOverlay} onClick={() => setShowResult(null)}>
-            <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} style={localDs.modalCard} onClick={e => e.stopPropagation()}>
-              <div style={localDs.modalTitle}>
+            <motion.div 
+              initial={{ scale: 0.3, rotate: -6, opacity: 0 }} 
+              animate={{ scale: 1, rotate: 0, opacity: 1 }} 
+              transition={{ type: "spring", stiffness: 300, damping: 18 }}
+              style={{
+                ...localDs.modalCard,
+                border: showResult.isWin ? '2px solid #ffd700' : '1px solid #333',
+                boxShadow: showResult.isWin ? '0 0 60px rgba(255,215,0,0.35)' : '0 0 40px rgba(0,0,0,0.6)'
+              }} 
+              onClick={e => e.stopPropagation()}
+            >
+              {/* 당첨 시 모달 내부 컨페티 */}
+              {showResult.isWin && (
+                <div style={localDs.confettiWrap}>
+                  {["🎉","✨","🎊","⭐","💎","🎉","✨","🎊"].map((c, i) => (
+                    <motion.span
+                      key={i}
+                      style={{ position: 'absolute', left: `${8 + i * 12}%`, top: '-10px', fontSize: '18px' }}
+                      initial={{ y: -20, opacity: 0, rotate: 0 }}
+                      animate={{ y: [0, 90], opacity: [0, 1, 0], rotate: (i % 2 ? 1 : -1) * 260 }}
+                      transition={{ duration: 1.6, delay: i * 0.12, repeat: Infinity, repeatDelay: 0.6 }}
+                    >
+                      {c}
+                    </motion.span>
+                  ))}
+                </div>
+              )}
+
+              <motion.div 
+                style={localDs.modalTitle}
+                initial={{ scale: 0.6 }}
+                animate={{ scale: [0.6, 1.15, 1] }}
+                transition={{ duration: 0.45, delay: 0.1 }}
+              >
                 {showResult.isWin ? (isKo ? "🎉 당첨 성공!" : "🎉 YOU WIN!") : showResult.isDraw ? (isKo ? "⚖️ 본전 방어!" : "⚖️ DRAW!") : (isKo ? "😢 아쉬워요" : "😢 YOU LOSE")}
+              </motion.div>
+
+              <div style={{fontSize: '50px', margin: '20px 0', display: 'flex', justifyContent: 'center', gap: '12px'}}>
+                {showResult.winItems.map((str, i) => (
+                  <motion.span
+                    key={i}
+                    initial={{ scale: 0, rotate: -90 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: "spring", stiffness: 260, damping: 14, delay: 0.25 + i * 0.15 }}
+                  >
+                    {getLocalizedText(str)}
+                  </motion.span>
+                ))}
               </div>
-              <div style={{fontSize: '50px', margin: '20px 0'}}>
-                {showResult.winItems.map(str => getLocalizedText(str)).join(" ")}
-              </div>
+
               <div style={localDs.modalInfoBox}>
                 <div>{isKo ? "투자" : "Bet"}: {showResult.betTotal.toLocaleString()}</div>
                 <div>{isKo ? "결과" : "Result"}: {showResult.winAmount.toLocaleString()}</div>
               </div>
-              <div style={{...localDs.modalAmount, color: (showResult.winAmount - showResult.betTotal) > 0 ? '#34D399' : (showResult.winAmount - showResult.betTotal) === 0 ? '#fff' : '#FB7185'}}>
+
+              <motion.div 
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 200, damping: 12, delay: 0.55 }}
+                style={{...localDs.modalAmount, color: (showResult.winAmount - showResult.betTotal) > 0 ? '#34D399' : (showResult.winAmount - showResult.betTotal) === 0 ? '#fff' : '#FB7185'}}
+              >
                 {(showResult.winAmount - showResult.betTotal) > 0 ? "+" : ""}{(showResult.winAmount - showResult.betTotal).toLocaleString()} DIA
-              </div>
+              </motion.div>
+
               <button style={localDs.modalCloseBtn} onClick={() => setShowResult(null)}>{isKo ? "확인" : "CLOSE"}</button>
             </motion.div>
           </motion.div>
@@ -342,17 +358,6 @@ const localDs = {
   profileImg: { width: "100%", height: "100%", objectFit: "cover" },
   liveTicker: { height: '34px', background: 'rgba(255, 179, 71, 0.05)', margin: '0 -20px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   tickerText: { fontSize: '11px', color: '#ffb347', fontWeight: '600' },
-  eventBanner: { background: "linear-gradient(135deg, #ffdeeb 0%, #fbc2eb 100%)", borderRadius: "28px", padding: "25px", border: '1px solid #ffb6c1', textAlign: 'center', position: 'relative', overflow: 'hidden', height: '190px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  radarContainer: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' },
-  radarCircle: { position: 'absolute', borderRadius: '50%', border: '8px solid rgba(255, 255, 255, 0.6)' },
-  bannerContent: { position: 'relative', zIndex: 10, width: '100%' },
-  bannerTop: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' },
-  liveBadge: { color: '#fff', fontSize: '10px', fontWeight: '900', padding: '2px 8px', borderRadius: '4px' },
-  roundInfo: { fontSize: '12px', color: '#555', fontWeight: '700' },
-  timeLeftNum: { fontSize: '52px', fontWeight: '900', margin: '5px 0', color: '#333', letterSpacing: '-1px' },
-  lastResultBar: { background: 'rgba(255,255,255,0.6)', padding: '8px 15px', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '10px', marginTop: '10px' },
-  lastLabel: { fontSize: '11px', color: '#333', fontWeight: '600' },
-  resTag: { fontSize: '12px', fontWeight: '800', color: '#000' },
   sectionLabel: { fontSize: "16px", fontWeight: "900", margin: "35px 0 15px", display: 'flex', alignItems: 'center', gap: '8px', color: '#fff' },
   labelBar: { width: '4px', height: '16px', background: '#ffb347', borderRadius: '2px' },
   subLabel: { opacity: 0.4, marginLeft: '5px', fontWeight: '400', fontSize: '12px', color: '#fff' },
@@ -374,16 +379,15 @@ const localDs = {
   histRound: { fontSize: '14px', fontWeight: '800', color: '#fff' },
   histDetail: { fontSize: '11px', color: '#555' },
   histRight: { textAlign: 'right' },
-  histWinIcons: { fontSize: '10px', color: '#666', marginTop: '2px' },
+  histWinIcons: { fontSize: '12px', color: '#ccc', marginTop: '2px', fontWeight: '600' },
   emptyText: { padding: '40px', textAlign: 'center', color: '#444', fontSize: '13px' },
   bottomPanel: { position: "absolute", bottom: 20, left: 15, right: 15, background: "#1c1c1e", padding: "20px", borderRadius: "30px", border: "1px solid #333", zIndex: 100, boxShadow: '0 -10px 40px rgba(0,0,0,0.5)', boxSizing: 'border-box' },
   panelTop: { display: 'flex', justifyContent: 'space-between', marginBottom: '15px', alignItems: 'center' },
   selectionText: { fontSize: '13px', color: '#888' },
   clearBtn: { background: 'none', border: 'none', color: '#ff3b30', fontSize: '13px', fontWeight: '700', cursor: 'pointer' },
-  betInputGroup: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' },
-  mainInput: { flex: 1, background: '#000', border: '1px solid #444', borderRadius: '16px', padding: '15px', color: '#fff', fontSize: '18px', fontWeight: '800' },
-  clearInputBtn: { background: '#2c2c2e', border: '1px solid #444', color: '#aaa', padding: '0 14px', height: '52px', borderRadius: '16px', fontWeight: '700', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' },
-  finalBtn: { background: '#ffb347', color: '#000', border: 'none', padding: '0 18px', height: '52px', borderRadius: '16px', fontWeight: '900', fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap' },
+  betInputGroup: { display: 'flex', gap: '8px', alignItems: 'center' },
+  mainInput: { flex: 1, background: '#000', border: '1px solid #444', borderRadius: '16px', padding: '15px', color: '#fff', fontSize: '18px', fontWeight: '800', minWidth: 0 },
+  finalBtn: { background: '#ffb347', color: '#000', border: 'none', padding: '0 24px', height: '52px', borderRadius: '16px', fontWeight: '900', fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap' },
   totalCostBar: { marginTop: '12px', textAlign: 'center', fontSize: '13px', color: '#888', padding: '10px', background: 'rgba(255,179,71,0.05)', borderRadius: '12px', border: '1px solid rgba(255,179,71,0.1)' },
   pendingContainer: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
   pendingInfo: { display: 'flex', flexDirection: 'column', gap: '4px' },
@@ -391,7 +395,8 @@ const localDs = {
   pendingDetail: { fontSize: '12px', color: '#888' },
   cancelBtn: { background: '#ff3b30', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '13px', cursor: 'pointer' },
   modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' },
-  modalCard: { background: '#222', padding: '40px 30px', borderRadius: '35px', textAlign: 'center', width: '100%', maxWidth: '320px', border: '1px solid #333' },
+  modalCard: { background: '#222', padding: '40px 30px', borderRadius: '35px', textAlign: 'center', width: '100%', maxWidth: '320px', position: 'relative', overflow: 'hidden' },
+  confettiWrap: { position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' },
   modalTitle: { fontSize: '20px', fontWeight: '900', color: '#fff' },
   modalInfoBox: { background: '#161616', padding: '15px', borderRadius: '15px', margin: '20px 0', display: 'flex', justifyContent: 'space-around', fontSize: '12px', color: '#aaa' },
   modalAmount: { fontSize: '32px', fontWeight: '900', marginBottom: '25px' },
