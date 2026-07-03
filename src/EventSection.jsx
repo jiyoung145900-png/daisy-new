@@ -3,9 +3,7 @@ import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { useEventEngine, allItems } from "./useEventEngine"; 
 import { EventBanner, ImpactBurst } from "./EventComponents";
 import { db } from "./firebase"; 
-// ★ [수정] updateDoc 추가 - handleDonate에서 배팅 즉시 Firestore 잔액 차감용
 import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
-// 아바타 스타일 통합 소스에서 가져오기 (MyPage와 동일한 스타일 사용)
 import { avatarStyles, getAvatarUrl } from "./MyPage.utils";
 
 export default function EventSection({ user, userPoint = 0, confirmedImage, confirmedAvatarIdx, onBack, onUpdatePoint, t }) {
@@ -32,11 +30,11 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     return inputName;
   };
 
-  // ★ [수정] syncDiamondToFirestore 추가 - useEventEngine에서 제공하는 Firestore 실시간 동기화 함수
+  // ★ [변경] myPendingBets(배열), addPendingBet, maxBetsPerRound 받기
   const { 
-    round, timeLeft, totalHistory, myHistory, myPendingBet, setMyPendingBet, 
+    round, timeLeft, totalHistory, myHistory, myPendingBets, addPendingBet,
     isDrawing, drawingItems, showResult, setShowResult, liveNoti, stats, impactTick, updatePointWithAnim,
-    syncDiamondToFirestore
+    syncDiamondToFirestore, maxBetsPerRound
   } = useEventEngine(user, userPoint, onUpdatePoint, pointControls);
 
   const [selectedItems, setSelectedItems] = useState([]);
@@ -61,13 +59,21 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     return getAvatarUrl(confirmedAvatarIdx || 0, user?.id);
   }, [confirmedImage, confirmedAvatarIdx, user?.id]);
 
-  // ★ [삭제] handleCancelBet 함수 완전 제거
-  //   - 사용자 요청: 베팅 후 취소 불가 (한 번 걸면 결과까지 진행)
-  //   - deleteDoc 임포트도 함께 제거
+  // ★ [신규 유틸] 남은 베팅 가능 횟수 / 최대 도달 여부
+  const pendingCount = myPendingBets?.length || 0;
+  const isMaxReached = pendingCount >= maxBetsPerRound;
 
-  // ★ [수정] handleDonate - 배팅 즉시 Firestore users/{id}.diamond를 차감하여
-  //   마이페이지/관리자 페이지 등 다른 화면에도 실시간 반영되도록 함
+  // ★ [수정] handleDonate - 다중 베팅 지원
+  //   - 최대 횟수 체크 → 초과 시 알림
+  //   - Firestore 잔액 즉시 차감 (기존 유지)
+  //   - addPendingBet으로 배열에 추가 (기존 setMyPendingBet 방식 대체)
   const handleDonate = async () => {
+    if (isMaxReached) {
+      return alert(isKo 
+        ? `한 회차 최대 ${maxBetsPerRound}회까지 베팅 가능합니다.` 
+        : `Max ${maxBetsPerRound} bets per round.`);
+    }
+
     const perAmount = parseInt(betAmount);
     const totalCost = perAmount * selectedItems.length;
     if (selectedItems.length === 0) return alert(isKo ? "아이템을 선택해주세요." : "Please select items.");
@@ -79,7 +85,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     updatePointWithAnim(newPoint); 
 
     try {
-      // ★ [신규] 배팅 즉시 Firestore 잔액 차감 - 다른 페이지 실시간 sync용
+      // Firestore 잔액 즉시 차감 (다른 페이지 실시간 sync)
       if (user?.id) {
         await updateDoc(doc(db, "users", user.id), { diamond: newPoint });
       }
@@ -87,7 +93,15 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
       const docRef = await addDoc(collection(db, "event_bets"), {
         round: round, userId: user.id, betAmount: totalCost, items: [...selectedItems], win: null, timestamp: new Date().toISOString()
       });
-      setMyPendingBet({ round: round, items: [...selectedItems], perAmount, totalCost, docId: docRef.id });
+
+      // ★ [변경] 배열에 추가 (기존 세팅 방식과 달리 append)
+      addPendingBet({ 
+        round: round, 
+        items: [...selectedItems], 
+        perAmount, 
+        totalCost, 
+        docId: docRef.id 
+      });
     } catch (e) { 
       console.error("서버 기록 실패:", e); 
       alert(isKo ? "베팅 처리 중 오류가 발생했습니다." : "Error processing bet.");
@@ -96,11 +110,20 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
       updatePointWithAnim(displayPoint);
     }
 
+    // 입력 초기화 → 다음 베팅 위한 상태 리셋
     setSelectedItems([]);
     setBetAmount("");
   };
 
   const currentTotalCost = (parseInt(betAmount) || 0) * (selectedItems.length || 0);
+
+  // ★ [신규] 결과 모달에서 사용할 순손익 (net profit)
+  //   - winAmount: 총 지급액 (승리 시 totalCost * 2)
+  //   - betTotal: 총 베팅액
+  //   - netProfit = winAmount - betTotal → 실제 손익
+  //     예) 2만원 걸어 이김: 40000 - 20000 = +20000
+  //     예) 2만원 걸어 짐: 0 - 20000 = -20000
+  const netProfit = showResult ? (showResult.winAmount - showResult.betTotal) : 0;
 
   return (
     <div style={localDs.screenContainer}>
@@ -132,7 +155,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
           </motion.div>
         </div>
 
-        {/* 메인 배너 (대기중 반짝임 + 추첨 + 임팩트 연출) */}
+        {/* 메인 배너 */}
         <EventBanner
           round={round}
           timeLeft={timeLeft}
@@ -140,7 +163,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
           drawingItems={drawingItems}
           impactTick={impactTick}
           isKo={isKo}
-          joined={!!myPendingBet}
+          joined={pendingCount > 0}
           lastResultItems={totalHistory[0]?.winItems?.map(getLocalizedText)}
         />
 
@@ -152,10 +175,12 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
         <div style={localDs.grid}>
           {allItems.map((item) => {
             const isSelected = selectedItems.includes(item.name);
+            // ★ [수정] 아이템 선택 비활성화 조건: pending 아닌 "최대 도달" 기준
+            //   즉 첫 베팅 후에도 두 번째 베팅 위한 선택 가능
             return (
-              <motion.div key={item.name} whileTap={myPendingBet ? {} : { scale: 0.95 }} 
-                onClick={() => !myPendingBet && setSelectedItems(prev => prev.includes(item.name) ? prev.filter(i => i !== item.name) : [...prev, item.name].slice(0, 2))}
-                style={{...localDs.itemCard, opacity: myPendingBet ? 0.5 : 1, background: isSelected ? `linear-gradient(145deg, ${item.color}88, #111)` : "#161616", border: isSelected ? `2px solid ${item.color}` : "2px solid #252525"}}>
+              <motion.div key={item.name} whileTap={isMaxReached ? {} : { scale: 0.95 }} 
+                onClick={() => !isMaxReached && setSelectedItems(prev => prev.includes(item.name) ? prev.filter(i => i !== item.name) : [...prev, item.name].slice(0, 2))}
+                style={{...localDs.itemCard, opacity: isMaxReached ? 0.5 : 1, background: isSelected ? `linear-gradient(145deg, ${item.color}88, #111)` : "#161616", border: isSelected ? `2px solid ${item.color}` : "2px solid #252525"}}>
                 <div style={localDs.multiplier}>{item.label}</div>
                 {!isSelected && <div style={localDs.statBadge}>{stats[item.name] ?? 0}%</div>}
                 <div style={localDs.itemIcon}>{item.icon}</div>
@@ -192,7 +217,14 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                 </div>
                 <div style={localDs.histRight}>
                   {activeTab === 'mine' ? (
-                    <div style={{ color: h.earn > 0 ? '#34D399' : '#FB7185', fontWeight: 'bold' }}>{h.earn > 0 ? `+${h.earn.toLocaleString()}` : `-${h.cost.toLocaleString()}`}</div>
+                    // ★ [수정] 순손익 표시로 변경
+                    //   기존: 이기면 +earn(총지급액 40000), 지면 -cost(20000) 
+                    //   신규: 이기면 +(earn - cost) 순수익(20000), 지면 -cost(20000)
+                    <div style={{ color: h.earn > 0 ? '#34D399' : '#FB7185', fontWeight: 'bold' }}>
+                      {h.earn > 0 
+                        ? `+${(h.earn - h.cost).toLocaleString()}` 
+                        : `-${h.cost.toLocaleString()}`}
+                    </div>
                   ) : (
                     <div style={localDs.histWinIcons}>
                       {h.winItems?.map(str => getLocalizedText(str)).join(" ")}
@@ -212,64 +244,103 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
         </div>
       </div>
 
-      {/* 3. 하단 패널 */}
+      {/* 3. 하단 패널 - ★ 다중 베팅 UI로 완전 재설계 */}
       <AnimatePresence>
-        {(selectedItems.length > 0 || myPendingBet) && (
+        {(selectedItems.length > 0 || pendingCount > 0) && (
           <motion.div initial={{ y: 150 }} animate={{ y: 0 }} exit={{ y: 150 }} style={localDs.bottomPanel}>
-            {myPendingBet ? (
-              // ★ [수정] 취소 버튼 완전 삭제 - 참여 중 표시만 남김
-              //   사용자 요청: "취소버튼 필요없어" → 한 번 걸면 결과까지 진행
-              <div style={localDs.pendingInfo}>
-                <div style={localDs.pendingTitle}>
-                  {round}{isKo ? "회차 참여 중..." : " Round Joined..."}
+
+            {/* ★ [신규] 참여 중인 베팅 리스트 (있을 때만) */}
+            {pendingCount > 0 && (
+              <div style={localDs.pendingBox}>
+                <div style={localDs.pendingHeader}>
+                  <span style={{color:'#ffb347', fontWeight:900}}>
+                    {round}{isKo ? "회차 참여 중" : " Round Joined"}
+                  </span>
+                  <span style={localDs.pendingCounter}>
+                    {pendingCount}/{maxBetsPerRound}
+                  </span>
                 </div>
-                <div style={localDs.pendingDetail}>
-                  {isKo ? "선택:" : "Pick:"} <b style={{color:'#fff'}}>{myPendingBet.items.map(name => getLocalizedText(name)).join(", ")}</b> | {myPendingBet.totalCost.toLocaleString()} DIA
-                </div>
-                <div style={localDs.waitingHint}>
-                  ⏳ {isKo ? "결과를 기다려주세요" : "Waiting for result..."}
-                </div>
+                {myPendingBets.map((bet, idx) => (
+                  <div key={bet.docId || idx} style={localDs.pendingRow}>
+                    <span style={localDs.pendingIdx}>#{idx + 1}</span>
+                    <span style={localDs.pendingItems}>
+                      {bet.items.map(name => getLocalizedText(name)).join(", ")}
+                    </span>
+                    <span style={localDs.pendingCost}>
+                      {bet.totalCost.toLocaleString()} DIA
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ★ 최대 도달 시: 결과 대기, 아니면: 추가 베팅 UI */}
+            {isMaxReached ? (
+              <div style={localDs.waitingHint}>
+                ⏳ {isKo 
+                  ? `${maxBetsPerRound}회 베팅 완료 - 결과를 기다려주세요` 
+                  : `Max bets placed - Waiting for result...`}
               </div>
             ) : (
               <>
-                {/* 선택 아이템 + 초기화 */}
-                <div style={localDs.panelTop}>
-                  <span style={localDs.selectionText}>
-                    {isKo ? "선택됨:" : "Selected:"} <b style={{color: '#ffb347'}}>{selectedItems.map(name => getLocalizedText(name)).join(", ")}</b>
-                  </span>
-                  <button style={localDs.clearBtn} onClick={() => { setSelectedItems([]); setBetAmount(""); }}>{isKo ? "초기화" : "Reset"}</button>
-                </div>
-
-                {/* 베팅 입력 영역 */}
-                <div style={localDs.betInputGroup}>
-                  <input
-                    type="number"
-                    value={betAmount}
-                    onChange={e => setBetAmount(e.target.value)}
-                    style={localDs.mainInput}
-                    placeholder={isKo ? "금액 입력" : "Enter amount"}
-                  />
-                  <button
-                    style={{...localDs.finalBtn, opacity: !betAmount ? 0.5 : 1}}
-                    onClick={handleDonate}
-                    disabled={!betAmount}
-                  >
-                    {isKo ? "베팅" : "BET"}
-                  </button>
-                </div>
-
-                {/* 베팅 합계 표시 */}
-                {currentTotalCost > 0 && (
-                  <div style={localDs.totalCostBar}>
-                    {isKo ? "베팅 합계:" : "Total Bet:"} <b style={{color: '#ffb347'}}>{currentTotalCost.toLocaleString()} DIA</b>
-                    {/* ★ [신규] 예상 당첨금 표시 - 이기면 2배 규칙 안내 */}
-                    <span style={{marginLeft: 10, color: '#34D399'}}>
-                      → {isKo ? "당첨시" : "Win"}: {(currentTotalCost * 2).toLocaleString()} DIA
+                {/* 선택 아이템 + 초기화 (선택이 있을 때만) */}
+                {selectedItems.length > 0 && (
+                  <div style={localDs.panelTop}>
+                    <span style={localDs.selectionText}>
+                      {isKo ? "선택됨:" : "Selected:"} <b style={{color: '#ffb347'}}>
+                        {selectedItems.map(name => getLocalizedText(name)).join(", ")}
+                      </b>
                     </span>
+                    <button style={localDs.clearBtn} onClick={() => { setSelectedItems([]); setBetAmount(""); }}>
+                      {isKo ? "초기화" : "Reset"}
+                    </button>
                   </div>
+                )}
+
+                {/* 베팅 입력 (선택이 있거나, pending이 이미 있으면 계속 표시) */}
+                {(selectedItems.length > 0 || pendingCount > 0) && (
+                  <>
+                    <div style={localDs.betInputGroup}>
+                      <input
+                        type="number"
+                        value={betAmount}
+                        onChange={e => setBetAmount(e.target.value)}
+                        style={localDs.mainInput}
+                        placeholder={
+                          selectedItems.length === 0
+                            ? (isKo ? "아이템 선택 후 금액 입력" : "Select item first")
+                            : (isKo ? "금액 입력" : "Enter amount")
+                        }
+                        disabled={selectedItems.length === 0}
+                      />
+                      <button
+                        style={{
+                          ...localDs.finalBtn, 
+                          opacity: (!betAmount || selectedItems.length === 0) ? 0.5 : 1
+                        }}
+                        onClick={handleDonate}
+                        disabled={!betAmount || selectedItems.length === 0}
+                      >
+                        {isKo 
+                          ? (pendingCount === 0 ? "베팅" : "추가베팅") 
+                          : (pendingCount === 0 ? "BET" : "ADD BET")}
+                      </button>
+                    </div>
+
+                    {/* 예상 순수익 표시 (2배 지급 = 순수익 = 베팅액 그대로) */}
+                    {currentTotalCost > 0 && (
+                      <div style={localDs.totalCostBar}>
+                        {isKo ? "베팅 합계:" : "Total Bet:"} <b style={{color: '#ffb347'}}>{currentTotalCost.toLocaleString()} DIA</b>
+                        <span style={{marginLeft: 10, color: '#34D399'}}>
+                          → {isKo ? "당첨시 순수익" : "Net Profit"}: +{currentTotalCost.toLocaleString()}
+                        </span>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}
+
           </motion.div>
         )}
       </AnimatePresence>
@@ -277,7 +348,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
       {/* 4. 결과 공개 임팩트 */}
       <ImpactBurst impactTick={impactTick} />
 
-      {/* 5. 결과 모달 - ★ [수정] 본전 방어(DRAW) 완전 제거, 승/패 두 가지만 */}
+      {/* 5. 결과 모달 - ★ 다중 베팅 상세 + 순손익 표시로 재설계 */}
       <AnimatePresence>
         {showResult && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={localDs.modalOverlay} onClick={() => setShowResult(null)}>
@@ -292,7 +363,6 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
               }} 
               onClick={e => e.stopPropagation()}
             >
-              {/* 당첨 시 모달 내부 컨페티 */}
               {showResult.isWin && (
                 <div style={localDs.confettiWrap}>
                   {["🎉","✨","🎊","⭐","💎","🎉","✨","🎊"].map((c, i) => (
@@ -315,7 +385,6 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                 animate={{ scale: [0.6, 1.15, 1] }}
                 transition={{ duration: 0.45, delay: 0.1 }}
               >
-                {/* ★ [수정] DRAW/본전 방어 케이스 완전 제거 → 승/패 두 가지만 */}
                 {showResult.isWin
                   ? (isKo ? "🎉 당첨 성공!" : "🎉 YOU WIN!")
                   : (isKo ? "😢 아쉬워요" : "😢 YOU LOSE")}
@@ -334,25 +403,55 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                 ))}
               </div>
 
-              <div style={localDs.modalInfoBox}>
-                <div>{isKo ? "투자" : "Bet"}: {showResult.betTotal.toLocaleString()}</div>
-                <div>{isKo ? "결과" : "Result"}: {showResult.winAmount.toLocaleString()}</div>
-              </div>
+              {/* ★ [신규] 다중 베팅인 경우 각 베팅 상세 표시 */}
+              {showResult.details && showResult.details.length > 1 && (
+                <div style={localDs.detailsBox}>
+                  {showResult.details.map((d, i) => {
+                    const dNet = d.winAmount - d.totalCost;
+                    return (
+                      <div key={i} style={localDs.detailRow}>
+                        <span style={localDs.detailIdx}>#{i + 1}</span>
+                        <span style={localDs.detailItems}>
+                          {d.items.map(name => getLocalizedText(name)).join(", ")}
+                        </span>
+                        <span style={{
+                          ...localDs.detailResult,
+                          color: dNet > 0 ? '#34D399' : '#FB7185'
+                        }}>
+                          {dNet > 0 ? `+${dNet.toLocaleString()}` : `-${d.totalCost.toLocaleString()}`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
+              {/* ★ [수정] 총 순손익 표시 - 걸었던 돈만큼만 오르내리게 */}
               <motion.div 
                 initial={{ scale: 0.5, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: "spring", stiffness: 200, damping: 12, delay: 0.55 }}
                 style={{
                   ...localDs.modalAmount, 
-                  // ★ [수정] 손익 색상 - 이기면 초록(+), 지면 빨강(-). 본전은 없음
-                  color: (showResult.winAmount - showResult.betTotal) > 0 ? '#34D399' : '#FB7185'
+                  color: netProfit > 0 ? '#34D399' : '#FB7185'
                 }}
               >
-                {(showResult.winAmount - showResult.betTotal) > 0 ? "+" : ""}{(showResult.winAmount - showResult.betTotal).toLocaleString()} DIA
+                {netProfit > 0 ? "+" : ""}{netProfit.toLocaleString()} DIA
               </motion.div>
 
-              <button style={localDs.modalCloseBtn} onClick={() => setShowResult(null)}>{isKo ? "확인" : "CLOSE"}</button>
+              {/* 참고 정보 (총 베팅액만 표시 - 총 지급액은 혼란 방지를 위해 숨김) */}
+              <div style={localDs.modalHint}>
+                {isKo ? "총 베팅:" : "Total Bet:"} {showResult.betTotal.toLocaleString()} DIA
+                {showResult.betCount > 1 && (
+                  <span style={{marginLeft: 8, color: '#666'}}>
+                    ({showResult.betCount}{isKo ? "회 베팅" : " bets"})
+                  </span>
+                )}
+              </div>
+
+              <button style={localDs.modalCloseBtn} onClick={() => setShowResult(null)}>
+                {isKo ? "확인" : "CLOSE"}
+              </button>
             </motion.div>
           </motion.div>
         )}
@@ -364,7 +463,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
 const localDs = {
   screenContainer: { position: 'relative', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#0c0c0c', overflow: 'hidden', fontFamily: '-apple-system, sans-serif' },
   fixedHeader: { flex: '0 0 auto', height: '70px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', backgroundColor: '#0c0c0c', zIndex: 10, paddingTop: 'env(safe-area-inset-top)' },
-  scrollBody: { flex: 1, overflowY: 'auto', padding: '20px 20px 200px', WebkitOverflowScrolling: 'touch' },
+  scrollBody: { flex: 1, overflowY: 'auto', padding: '20px 20px 250px', WebkitOverflowScrolling: 'touch' },
   navLeft: { display: "flex", alignItems: "center", gap: "12px", cursor: 'pointer' },
   navTitle: { fontSize: "17px", fontWeight: "900", color: "#fff" },
   backBtn: { fontSize: "22px", color: '#666' },
@@ -399,25 +498,98 @@ const localDs = {
   histRight: { textAlign: 'right' },
   histWinIcons: { fontSize: '12px', color: '#ccc', marginTop: '2px', fontWeight: '600' },
   emptyText: { padding: '40px', textAlign: 'center', color: '#444', fontSize: '13px' },
-  bottomPanel: { position: "absolute", bottom: 20, left: 15, right: 15, background: "#1c1c1e", padding: "20px", borderRadius: "30px", border: "1px solid #333", zIndex: 100, boxShadow: '0 -10px 40px rgba(0,0,0,0.5)', boxSizing: 'border-box' },
-  panelTop: { display: 'flex', justifyContent: 'space-between', marginBottom: '15px', alignItems: 'center' },
+  bottomPanel: { position: "absolute", bottom: 20, left: 15, right: 15, background: "#1c1c1e", padding: "18px", borderRadius: "28px", border: "1px solid #333", zIndex: 100, boxShadow: '0 -10px 40px rgba(0,0,0,0.5)', boxSizing: 'border-box' },
+
+  // ★ [신규] 다중 베팅 상태 표시 UI
+  pendingBox: { 
+    background: 'rgba(255,179,71,0.05)', 
+    border: '1px solid rgba(255,179,71,0.15)', 
+    borderRadius: 16, 
+    padding: '12px 14px', 
+    marginBottom: 12 
+  },
+  pendingHeader: { 
+    display: 'flex', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    fontSize: 13, 
+    marginBottom: 8 
+  },
+  pendingCounter: { 
+    background: '#0a0a0a', 
+    border: '1px solid #333', 
+    color: '#ffb347', 
+    padding: '3px 10px', 
+    borderRadius: 12, 
+    fontSize: 11, 
+    fontWeight: 900 
+  },
+  pendingRow: { 
+    display: 'flex', 
+    alignItems: 'center', 
+    gap: 10, 
+    padding: '6px 4px', 
+    fontSize: 12, 
+    color: '#ddd', 
+    borderTop: '1px solid rgba(255,255,255,0.04)' 
+  },
+  pendingIdx: { 
+    color: '#666', 
+    fontWeight: 800, 
+    minWidth: 22 
+  },
+  pendingItems: { 
+    flex: 1, 
+    color: '#fff', 
+    fontWeight: 600 
+  },
+  pendingCost: { 
+    color: '#ffb347', 
+    fontWeight: 800 
+  },
+
+  waitingHint: { 
+    fontSize: 12, 
+    color: '#888', 
+    textAlign: 'center', 
+    padding: '10px 4px 4px', 
+    fontWeight: 600 
+  },
+
+  panelTop: { display: 'flex', justifyContent: 'space-between', marginBottom: '12px', alignItems: 'center' },
   selectionText: { fontSize: '13px', color: '#888' },
   clearBtn: { background: 'none', border: 'none', color: '#ff3b30', fontSize: '13px', fontWeight: '700', cursor: 'pointer' },
   betInputGroup: { display: 'flex', gap: '8px', alignItems: 'center' },
   mainInput: { flex: 1, background: '#000', border: '1px solid #444', borderRadius: '16px', padding: '15px', color: '#fff', fontSize: '18px', fontWeight: '800', minWidth: 0 },
-  finalBtn: { background: '#ffb347', color: '#000', border: 'none', padding: '0 24px', height: '52px', borderRadius: '16px', fontWeight: '900', fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap' },
+  finalBtn: { background: '#ffb347', color: '#000', border: 'none', padding: '0 22px', height: '52px', borderRadius: '16px', fontWeight: '900', fontSize: '13px', cursor: 'pointer', whiteSpace: 'nowrap' },
   totalCostBar: { marginTop: '12px', textAlign: 'center', fontSize: '13px', color: '#888', padding: '10px', background: 'rgba(255,179,71,0.05)', borderRadius: '12px', border: '1px solid rgba(255,179,71,0.1)' },
-  // ★ [수정] pendingContainer 스타일 사용 안 함 (취소 버튼 제거로 정렬 방식 변경)
-  pendingInfo: { display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center', textAlign: 'center' },
-  pendingTitle: { fontSize: '15px', fontWeight: '900', color: '#ffb347' },
-  pendingDetail: { fontSize: '12px', color: '#888' },
-  // ★ [신규] 결과 대기 안내 문구 스타일
-  waitingHint: { fontSize: '11px', color: '#666', marginTop: 4, fontWeight: '600' },
+
   modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' },
-  modalCard: { background: '#222', padding: '40px 30px', borderRadius: '35px', textAlign: 'center', width: '100%', maxWidth: '320px', position: 'relative', overflow: 'hidden' },
+  modalCard: { background: '#222', padding: '35px 28px', borderRadius: '35px', textAlign: 'center', width: '100%', maxWidth: '340px', position: 'relative', overflow: 'hidden' },
   confettiWrap: { position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' },
   modalTitle: { fontSize: '20px', fontWeight: '900', color: '#fff' },
-  modalInfoBox: { background: '#161616', padding: '15px', borderRadius: '15px', margin: '20px 0', display: 'flex', justifyContent: 'space-around', fontSize: '12px', color: '#aaa' },
-  modalAmount: { fontSize: '32px', fontWeight: '900', marginBottom: '25px' },
+
+  // ★ [신규] 다중 베팅 결과 상세 박스
+  detailsBox: { 
+    background: '#161616', 
+    padding: '12px', 
+    borderRadius: '15px', 
+    margin: '15px 0', 
+    border: '1px solid #2a2a2a' 
+  },
+  detailRow: { 
+    display: 'flex', 
+    alignItems: 'center', 
+    gap: 8, 
+    padding: '6px 4px', 
+    fontSize: 12,
+    borderTop: '1px solid rgba(255,255,255,0.04)' 
+  },
+  detailIdx: { color: '#666', fontWeight: 800, minWidth: 22 },
+  detailItems: { flex: 1, color: '#ccc', textAlign: 'left' },
+  detailResult: { fontWeight: 900 },
+
+  modalAmount: { fontSize: '36px', fontWeight: '900', marginBottom: 12, marginTop: 20 },
+  modalHint: { fontSize: 11, color: '#888', marginBottom: 20, fontWeight: 600 },
   modalCloseBtn: { width: '100%', background: '#fff', color: '#000', border: 'none', padding: '18px', borderRadius: '18px', fontWeight: '900', fontSize: '16px', cursor: 'pointer' },
 };

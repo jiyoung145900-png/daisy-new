@@ -109,7 +109,7 @@ export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
   );
 };
 
-// --- 4. 출금 화면 (저장된 계좌 자동 불러오기) ---
+// --- 4. 출금 화면 (저장된 계좌 자동 불러오기 - 기존 유지) ---
 export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }) => {
   const [amount, setAmount] = useState("");
   const [bank, setBank] = useState("");
@@ -185,8 +185,7 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
   );
 };
 
-// --- 5. 입/출금 신청 내역 화면 ---
-// ★ [수정] 승인 사유(approveReason) 표시 추가 - 관리자가 승인할 때 입력한 사유
+// --- 5. 입/출금 신청 내역 화면 (기존 유지 - 승인/거절 사유 표시 포함) ---
 export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
     return (
       <div style={myStyles.container}>
@@ -200,7 +199,6 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
               const statusBg = isRejected ? 'rgba(239, 68, 68, 0.1)' : isDone ? 'rgba(76, 209, 55, 0.1)' : 'rgba(251, 197, 49, 0.1)';
               const statusText = isRejected ? (isKo ? '거절됨' : 'Rejected') : isDone ? (isKo ? '처리완료' : 'Done') : (isKo ? '심사중' : 'Pending');
 
-              // ★ [신규] 승인 사유가 있는지 체크 (완료된 건 중에서만)
               const hasApproveReason = isDone && h.approveReason && h.approveReason.trim() !== "";
 
               return (
@@ -226,7 +224,7 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
                     </div>
                   </div>
 
-                  {/* ★ [신규] 승인 사유 표시 - 관리자가 승인할 때 입력한 사유 */}
+                  {/* 승인 사유 표시 */}
                   {hasApproveReason && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(76, 209, 55, 0.2)' }}>
                       <div style={{ color: '#4cd137', fontSize: '11px', fontWeight: 'bold', marginBottom: 4 }}>
@@ -238,7 +236,7 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
                     </div>
                   )}
 
-                  {/* 거절 사유 표시 (기존 유지) */}
+                  {/* 거절 사유 표시 */}
                   {isRejected && h.rejectReason && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(239,68,68,0.2)' }}>
                       <div style={{ color: '#ef4444', fontSize: '11px', fontWeight: 'bold', marginBottom: 4 }}>
@@ -257,7 +255,11 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
     );
 };
 
-// --- 6. 게임 이용 내역 화면 (기존 유지) ---
+// --- 6. 게임 이용 내역 화면 ---
+// ★ [수정] 손익 표시를 순손익(net profit)으로 변경
+//   기존: 이기면 +h.earn (총지급액 40000), 지면 -h.cost (20000)
+//   신규: 이기면 +(h.earn - h.cost) 순수익 (20000), 지면 -h.cost (20000)
+//   → 딱 걸었던 돈만큼만 오르내리게 표시
 export const HistoryView = ({ onBack, isKo, userId }) => {
   const donationHistory = useMemo(() => {
     if (!userId) return [];
@@ -272,8 +274,19 @@ export const HistoryView = ({ onBack, isKo, userId }) => {
         {donationHistory.length === 0 ? <div style={{ textAlign: 'center', color: '#666', marginTop: '50px' }}>{isKo ? "내역이 없습니다." : "No records."}</div> :
           donationHistory.map((h, i) => (
             <div key={i} style={{ background: '#1a1a1a', padding: '15px', borderRadius: '10px', marginBottom: '10px', border: '1px solid #333' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#888', fontSize: '11px', marginBottom: '5px' }}><span>{h.round}{isKo ? "회차" : "R"}</span><span>{h.date}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: '#fff' }}>{h.selected?.join(", ")}</span><span style={{ color: h.earn > 0 ? '#4cd137' : '#e84118', fontWeight: 'bold' }}>{h.earn > 0 ? `+${h.earn.toLocaleString()}` : `-${h.cost.toLocaleString()}`}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#888', fontSize: '11px', marginBottom: '5px' }}>
+                <span>{h.round}{isKo ? "회차" : "R"}</span>
+                <span>{h.date}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: '#fff' }}>{h.selected?.join(", ")}</span>
+                {/* ★ [수정] 순손익 표시 */}
+                <span style={{ color: h.earn > 0 ? '#4cd137' : '#e84118', fontWeight: 'bold' }}>
+                  {h.earn > 0 
+                    ? `+${(h.earn - h.cost).toLocaleString()}` 
+                    : `-${h.cost.toLocaleString()}`}
+                </span>
+              </div>
             </div>
           ))}
       </div>
