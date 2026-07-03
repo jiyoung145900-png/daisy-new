@@ -12,6 +12,20 @@ const CONFIG = {
   START_TIME: new Date("2024-01-01T00:00:00Z").getTime(),
 };
 
+/* ============================================================
+ * ★ [신규] 배당 계산 공통 유틸 - useEventEngine.js와 완벽히 동일한 규칙
+ * ------------------------------------------------------------
+ * 새 규칙 (2026-07 개편):
+ *   - 이기면 무조건 배팅 총액의 2배 지급 (1개든 2개든 동일)
+ *   - 2개 걸었을 경우 2개 다 맞아야만 승리 (본전 방어 없음)
+ *   - 지면 0 지급 (배팅액 소실)
+ * ============================================================ */
+function calcWinAmount(items, matchedCount, totalCost) {
+  if (!items || items.length === 0 || !totalCost) return 0;
+  const isFullMatch = matchedCount === items.length;
+  return isFullMatch ? totalCost * 2 : 0;
+}
+
 export const useAdminLogic = (initialUsers, setInitialUsers) => {
   const [users, setUsers] = useState(initialUsers || []);
 
@@ -35,9 +49,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     return users.filter(u => u.lastActive && (now - u.lastActive < 60000));
   }, [users]);
 
-  /* ------------------------------------------------------------------ */
-  /* 베팅 데이터 실시간 매핑                                            */
-  /* ------------------------------------------------------------------ */
   const sponsorships = useMemo(() => {
     return rawSponsorships.map(bet => {
       const user = users.find(u => u.id === bet.userId);
@@ -49,11 +60,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     });
   }, [rawSponsorships, users]);
 
-  /* ------------------------------------------------------------------ */
-  /* 실시간 리스너 통합                                                 */
-  /* ------------------------------------------------------------------ */
   useEffect(() => {
-    // 1. 기존 리스너들
     const unsubUsers = onSnapshot(collection(db, "users"), snap => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       list.sort((a, b) => (b.lastActive || 0) - (a.lastActive || 0));
@@ -104,7 +111,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       setTargetRound(prev => prev || round + 1);
     }, 1000);
 
-    // 2. 자동 정리 기능 (3초 후 실행)
     const autoCleanup = setTimeout(cleanupOldData, 3000);
 
     return () => {
@@ -115,9 +121,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     };
   }, []);
 
-  /* ------------------------------------------------------------------ */
-  /* 파트너/직원 초대코드 생성                                          */
-  /* ------------------------------------------------------------------ */
   const addAgent = async () => {
     if (!newAgentName || !newAgentCode) {
       alert("이름과 초대코드를 입력하세요");
@@ -151,9 +154,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  /* ------------------------------------------------------------------ */
-  /* 파트너/직원 삭제                                                   */
-  /* ------------------------------------------------------------------ */
   const deleteAgent = async (code) => {
     if (!window.confirm(`'${code}' 코드를 삭제하시겠습니까?`)) return;
     try {
@@ -163,9 +163,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  /* ------------------------------------------------------------------ */
-  /* 관리자 비밀번호 변경                                               */
-  /* ------------------------------------------------------------------ */
   const handleChangeAdminPassword = async () => {
     const newPw = prompt("새 관리자(game) 비밀번호를 입력하세요:");
     if (!newPw) return;
@@ -181,9 +178,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  /* ------------------------------------------------------------------ */
-  /* 🔥 [수정/강화] 베팅 데이터 수정 + 유저 다이아 정산 + 최근 50경기 연동  */
-  /* ------------------------------------------------------------------ */
   const updateBetData = async (betId, newAmount, newItems, nextWinState, diamondDelta, userId, round) => {
     try {
       if (!newAmount || isNaN(newAmount)) {
@@ -244,6 +238,10 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
 
   /* ------------------------------------------------------------------ */
   /* 과거 회차 시크릿 결과 조작 및 유저 다이아 자동 재정산               */
+  /* ★ [수정] 배당 계산을 새 규칙으로 통일 (이기면 2배, 지면 0)         */
+  /*   기존: 1개 맞음 = betAmount * 2 / 2개 다 맞음 = betAmount * 4     */
+  /*         2개 중 1개만 = betAmount (본전) / draw 상태 존재            */
+  /*   신규: 이기면 = totalCost * 2 / 지면 = 0 / draw 없음               */
   /* ------------------------------------------------------------------ */
   const handleSecretRevisions = async (round, oldWinners, newWinners) => {
     try {
@@ -267,24 +265,15 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         const betItems = bet.items || [];
         const betAmount = bet.betAmount || 0;
 
+        // ★ [수정] 기존 결과 기준 지급액 - 공통 함수 사용
         const oldMatched = betItems.filter(name => cleanOldWinners.includes(name)).length;
-        let oldWinAmount = 0;
-        if (betItems.length === 1) {
-          if (oldMatched >= 1) oldWinAmount = betAmount * 2;
-        } else if (betItems.length === 2) {
-          if (oldMatched === 1) oldWinAmount = betAmount;
-          else if (oldMatched === 2) oldWinAmount = betAmount * 4;
-        }
+        const oldWinAmount = calcWinAmount(betItems, oldMatched, betAmount);
 
+        // ★ [수정] 새 결과 기준 지급액 - 공통 함수 사용
         const newMatched = betItems.filter(name => newWinners.includes(name)).length;
-        let newWinAmount = 0;
-        if (betItems.length === 1) {
-          if (newMatched >= 1) newWinAmount = betAmount * 2;
-        } else if (betItems.length === 2) {
-          if (newMatched === 1) newWinAmount = betAmount;
-          else if (newMatched === 2) newWinAmount = betAmount * 4;
-        }
+        const newWinAmount = calcWinAmount(betItems, newMatched, betAmount);
 
+        // 지급액 차이만큼 유저 다이아 증감
         const delta = newWinAmount - oldWinAmount;
 
         if (delta !== 0 && bet.userId) {
@@ -293,10 +282,8 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
           console.log(`💎 ${bet.userId}: ${delta > 0 ? '+' : ''}${delta} 다이아`);
         }
 
-        let isWin = false;
-        if (newWinAmount > betAmount) isWin = true;
-        else if (newWinAmount === 0 && betAmount > 0) isWin = false;
-        else if (newWinAmount === betAmount && betAmount > 0) isWin = "draw";
+        // ★ [수정] win 상태도 새 규칙으로 통일 - 이기면 true, 지면 false (draw 없음)
+        const isWin = newWinAmount > 0;
 
         const betRef = doc(db, "event_bets", bet.id);
         batch.update(betRef, { win: isWin });
@@ -320,9 +307,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  /* ================================================================== */
-  /* 오래된 데이터 정리                                                 */
-  /* ================================================================== */
   const cleanupOldData = async (showAlert = false) => {
     try {
       console.log("🗑️ 오래된 데이터 정리 시작...");
@@ -380,9 +364,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  /* ------------------------------------------------------------------ */
-  /* 기본 유저 데이터 처리 함수                                         */
-  /* ------------------------------------------------------------------ */
   const updateFullUserInfo = async (userId, diamond, refCode, referral) => {
     await updateDoc(doc(db, "users", userId), {
       diamond: parseInt(diamond),
@@ -399,7 +380,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  // ★ [신규] 신용점수 업데이트
   const updateUserCreditScore = async (userId, creditScore) => {
     try {
       const score = parseInt(creditScore, 10);
@@ -421,12 +401,10 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     if (pw) await updateDoc(doc(db, "users", userId), { password: pw });
   };
 
-  // ★ [수정] 입금 승인 - 승인 사유 prompt 추가 (선택사항, 빈칸 허용)
   const approveDeposit = async (req) => {
     const reason = window.prompt(
       "✅ 입금 승인 사유를 입력해주세요.\n(회원의 신청 내역에 표시됩니다. 사유 없이 승인하려면 빈칸으로 확인)"
     );
-    // null = 취소 클릭, "" = 빈칸으로 확인 (허용)
     if (reason === null) return;
 
     try {
@@ -437,7 +415,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       await addDoc(collection(db, "finance_history"), {
         ...req,
         type: "입금",
-        approveReason: reason.trim() || "", // ★ 승인 사유 (빈 문자열 가능)
+        approveReason: reason.trim() || "",
         completedAt: new Date().toISOString()
       });
       await deleteDoc(doc(db, "deposit_requests", req.id));
@@ -446,7 +424,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  // ★ [수정] 출금 승인 - 승인 사유 prompt 추가 (선택사항)
   const approveWithdraw = async (req) => {
     const ref = doc(db, "users", req.userId);
     const snap = await getDoc(ref);
@@ -467,7 +444,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       await addDoc(collection(db, "finance_history"), {
         ...req,
         type: "출금",
-        approveReason: reason.trim() || "", // ★ 승인 사유
+        approveReason: reason.trim() || "",
         completedAt: new Date().toISOString()
       });
       await deleteDoc(doc(db, "withdraw_requests", req.id));
@@ -476,7 +453,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  // 입금 거절
   const rejectDeposit = async (req) => {
     const reason = window.prompt("❌ 입금 거절 사유를 입력해주세요 (회원의 신청 내역에 표시됩니다):");
     if (reason === null) return;
@@ -494,7 +470,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  // 출금 거절
   const rejectWithdraw = async (req) => {
     const reason = window.prompt("❌ 출금 거절 사유를 입력해주세요 (회원의 신청 내역에 표시됩니다):");
     if (reason === null) return;
@@ -512,9 +487,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  /* ================================================================== */
-  /* 이벤트 결과 조작                                                   */
-  /* ================================================================== */
   const handleApplyManipulation = async (winners) => {
     try {
       if (!winners || winners.length === 0) {

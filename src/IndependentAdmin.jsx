@@ -6,7 +6,7 @@ import { db } from "./firebase";
 import { 
   RequestsView, FinanceView, EventControlView, UsersView, 
   AgentsView, ReferralsView, HistoryView, SponsorshipsView,
-  AccountsView   // ★ [신규] 회원 계좌 관리 뷰
+  AccountsView
 } from "./AdminViews.jsx";
 
 export default function IndependentAdmin({ users, setUsers, onExit }) {
@@ -74,7 +74,6 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
         <div onClick={() => setTab("users")} style={tab === "users" ? iaStyles.menuActive : iaStyles.menu}>
            💰 회원 관리
         </div>
-        {/* ★ [신규] 회원 계좌 관리 메뉴 */}
         <div onClick={() => setTab("accounts")} style={tab === "accounts" ? iaStyles.menuActive : iaStyles.menu}>
            🏦 회원 계좌 관리
         </div>
@@ -156,12 +155,15 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
             />
           )}
 
-          {/* ★ [신규] 회원 계좌 관리 뷰 라우팅 */}
           {tab === "accounts" && (
             <AccountsView users={users} />
           )}
 
-          {tab === "referrals" && <ReferralsView users={users} updateFullUserInfo={updateFullUserInfo} />}
+          {/* ★ [수정] ReferralsView에 agents props 추가 전달 */}
+          {tab === "referrals" && (
+            <ReferralsView users={users} agents={agents} />
+          )}
+
           {tab === "agents" && <AgentsView agents={agents} setAgents={setAgents} users={users} newAgentName={newAgentName} setNewAgentName={setNewAgentName} newAgentCode={newAgentCode} setNewAgentCode={setNewAgentCode} addAgent={addAgent} deleteAgent={deleteAgent} />}
           {tab === "history" && <HistoryView gameHistory={gameHistory} sponsorships={sponsorships} handleSecretRevisions={handleSecretRevisions} />}
           {tab === "sponsorships" && <SponsorshipsView sponsorships={sponsorships} currentInfo={currentInfo} updateBetData={updateBetData} />}

@@ -1,9 +1,25 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { EventService, soundManager, ITEM_CONFIG } from "./EventService"; 
 import { db } from "./firebase";
-import { collection, onSnapshot, query, where, doc, setDoc } from "firebase/firestore";
+// ★ [수정] updateDoc 추가 - 결과 확정 시 users/{id}.diamond 실시간 갱신용
+import { collection, onSnapshot, query, where, doc, setDoc, updateDoc } from "firebase/firestore";
 
 export { ITEM_CONFIG as allItems }; 
+
+/* ============================================================
+ * ★ [신규] 배당 계산 공통 유틸 - 4곳에 흩어져 있던 로직을 통일
+ * ------------------------------------------------------------
+ * 새 규칙 (2026-07 개편):
+ *   - 이기면 무조건 배팅 총액의 2배 지급 (1개든 2개든 동일)
+ *   - 2개를 걸었을 경우 2개 다 맞아야만 승리
+ *   - 1개만 맞으면 패배 (본전 방어 없음)
+ *   - 지면 0 지급 (배팅액 소실)
+ * ============================================================ */
+function calcWinAmount(items, matchedCount, totalCost) {
+  if (!items || items.length === 0 || !totalCost) return 0;
+  const isFullMatch = matchedCount === items.length;
+  return isFullMatch ? totalCost * 2 : 0;
+}
 
 export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
   // --- Refs ---
@@ -32,7 +48,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
   const [showResult, setShowResult] = useState(null);
   const [liveNoti, setLiveNoti] = useState("이벤트가 활성화되었습니다!");
 
-  // ✨ [신규] 결과 공개 순간 임팩트 트리거 (숫자가 바뀔 때마다 UI에서 폭발 연출 재생)
+  // ✨ 결과 공개 순간 임팩트 트리거
   const [impactTick, setImpactTick] = useState(0);
 
   // --- [원본 기능: 포인트 업데이트] ---
@@ -42,6 +58,19 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       if (pointControls) pointControls.start({ scale: [1, 1.2, 1], transition: { duration: 0.3 } });
     }
   }, [onUpdatePoint, pointControls]);
+
+  // ★ [신규] Firestore users/{id}.diamond 즉시 반영 헬퍼
+  //   - 다른 페이지(마이페이지, 관리자 뷰 등)가 onSnapshot으로 실시간 구독하므로
+  //     여기서 업데이트하면 모든 화면에 즉시 반영됨
+  //   - 실패해도 로컬 UI는 이미 반영되어 있으므로 사용자 경험에는 영향 없음
+  const syncDiamondToFirestore = useCallback(async (newPoint) => {
+    if (!user?.id) return;
+    try {
+      await updateDoc(doc(db, "users", user.id), { diamond: newPoint });
+    } catch (err) {
+      console.error("💎 잔액 동기화 실패:", err);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     const initEngine = async () => {
@@ -69,16 +98,10 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
           const winObjs = fixedResult || EventService.generateResult(parsedBet.round);
           const winNames = winObjs.map(i => i.name);
           
-          const { items, perAmount, totalCost } = parsedBet;
+          const { items, totalCost } = parsedBet;
           const matchedCount = items.filter(name => winNames.includes(name)).length;
-          let winAmount = 0;
-          
-          if (items.length === 1) { 
-            if (matchedCount >= 1) winAmount = perAmount * 2; 
-          } else if (items.length === 2) {
-            if (matchedCount === 1) winAmount = totalCost; 
-            else if (matchedCount === 2) winAmount = totalCost * 4; 
-          }
+          // ★ [수정] 배당 계산 공통 함수 사용 (이기면 2배, 지면 0)
+          const winAmount = calcWinAmount(items, matchedCount, totalCost);
 
           const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
           const newRecord = {
@@ -93,8 +116,11 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
             return updated;
           });
 
+          // ★ [수정] 부재중 정산: 이겼을 때 로컬 + Firestore 모두 즉시 반영
           if (winAmount > 0) {
-            updatePointWithAnim(pointRef.current + winAmount);
+            const newPoint = pointRef.current + winAmount;
+            updatePointWithAnim(newPoint);
+            syncDiamondToFirestore(newPoint);
           }
           localStorage.removeItem(`pending_bet_${user?.id}`);
         } else {
@@ -170,14 +196,9 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
                 return config ? config.icon : "❓";
               });
               
+              // ★ [수정] 재정산 배당 계산도 공통 함수 사용
               const matchedCount = record.selected.filter(name => newWinners.includes(name)).length;
-              let newEarn = 0;
-              if (record.selected.length === 1) {
-                if (matchedCount >= 1) newEarn = record.cost * 2;
-              } else if (record.selected.length === 2) {
-                if (matchedCount === 1) newEarn = record.cost;
-                else if (matchedCount === 2) newEarn = record.cost * 4;
-              }
+              const newEarn = calcWinAmount(record.selected, matchedCount, record.cost);
 
               return {
                 ...record,
@@ -203,8 +224,9 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     return () => unsubscribe();
   }, [user?.id]);
 
-  // ⭐ [핵심 신규 추가: 관리자의 실시간 베팅 수정 감지]
-  // 현재 베팅 정보(docId)가 있으면 파이어베이스 문서를 실시간으로 바라보며 변경 즉시 로컬 정보 갱신
+  // ⭐ [사용자 추가 기능 유지] 관리자의 실시간 베팅 수정 감지
+  // 현재 유저의 pending 베팅(docId)을 실시간 구독하여, 관리자가 items나 betAmount를
+  // 파이어베이스에서 수정하면 즉시 유저 UI/로컬 상태가 갱신됨
   useEffect(() => {
     if (!myPendingBet?.docId) return;
 
@@ -280,6 +302,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       const winNames = winObjs.map(i => i.name);
       const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
       
+      // 💥 결과 확정 순간: 임팩트 폭발 연출 + 붐 사운드
       setDrawingItems(winObjs.map(v => v.icon));
       setImpactTick(t => t + 1);
       soundManager.play("impact");
@@ -296,6 +319,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
         return updated;
       });
 
+      // game_history 컬렉션에 회차 결과 자동 저장 (관리자 페이지 이벤트 통계용)
       try {
         setDoc(doc(db, "game_history", String(targetRound)), {
           round: targetRound,
@@ -312,19 +336,15 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
 
       const activeBet = betRef.current;
       if (activeBet && activeBet.round === targetRound) {
-        const { items, perAmount, totalCost } = activeBet;
+        const { items, totalCost } = activeBet;
         const matchedCount = items.filter(name => winNames.includes(name)).length;
-        let winAmount = 0;
+        // ★ [수정] 배당 계산 공통 함수 사용
+        const winAmount = calcWinAmount(items, matchedCount, totalCost);
 
-        if (items.length === 1) { 
-          if (matchedCount >= 1) winAmount = perAmount * 2; 
-        } else if (items.length === 2) {
-          if (matchedCount === 1) winAmount = totalCost; 
-          else if (matchedCount === 2) winAmount = totalCost * 4; 
-        }
-
-        const isSuccess = winAmount > totalCost;
-        const isDraw = winAmount === totalCost && totalCost > 0;
+        // ★ [수정] "본전 방어(isDraw)" 개념 완전 삭제
+        //   - 이기면 winAmount > 0, 지면 winAmount === 0
+        //   - 무승부 없음
+        const isSuccess = winAmount > 0;
 
         setMyHistory(prev => {
           const updated = [{
@@ -335,22 +355,29 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
           return updated;
         });
 
+        // ✨ 임팩트가 먼저 터지고 → 0.8초 뒤에 결과 모달 등장
         setTimeout(() => {
           if (isSuccess) { 
             soundManager.play("win");
             if (navigator.vibrate) navigator.vibrate([100, 50, 150]); 
-          } else if (!isDraw && totalCost > 0) { 
+          } else if (totalCost > 0) { 
             soundManager.play("lose");
           }
 
-          updatePointWithAnim(pointRef.current + winAmount);
+          // ★ [수정] 결과 반영: 로컬 상태 + Firestore 잔액을 동시에 업데이트
+          //   - 로컬 = 즉시 UI 반영, 사용자 애니메이션 자연스러움
+          //   - Firestore = 마이페이지 등 다른 페이지에도 실시간 반영
+          //   - 지면 winAmount = 0이므로 잔액 그대로 (배팅액은 handleDonate에서 이미 차감됨)
+          const newPoint = pointRef.current + winAmount;
+          updatePointWithAnim(newPoint);
+          syncDiamondToFirestore(newPoint);
           
           setShowResult({ 
             winItems: winObjs.map(v => `${v.icon} ${v.name}`), 
             winAmount, 
             betTotal: totalCost, 
-            isWin: isSuccess, 
-            isDraw 
+            isWin: isSuccess
+            // ★ [삭제] isDraw 필드 제거 - 본전 방어 개념 없음
           });
         }, 800);
       }
@@ -361,7 +388,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       }, 2600);
 
     }, 3000); 
-  }, [user?.id, updatePointWithAnim]);
+  }, [user?.id, updatePointWithAnim, syncDiamondToFirestore]);
 
   // --- [원본 기능: 시간 동기화 루프] ---
   useEffect(() => {
@@ -426,6 +453,8 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     liveNoti,
     stats,
     impactTick,
-    updatePointWithAnim
+    updatePointWithAnim,
+    // ★ [신규] Firestore 잔액 동기화 함수 export - EventSection의 handleDonate에서 사용
+    syncDiamondToFirestore,
   };
 }

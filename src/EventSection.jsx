@@ -3,9 +3,9 @@ import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { useEventEngine, allItems } from "./useEventEngine"; 
 import { EventBanner, ImpactBurst } from "./EventComponents";
 import { db } from "./firebase"; 
-import { collection, addDoc, deleteDoc, doc } from "firebase/firestore";
-// ★ [수정] 아바타 스타일 배열이 하드코딩되어 있었음 → MyPage.utils의 통합 소스에서 가져오도록 변경
-//    이렇게 하면 MyPage에서 스타일이 바뀔 때 EventSection도 자동 반영됨 (idx 불일치 이슈 해결)
+// ★ [수정] updateDoc 추가 - handleDonate에서 배팅 즉시 Firestore 잔액 차감용
+import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
+// 아바타 스타일 통합 소스에서 가져오기 (MyPage와 동일한 스타일 사용)
 import { avatarStyles, getAvatarUrl } from "./MyPage.utils";
 
 export default function EventSection({ user, userPoint = 0, confirmedImage, confirmedAvatarIdx, onBack, onUpdatePoint, t }) {
@@ -32,9 +32,11 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     return inputName;
   };
 
+  // ★ [수정] syncDiamondToFirestore 추가 - useEventEngine에서 제공하는 Firestore 실시간 동기화 함수
   const { 
     round, timeLeft, totalHistory, myHistory, myPendingBet, setMyPendingBet, 
-    isDrawing, drawingItems, showResult, setShowResult, liveNoti, stats, impactTick, updatePointWithAnim 
+    isDrawing, drawingItems, showResult, setShowResult, liveNoti, stats, impactTick, updatePointWithAnim,
+    syncDiamondToFirestore
   } = useEventEngine(user, userPoint, onUpdatePoint, pointControls);
 
   const [selectedItems, setSelectedItems] = useState([]);
@@ -54,27 +56,17 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     return () => window.removeEventListener("user_point_update", handlePointUpdate);
   }, [user, updatePointWithAnim]);
 
-  // ★ [수정] 자체 avatarStyles 배열 제거 → MyPage.utils의 getAvatarUrl 함수 재사용
-  //    Cloudinary 업로드 이미지(URL)든 dicebear 아바타든 동일하게 처리됨
   const currentAvatarUrl = useMemo(() => {
     if (confirmedImage) return confirmedImage;
     return getAvatarUrl(confirmedAvatarIdx || 0, user?.id);
   }, [confirmedImage, confirmedAvatarIdx, user?.id]);
 
-  const handleCancelBet = async () => {
-    if (!myPendingBet?.docId) return;
-    try {
-      await deleteDoc(doc(db, "event_bets", myPendingBet.docId));
-      const refunded = displayPoint + myPendingBet.totalCost;
-      setDisplayPoint(refunded);
-      updatePointWithAnim(refunded);
-      setMyPendingBet(null);
-    } catch (error) {
-      console.error("베팅 취소 실패:", error);
-      alert("취소 처리 중 오류가 발생했습니다.");
-    }
-  };
+  // ★ [삭제] handleCancelBet 함수 완전 제거
+  //   - 사용자 요청: 베팅 후 취소 불가 (한 번 걸면 결과까지 진행)
+  //   - deleteDoc 임포트도 함께 제거
 
+  // ★ [수정] handleDonate - 배팅 즉시 Firestore users/{id}.diamond를 차감하여
+  //   마이페이지/관리자 페이지 등 다른 화면에도 실시간 반영되도록 함
   const handleDonate = async () => {
     const perAmount = parseInt(betAmount);
     const totalCost = perAmount * selectedItems.length;
@@ -87,11 +79,22 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     updatePointWithAnim(newPoint); 
 
     try {
+      // ★ [신규] 배팅 즉시 Firestore 잔액 차감 - 다른 페이지 실시간 sync용
+      if (user?.id) {
+        await updateDoc(doc(db, "users", user.id), { diamond: newPoint });
+      }
+
       const docRef = await addDoc(collection(db, "event_bets"), {
         round: round, userId: user.id, betAmount: totalCost, items: [...selectedItems], win: null, timestamp: new Date().toISOString()
       });
       setMyPendingBet({ round: round, items: [...selectedItems], perAmount, totalCost, docId: docRef.id });
-    } catch (e) { console.error("서버 기록 실패:", e); }
+    } catch (e) { 
+      console.error("서버 기록 실패:", e); 
+      alert(isKo ? "베팅 처리 중 오류가 발생했습니다." : "Error processing bet.");
+      // 실패 시 UI 롤백
+      setDisplayPoint(displayPoint);
+      updatePointWithAnim(displayPoint);
+    }
 
     setSelectedItems([]);
     setBetAmount("");
@@ -177,7 +180,6 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
             </button>
           </div>
           <div style={localDs.tabContent}>
-            {/* ✅ 회차별 결과는 최근 50경기까지 표시, 내 기록은 20개 */}
             {(activeTab === 'mine' ? myHistory : totalHistory)
               .slice()
               .sort((a, b) => b.round - a.round)
@@ -215,16 +217,18 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
         {(selectedItems.length > 0 || myPendingBet) && (
           <motion.div initial={{ y: 150 }} animate={{ y: 0 }} exit={{ y: 150 }} style={localDs.bottomPanel}>
             {myPendingBet ? (
-              <div style={localDs.pendingContainer}>
-                <div style={localDs.pendingInfo}>
-                  <div style={localDs.pendingTitle}>{round}{isKo ? "회차 참여 중..." : " Round Joined..."}</div>
-                  <div style={localDs.pendingDetail}>
-                    {isKo ? "선택:" : "Pick:"} <b style={{color:'#fff'}}>{myPendingBet.items.map(name => getLocalizedText(name)).join(", ")}</b> | {myPendingBet.totalCost.toLocaleString()} DIA
-                  </div>
+              // ★ [수정] 취소 버튼 완전 삭제 - 참여 중 표시만 남김
+              //   사용자 요청: "취소버튼 필요없어" → 한 번 걸면 결과까지 진행
+              <div style={localDs.pendingInfo}>
+                <div style={localDs.pendingTitle}>
+                  {round}{isKo ? "회차 참여 중..." : " Round Joined..."}
                 </div>
-                <button style={localDs.cancelBtn} onClick={handleCancelBet}>
-                  {isKo ? "취소" : "Cancel"}
-                </button>
+                <div style={localDs.pendingDetail}>
+                  {isKo ? "선택:" : "Pick:"} <b style={{color:'#fff'}}>{myPendingBet.items.map(name => getLocalizedText(name)).join(", ")}</b> | {myPendingBet.totalCost.toLocaleString()} DIA
+                </div>
+                <div style={localDs.waitingHint}>
+                  ⏳ {isKo ? "결과를 기다려주세요" : "Waiting for result..."}
+                </div>
               </div>
             ) : (
               <>
@@ -236,7 +240,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                   <button style={localDs.clearBtn} onClick={() => { setSelectedItems([]); setBetAmount(""); }}>{isKo ? "초기화" : "Reset"}</button>
                 </div>
 
-                {/* 베팅 입력 영역 (✅ 지우기 버튼 제거 → 입력창 + 베팅 버튼만) */}
+                {/* 베팅 입력 영역 */}
                 <div style={localDs.betInputGroup}>
                   <input
                     type="number"
@@ -258,6 +262,10 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                 {currentTotalCost > 0 && (
                   <div style={localDs.totalCostBar}>
                     {isKo ? "베팅 합계:" : "Total Bet:"} <b style={{color: '#ffb347'}}>{currentTotalCost.toLocaleString()} DIA</b>
+                    {/* ★ [신규] 예상 당첨금 표시 - 이기면 2배 규칙 안내 */}
+                    <span style={{marginLeft: 10, color: '#34D399'}}>
+                      → {isKo ? "당첨시" : "Win"}: {(currentTotalCost * 2).toLocaleString()} DIA
+                    </span>
                   </div>
                 )}
               </>
@@ -266,10 +274,10 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
         )}
       </AnimatePresence>
 
-      {/* 4. 결과 공개 임팩트 (화면 전체 폭발 파티클) */}
+      {/* 4. 결과 공개 임팩트 */}
       <ImpactBurst impactTick={impactTick} />
 
-      {/* 5. 결과 모달 (스프링 팝 + 당첨 시 골드 글로우 + 파티클) */}
+      {/* 5. 결과 모달 - ★ [수정] 본전 방어(DRAW) 완전 제거, 승/패 두 가지만 */}
       <AnimatePresence>
         {showResult && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={localDs.modalOverlay} onClick={() => setShowResult(null)}>
@@ -307,7 +315,10 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                 animate={{ scale: [0.6, 1.15, 1] }}
                 transition={{ duration: 0.45, delay: 0.1 }}
               >
-                {showResult.isWin ? (isKo ? "🎉 당첨 성공!" : "🎉 YOU WIN!") : showResult.isDraw ? (isKo ? "⚖️ 본전 방어!" : "⚖️ DRAW!") : (isKo ? "😢 아쉬워요" : "😢 YOU LOSE")}
+                {/* ★ [수정] DRAW/본전 방어 케이스 완전 제거 → 승/패 두 가지만 */}
+                {showResult.isWin
+                  ? (isKo ? "🎉 당첨 성공!" : "🎉 YOU WIN!")
+                  : (isKo ? "😢 아쉬워요" : "😢 YOU LOSE")}
               </motion.div>
 
               <div style={{fontSize: '50px', margin: '20px 0', display: 'flex', justifyContent: 'center', gap: '12px'}}>
@@ -332,7 +343,11 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                 initial={{ scale: 0.5, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: "spring", stiffness: 200, damping: 12, delay: 0.55 }}
-                style={{...localDs.modalAmount, color: (showResult.winAmount - showResult.betTotal) > 0 ? '#34D399' : (showResult.winAmount - showResult.betTotal) === 0 ? '#fff' : '#FB7185'}}
+                style={{
+                  ...localDs.modalAmount, 
+                  // ★ [수정] 손익 색상 - 이기면 초록(+), 지면 빨강(-). 본전은 없음
+                  color: (showResult.winAmount - showResult.betTotal) > 0 ? '#34D399' : '#FB7185'
+                }}
               >
                 {(showResult.winAmount - showResult.betTotal) > 0 ? "+" : ""}{(showResult.winAmount - showResult.betTotal).toLocaleString()} DIA
               </motion.div>
@@ -392,11 +407,12 @@ const localDs = {
   mainInput: { flex: 1, background: '#000', border: '1px solid #444', borderRadius: '16px', padding: '15px', color: '#fff', fontSize: '18px', fontWeight: '800', minWidth: 0 },
   finalBtn: { background: '#ffb347', color: '#000', border: 'none', padding: '0 24px', height: '52px', borderRadius: '16px', fontWeight: '900', fontSize: '14px', cursor: 'pointer', whiteSpace: 'nowrap' },
   totalCostBar: { marginTop: '12px', textAlign: 'center', fontSize: '13px', color: '#888', padding: '10px', background: 'rgba(255,179,71,0.05)', borderRadius: '12px', border: '1px solid rgba(255,179,71,0.1)' },
-  pendingContainer: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' },
-  pendingInfo: { display: 'flex', flexDirection: 'column', gap: '4px' },
+  // ★ [수정] pendingContainer 스타일 사용 안 함 (취소 버튼 제거로 정렬 방식 변경)
+  pendingInfo: { display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'center', textAlign: 'center' },
   pendingTitle: { fontSize: '15px', fontWeight: '900', color: '#ffb347' },
   pendingDetail: { fontSize: '12px', color: '#888' },
-  cancelBtn: { background: '#ff3b30', color: '#fff', border: 'none', padding: '12px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '13px', cursor: 'pointer' },
+  // ★ [신규] 결과 대기 안내 문구 스타일
+  waitingHint: { fontSize: '11px', color: '#666', marginTop: 4, fontWeight: '600' },
   modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' },
   modalCard: { background: '#222', padding: '40px 30px', borderRadius: '35px', textAlign: 'center', width: '100%', maxWidth: '320px', position: 'relative', overflow: 'hidden' },
   confettiWrap: { position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' },
