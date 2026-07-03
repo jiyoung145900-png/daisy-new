@@ -47,10 +47,6 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     const initEngine = async () => {
       const { round: currentRound } = EventService.getCurrentRoundInfo();
       
-      // 1. 전체 히스토리 복구
-      // ✅ [버그 수정] 기존: 저장 기록이 없으면 lastSavedRound = currentRound - 1 로 잡혀서
-      //    "currentRound > lastSavedRound + 1" 조건이 항상 false → 백필이 아예 안 됨 → 통계 0%, 회차별 결과 빈 화면
-      //    수정: 저장 기록이 없으면 최근 100회를 전부 백필하도록 기준점을 currentRound - 101 로 설정
       const savedTotal = JSON.parse(localStorage.getItem("event_total_history") || "[]");
       const lastSavedRound = savedTotal.length > 0 ? savedTotal[0].round : currentRound - 101;
 
@@ -108,7 +104,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       }
     };
     initEngine();
-  }, [user?.id]); // updatePointWithAnim은 의존성에서 의도적으로 제외 (마운트 1회만 실행)
+  }, [user?.id]); 
 
   // --- [원본 기능: 관리자 다이아 수정 리스너] ---
   useEffect(() => {
@@ -131,8 +127,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     return () => window.removeEventListener("event_history_update", handleHistoryUpdate);
   }, []);
 
-  // ⭐ [신규] 관리자 과거 회차 조작 실시간 감지 리스너
-  // 관리자가 과거 회차 결과를 조작하면 즉시 감지해서 로컬 캐시 & 화면 갱신
+  // ⭐ [원본 기능: 관리자 과거 회차 조작 실시간 감지 리스너]
   useEffect(() => {
     if (!user?.id) return;
 
@@ -152,7 +147,6 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
 
           console.log(`🔄 ${revisedRound}회차 결과 재정산 감지! 로컬 캐시 갱신 중...`);
 
-          // 1. 로컬 스토리지의 전체 히스토리 갱신
           const savedTotal = JSON.parse(localStorage.getItem("event_total_history") || "[]");
           const updatedTotal = savedTotal.map(item => {
             if (item.round === revisedRound) {
@@ -168,7 +162,6 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
           localStorage.setItem("event_total_history", JSON.stringify(updatedTotal));
           setTotalHistory(updatedTotal);
 
-          // 2. 내 베팅 기록도 갱신 (재정산에 맞춰 승패/획득 재계산)
           const myHist = JSON.parse(localStorage.getItem(`event_my_history_${user?.id}`) || "[]");
           const myUpdated = myHist.map(record => {
             if (record.round === revisedRound) {
@@ -177,7 +170,6 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
                 return config ? config.icon : "❓";
               });
               
-              // 새 결과로 재계산
               const matchedCount = record.selected.filter(name => newWinners.includes(name)).length;
               let newEarn = 0;
               if (record.selected.length === 1) {
@@ -192,7 +184,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
                 winNames: newWinners,
                 winIcons,
                 earn: newEarn,
-                revised: true // 재정산 표시
+                revised: true 
               };
             }
             return record;
@@ -210,6 +202,50 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
 
     return () => unsubscribe();
   }, [user?.id]);
+
+  // ⭐ [핵심 신규 추가: 관리자의 실시간 베팅 수정 감지]
+  // 현재 베팅 정보(docId)가 있으면 파이어베이스 문서를 실시간으로 바라보며 변경 즉시 로컬 정보 갱신
+  useEffect(() => {
+    if (!myPendingBet?.docId) return;
+
+    const betDocRef = doc(db, "event_bets", myPendingBet.docId);
+    const unsubscribe = onSnapshot(betDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        
+        setMyPendingBet(prev => {
+          if (!prev) return prev;
+          
+          // 기존 데이터와 관리자가 수정한 파이어베이스 데이터 비교
+          const isItemsChanged = JSON.stringify(prev.items) !== JSON.stringify(data.items);
+          const isAmountChanged = prev.totalCost !== data.betAmount;
+
+          if (isItemsChanged || isAmountChanged) {
+            const newItems = data.items || prev.items;
+            const newTotalCost = data.betAmount !== undefined ? data.betAmount : prev.totalCost;
+            const newPerAmount = newTotalCost / Math.max(1, newItems.length); // 아이템 개수로 베팅 단가 재계산
+
+            const updatedBet = {
+              ...prev,
+              items: newItems,
+              totalCost: newTotalCost,
+              perAmount: newPerAmount
+            };
+
+            // 엔진 최신화 및 로컬 백업 최신화
+            betRef.current = updatedBet;
+            localStorage.setItem(`pending_bet_${user?.id}`, JSON.stringify(updatedBet));
+            console.log("🛠️ 관리자가 베팅 정보를 실시간으로 수정했습니다.", updatedBet);
+            
+            return updatedBet;
+          }
+          return prev;
+        });
+      }
+    });
+
+    return () => unsubscribe();
+  }, [myPendingBet?.docId, user?.id]);
 
   // 베팅 시 로컬 스토리지에 즉시 백업
   const handleSetMyPendingBet = (bet) => {
@@ -244,7 +280,6 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       const winNames = winObjs.map(i => i.name);
       const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
       
-      // 💥 [신규] 결과 확정 순간: 임팩트 폭발 연출 + 붐 사운드
       setDrawingItems(winObjs.map(v => v.icon));
       setImpactTick(t => t + 1);
       soundManager.play("impact");
@@ -261,10 +296,6 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
         return updated;
       });
 
-      // ⭐ [신규] game_history 컬렉션에 회차 결과 자동 저장 (관리자 페이지 이벤트 통계용)
-      // - setDoc + merge: 여러 유저가 동시에 저장해도 덮어쓰기만 됨 (안전)
-      // - 결과는 모두 같으므로 데이터 무결성 유지
-      // - 관리자 페이지 cleanupOldData가 50개 이상 자동 삭제 (부담 최소)
       try {
         setDoc(doc(db, "game_history", String(targetRound)), {
           round: targetRound,
@@ -304,7 +335,6 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
           return updated;
         });
 
-        // ✨ [수정] 임팩트가 먼저 터지고 → 0.8초 뒤에 결과 모달 등장 (드라마틱한 순서)
         setTimeout(() => {
           if (isSuccess) { 
             soundManager.play("win");
