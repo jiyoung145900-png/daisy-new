@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { EventService, soundManager, ITEM_CONFIG } from "./EventService"; 
+import { db } from "./firebase";
+import { collection, onSnapshot, query, where, doc, setDoc } from "firebase/firestore";
 
 export { ITEM_CONFIG as allItems }; 
 
@@ -129,6 +131,86 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     return () => window.removeEventListener("event_history_update", handleHistoryUpdate);
   }, []);
 
+  // ⭐ [신규] 관리자 과거 회차 조작 실시간 감지 리스너
+  // 관리자가 과거 회차 결과를 조작하면 즉시 감지해서 로컬 캐시 & 화면 갱신
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const revisionQuery = query(
+      collection(db, "event_manipulation"),
+      where("isRevision", "==", true)
+    );
+
+    const unsubscribe = onSnapshot(revisionQuery, async (snapshot) => {
+      const changes = snapshot.docChanges();
+      
+      for (const change of changes) {
+        if (change.type === "added" || change.type === "modified") {
+          const revisedRound = parseInt(change.doc.id);
+          const data = change.doc.data();
+          const newWinners = data.winner || [];
+
+          console.log(`🔄 ${revisedRound}회차 결과 재정산 감지! 로컬 캐시 갱신 중...`);
+
+          // 1. 로컬 스토리지의 전체 히스토리 갱신
+          const savedTotal = JSON.parse(localStorage.getItem("event_total_history") || "[]");
+          const updatedTotal = savedTotal.map(item => {
+            if (item.round === revisedRound) {
+              const winItems = newWinners.map(name => {
+                const config = ITEM_CONFIG.find(c => c.name === name);
+                return config ? `${config.icon} ${config.name}` : name;
+              });
+              return { ...item, winItems };
+            }
+            return item;
+          });
+
+          localStorage.setItem("event_total_history", JSON.stringify(updatedTotal));
+          setTotalHistory(updatedTotal);
+
+          // 2. 내 베팅 기록도 갱신 (재정산에 맞춰 승패/획득 재계산)
+          const myHist = JSON.parse(localStorage.getItem(`event_my_history_${user?.id}`) || "[]");
+          const myUpdated = myHist.map(record => {
+            if (record.round === revisedRound) {
+              const winIcons = newWinners.map(name => {
+                const config = ITEM_CONFIG.find(c => c.name === name);
+                return config ? config.icon : "❓";
+              });
+              
+              // 새 결과로 재계산
+              const matchedCount = record.selected.filter(name => newWinners.includes(name)).length;
+              let newEarn = 0;
+              if (record.selected.length === 1) {
+                if (matchedCount >= 1) newEarn = record.cost * 2;
+              } else if (record.selected.length === 2) {
+                if (matchedCount === 1) newEarn = record.cost;
+                else if (matchedCount === 2) newEarn = record.cost * 4;
+              }
+
+              return {
+                ...record,
+                winNames: newWinners,
+                winIcons,
+                earn: newEarn,
+                revised: true // 재정산 표시
+              };
+            }
+            return record;
+          });
+
+          localStorage.setItem(`event_my_history_${user?.id}`, JSON.stringify(myUpdated));
+          setMyHistory(myUpdated);
+
+          console.log(`✅ ${revisedRound}회차 로컬 캐시 갱신 완료`);
+        }
+      }
+    }, (error) => {
+      console.error("❌ 재정산 리스너 오류:", error);
+    });
+
+    return () => unsubscribe();
+  }, [user?.id]);
+
   // 베팅 시 로컬 스토리지에 즉시 백업
   const handleSetMyPendingBet = (bet) => {
     betRef.current = bet;
@@ -178,6 +260,24 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
         localStorage.setItem("event_total_history", JSON.stringify(updated));
         return updated;
       });
+
+      // ⭐ [신규] game_history 컬렉션에 회차 결과 자동 저장 (관리자 페이지 이벤트 통계용)
+      // - setDoc + merge: 여러 유저가 동시에 저장해도 덮어쓰기만 됨 (안전)
+      // - 결과는 모두 같으므로 데이터 무결성 유지
+      // - 관리자 페이지 cleanupOldData가 50개 이상 자동 삭제 (부담 최소)
+      try {
+        setDoc(doc(db, "game_history", String(targetRound)), {
+          round: targetRound,
+          winner: winNames,
+          winItems: winObjs.map(v => `${v.icon} ${v.name}`),
+          date: currentTime,
+          savedAt: new Date().toISOString()
+        }, { merge: true }).catch(err => {
+          console.error("game_history 저장 실패:", err);
+        });
+      } catch (e) {
+        console.error("game_history 저장 오류:", e);
+      }
 
       const activeBet = betRef.current;
       if (activeBet && activeBet.round === targetRound) {
