@@ -21,6 +21,52 @@ export const myStyles = {
   tierText: { fontSize: '10px', color: '#888', marginBottom: '4px' },
   tierBarOuter: { width: '100%', height: '4px', background: '#333', borderRadius: '2px', overflow: 'hidden' },
   tierBarInner: { height: '100%', transition: 'width 0.5s ease' },
+
+  // ★ [신규] 신용점수 표시 영역
+  creditBox: {
+    marginTop: 8,
+    padding: '10px 12px',
+    background: 'rgba(255,255,255,0.03)',
+    borderRadius: 12,
+    border: '1px solid rgba(255,255,255,0.06)',
+  },
+  creditTopRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  creditLabel: {
+    fontSize: 10,
+    color: '#888',
+    fontWeight: 700,
+    letterSpacing: '1px',
+  },
+  creditScoreText: {
+    fontSize: 15,
+    fontWeight: 900,
+    letterSpacing: '0.5px',
+  },
+  creditRankText: {
+    fontSize: 9,
+    fontWeight: 800,
+    padding: '2px 6px',
+    borderRadius: 4,
+    marginLeft: 6,
+  },
+  creditBarOuter: {
+    width: '100%',
+    height: 6,
+    background: 'rgba(255,255,255,0.06)',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  creditBarInner: {
+    height: '100%',
+    borderRadius: 3,
+    transition: 'width 0.5s ease',
+  },
+
   balanceCard: { margin: "-20px 20px 25px", background: "rgba(255,255,255,0.03)", backdropFilter: 'blur(15px)', borderRadius: "24px", display: "flex", alignItems:'center', padding: "30px 0", border: '1px solid rgba(212, 175, 55, 0.1)' },
   balanceItem: { flex: 1, textAlign: "center" },
   divider: { width: '1px', height: '35px', background: 'rgba(255,255,255,0.05)' },

@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import EventSection from "./EventSection"; 
 import AvatarEditorModal from "./AvatarEditorModal";
 import { myStyles } from "./MyPage.styles";
-import { getTierInfo, getAvatarUrl, avatarStyles } from "./MyPage.utils";
+// ★ [수정] getCreditInfo 추가 임포트
+import { getTierInfo, getAvatarUrl, avatarStyles, getCreditInfo } from "./MyPage.utils";
 
 // ★ 로직 파일 임포트 (.js)
 import { useMyPageLogic } from "./useMyPageLogic.js"; 
@@ -41,6 +42,10 @@ export default function MyPage({
   // ★ [수정] 다이아 보유량 기반 자동계산 대신, 관리자가 지정한 userInfo.tier 값을 그대로 사용
   const tier = getTierInfo(userInfo.tier);
 
+  // ★ [신규] 신용점수 계산 - 관리자가 지정한 userInfo.creditScore 값 사용
+  // 값이 없으면 기본값 100 (첫 가입자)
+  const credit = getCreditInfo(userInfo.creditScore);
+
   // --- 화면 라우팅 ---
   if (view === "profile") return <PasswordView onBack={()=>setView("settings")} isKo={isKo} onSubmit={updatePassword} userInfo={userInfo} />;
   if (view === "payment_pin") return <PinView onBack={()=>setView("settings")} isKo={isKo} onSubmit={updatePin} userInfo={userInfo} />;
@@ -48,8 +53,8 @@ export default function MyPage({
   // ★ [수정] 입금 화면: 내역 버튼 누르면 'deposit_history'로 이동
   if (view === "deposit") return <DepositView onBack={()=>setView("main")} isKo={isKo} onSubmit={requestDeposit} onViewHistory={()=>setView("deposit_history")} />;
   
-  // ★ [수정] 출금 화면: 내역 버튼 누르면 'withdraw_history'로 이동
-  if (view === "withdraw") return <WithdrawView onBack={()=>setView("main")} isKo={isKo} onSubmit={requestWithdraw} onViewHistory={()=>setView("withdraw_history")} />;
+  // ★ [수정] 출금 화면: userInfo를 넘겨서 저장된 계좌 자동 불러오기 활성화
+  if (view === "withdraw") return <WithdrawView onBack={()=>setView("main")} isKo={isKo} onSubmit={requestWithdraw} onViewHistory={()=>setView("withdraw_history")} userInfo={userInfo} />;
   
   // ★ [신규] 입금 신청 내역 화면 연결
   if (view === "deposit_history") return <TransactionHistoryView onBack={()=>setView("deposit")} isKo={isKo} title={isKo?"입금 신청 내역":"Deposit History"} data={myDeposits} />;
@@ -82,8 +87,39 @@ export default function MyPage({
             <button style={myStyles.editBadgeOutside} onClick={() => setShowAvatarEditor(true)}>{isKo ? "변경" : "Edit"}</button>
           </div>
           <div style={myStyles.userTextMain}>
-            <div style={myStyles.userIdMain}>{userInfo.name || userInfo.id} <span style={{...myStyles.vipBadge, background: tier.color, color:'#000'}}>{tier.name}</span></div>
-            <div style={myStyles.userNoMain}>UID: {userInfo.no || "000000"}</div>
+            <div style={myStyles.userIdMain}>
+              {userInfo.name || userInfo.id}
+              <span style={{...myStyles.vipBadge, background: tier.color, color:'#000'}}>{tier.name}</span>
+            </div>
+
+            {/* ★ [수정] 기존 UID 표시 제거 → 신용점수 + 진행바로 교체 */}
+            <div style={myStyles.creditBox}>
+              <div style={myStyles.creditTopRow}>
+                <span style={myStyles.creditLabel}>
+                  {isKo ? "신용점수" : "CREDIT SCORE"}
+                </span>
+                <div style={{display:'flex', alignItems:'center'}}>
+                  <span style={{...myStyles.creditScoreText, color: credit.color}}>
+                    {credit.score}
+                  </span>
+                  <span style={{
+                    ...myStyles.creditRankText,
+                    background: `${credit.color}22`,
+                    color: credit.color,
+                    border: `1px solid ${credit.color}55`,
+                  }}>
+                    {isKo ? credit.labelKo : credit.label}
+                  </span>
+                </div>
+              </div>
+              <div style={myStyles.creditBarOuter}>
+                <div style={{
+                  ...myStyles.creditBarInner,
+                  width: `${credit.percent}%`,
+                  background: `linear-gradient(to right, ${credit.color}88, ${credit.color})`,
+                }} />
+              </div>
+            </div>
           </div>
         </div>
       </div>

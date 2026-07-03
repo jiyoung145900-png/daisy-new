@@ -4,6 +4,9 @@ import { useEventEngine, allItems } from "./useEventEngine";
 import { EventBanner, ImpactBurst } from "./EventComponents";
 import { db } from "./firebase"; 
 import { collection, addDoc, deleteDoc, doc } from "firebase/firestore";
+// ★ [수정] 아바타 스타일 배열이 하드코딩되어 있었음 → MyPage.utils의 통합 소스에서 가져오도록 변경
+//    이렇게 하면 MyPage에서 스타일이 바뀔 때 EventSection도 자동 반영됨 (idx 불일치 이슈 해결)
+import { avatarStyles, getAvatarUrl } from "./MyPage.utils";
 
 export default function EventSection({ user, userPoint = 0, confirmedImage, confirmedAvatarIdx, onBack, onUpdatePoint, t }) {
   const pointControls = useAnimation();
@@ -51,11 +54,11 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     return () => window.removeEventListener("user_point_update", handlePointUpdate);
   }, [user, updatePointWithAnim]);
 
-  const avatarStyles = ["adventurer", "avataaars", "big-ears", "bottts", "fun-emoji", "lorelei", "micah", "miniavs", "notionists", "open-peeps"];
+  // ★ [수정] 자체 avatarStyles 배열 제거 → MyPage.utils의 getAvatarUrl 함수 재사용
+  //    Cloudinary 업로드 이미지(URL)든 dicebear 아바타든 동일하게 처리됨
   const currentAvatarUrl = useMemo(() => {
     if (confirmedImage) return confirmedImage;
-    const idx = confirmedAvatarIdx || 0;
-    return `https://api.dicebear.com/7.x/${avatarStyles[idx]}/svg?seed=${user?.id}_${idx}&backgroundColor=2a2a2e`;
+    return getAvatarUrl(confirmedAvatarIdx || 0, user?.id);
   }, [confirmedImage, confirmedAvatarIdx, user?.id]);
 
   const handleCancelBet = async () => {

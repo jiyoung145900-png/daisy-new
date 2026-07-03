@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { myStyles } from "./MyPage.styles";
 
 // 공통 헤더 컴포넌트
@@ -77,7 +77,7 @@ export const PinView = ({ onBack, isKo, onSubmit, userInfo }) => {
   );
 };
 
-// --- 3. 입금 화면 (★ 내역 확인 버튼 추가됨) ---
+// --- 3. 입금 화면 (기존 유지) ---
 export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
@@ -91,7 +91,6 @@ export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
     <div style={myStyles.container}>
       <SubHeader title={isKo ? "입금 신청" : "Deposit"} onBack={onBack} />
       <div style={myStyles.formArea}>
-        {/* 내역 확인 버튼 */}
         <div style={{display:'flex', justifyContent:'flex-end', marginBottom:20}}>
             <button onClick={onViewHistory} style={{background:'#222', color:'#aaa', border:'1px solid #444', padding:'8px 12px', borderRadius:8, fontSize:13, cursor:'pointer'}}>
                 📄 {isKo ? "나의 입금 신청 내역" : "My History"}
@@ -110,13 +109,30 @@ export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
   );
 };
 
-// --- 4. 출금 화면 (★ 내역 확인 버튼 추가됨) ---
-export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
+// --- 4. 출금 화면 (저장된 계좌 자동 불러오기) ---
+export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }) => {
   const [amount, setAmount] = useState("");
   const [bank, setBank] = useState("");
   const [account, setAccount] = useState("");
   const [holder, setHolder] = useState("");
   const [pin, setPin] = useState("");
+
+  const hasSavedBankInfo = !!(userInfo?.savedBankInfo?.bank);
+
+  useEffect(() => {
+    const saved = userInfo?.savedBankInfo;
+    if (saved) {
+      if (saved.bank) setBank(saved.bank);
+      if (saved.account) setAccount(saved.account);
+      if (saved.holder) setHolder(saved.holder);
+    }
+  }, [userInfo?.savedBankInfo]);
+
+  const handleClearBank = () => {
+    setBank("");
+    setAccount("");
+    setHolder("");
+  };
 
   const handleReq = async () => {
     const success = await onSubmit(amount, { bank, account, holder }, pin);
@@ -127,7 +143,6 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
     <div style={myStyles.container}>
       <SubHeader title={isKo ? "출금 신청" : "Withdraw"} onBack={onBack} />
       <div style={myStyles.formArea}>
-        {/* 내역 확인 버튼 */}
         <div style={{display:'flex', justifyContent:'flex-end', marginBottom:20}}>
             <button onClick={onViewHistory} style={{background:'#222', color:'#aaa', border:'1px solid #444', padding:'8px 12px', borderRadius:8, fontSize:13, cursor:'pointer'}}>
                 📄 {isKo ? "나의 출금 신청 내역" : "My History"}
@@ -137,11 +152,30 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
         <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "금액" : "Amount"}</label>
           <input type="number" style={myStyles.input} value={amount} onChange={(e)=>setAmount(e.target.value)} />
         </div>
-        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "은행 정보" : "Bank Info"}</label>
+
+        <div style={myStyles.inputGroup}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10, paddingLeft:5}}>
+            <label style={{...myStyles.inputLabel, marginBottom:0}}>{isKo ? "은행 정보" : "Bank Info"}</label>
+            {hasSavedBankInfo && (
+              <div style={{display:'flex', alignItems:'center', gap:8}}>
+                <span style={{fontSize:11, color:'#4cd137', fontWeight:'700'}}>
+                  ✓ {isKo ? "저장된 계좌 불러옴" : "Auto-filled"}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearBank}
+                  style={{background:'transparent', border:'1px solid #444', color:'#888', padding:'3px 8px', borderRadius:6, fontSize:11, cursor:'pointer'}}
+                >
+                  {isKo ? "다시 입력" : "Clear"}
+                </button>
+              </div>
+            )}
+          </div>
           <input style={{...myStyles.input, marginBottom:5}} placeholder={isKo ? "은행명" : "Bank Name"} value={bank} onChange={(e)=>setBank(e.target.value)}/>
           <input style={{...myStyles.input, marginBottom:5}} placeholder={isKo ? "계좌번호" : "Account No"} value={account} onChange={(e)=>setAccount(e.target.value)}/>
           <input style={myStyles.input} placeholder={isKo ? "예금주" : "Holder"} value={holder} onChange={(e)=>setHolder(e.target.value)}/>
         </div>
+
         <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>PIN</label>
           <input type="password" maxLength={6} style={{...myStyles.input, textAlign:'center', letterSpacing:'8px'}} value={pin} onChange={(e)=>setPin(e.target.value.replace(/[^0-9]/g,''))} />
         </div>
@@ -151,7 +185,8 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
   );
 };
 
-// --- 5. [신규] 입/출금 신청 내역 화면 (심사중/완료/거절 상태 표시) ---
+// --- 5. 입/출금 신청 내역 화면 ---
+// ★ [수정] 승인 사유(approveReason) 표시 추가 - 관리자가 승인할 때 입력한 사유
 export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
     return (
       <div style={myStyles.container}>
@@ -159,12 +194,14 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
         <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
           {data.length === 0 ? <div style={{ textAlign: 'center', color: '#666', marginTop: '50px' }}>{isKo ? "내역이 없습니다." : "No records."}</div> :
             data.map((h, i) => {
-              // ✅ [수정] 상태별 색상 및 텍스트 처리 - 완료/심사중에 더해 거절 상태 추가
               const isDone = h.status === '완료';
               const isRejected = h.status === '거절';
-              const statusColor = isRejected ? '#ef4444' : isDone ? '#4cd137' : '#fbc531'; // 빨강 / 초록 / 노랑
+              const statusColor = isRejected ? '#ef4444' : isDone ? '#4cd137' : '#fbc531';
               const statusBg = isRejected ? 'rgba(239, 68, 68, 0.1)' : isDone ? 'rgba(76, 209, 55, 0.1)' : 'rgba(251, 197, 49, 0.1)';
               const statusText = isRejected ? (isKo ? '거절됨' : 'Rejected') : isDone ? (isKo ? '처리완료' : 'Done') : (isKo ? '심사중' : 'Pending');
+
+              // ★ [신규] 승인 사유가 있는지 체크 (완료된 건 중에서만)
+              const hasApproveReason = isDone && h.approveReason && h.approveReason.trim() !== "";
 
               return (
                 <div key={i} style={{ background: '#1a1a1a', padding: '20px', borderRadius: '15px', marginBottom: '15px', border: isRejected ? '1px solid rgba(239,68,68,0.4)' : '1px solid #333' }}>
@@ -176,7 +213,6 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
                         <div style={{color: '#fff', fontSize: '18px', fontWeight:'bold'}}>
                             {h.amount?.toLocaleString()} DIA
                         </div>
-                        {/* 추가 정보 표시 (입금자명 or 은행) */}
                         <div style={{color: '#666', fontSize:'13px', marginTop:4}}>
                             {h.depositName ? (isKo ? `입금자: ${h.depositName}` : `Name: ${h.depositName}`) : 
                              (h.bankInfo ? `${h.bankInfo.bank} ${h.bankInfo.holder}` : '')}
@@ -190,7 +226,19 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
                     </div>
                   </div>
 
-                  {/* ✅ [추가] 거절 사유 표시 - 관리자가 거절할 때 입력한 사유를 회원에게 그대로 보여줌 */}
+                  {/* ★ [신규] 승인 사유 표시 - 관리자가 승인할 때 입력한 사유 */}
+                  {hasApproveReason && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(76, 209, 55, 0.2)' }}>
+                      <div style={{ color: '#4cd137', fontSize: '11px', fontWeight: 'bold', marginBottom: 4 }}>
+                        {isKo ? '✓ 승인 사유' : '✓ Approval Note'}
+                      </div>
+                      <div style={{ color: '#ccc', fontSize: '13px', lineHeight: 1.5 }}>
+                        {h.approveReason}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 거절 사유 표시 (기존 유지) */}
                   {isRejected && h.rejectReason && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(239,68,68,0.2)' }}>
                       <div style={{ color: '#ef4444', fontSize: '11px', fontWeight: 'bold', marginBottom: 4 }}>

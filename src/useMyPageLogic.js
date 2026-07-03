@@ -219,6 +219,11 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     if (Number(amount) > (userInfo.diamond || 0))
       return alert(isKo ? "잔액 부족" : "Not enough balance");
 
+    // ★ [신규] 은행 정보 유효성 체크
+    if (!bankInfo?.bank?.trim() || !bankInfo?.account?.trim() || !bankInfo?.holder?.trim()) {
+      return alert(isKo ? "은행 정보를 모두 입력해주세요." : "Please fill in all bank info.");
+    }
+
     try {
       await addDoc(collection(db, "withdraw_requests"), {
         userId: userInfo.id,
@@ -228,6 +233,20 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
         status: "pending",
         timestamp: new Date().toISOString(),
       });
+
+      // ★ [신규] 계좌 정보 자동 저장 - 다음 출금 신청 시 자동으로 불러올 수 있게
+      // users/{id}.savedBankInfo 필드에 저장
+      try {
+        const userRef = doc(db, "users", userInfo.id);
+        await updateDoc(userRef, {
+          savedBankInfo: bankInfo,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (saveErr) {
+        // 계좌 저장은 실패해도 출금 신청 자체는 성공했으므로 사용자에게는 알리지 않음
+        console.warn("Failed to save bank info:", saveErr);
+      }
+
       playFemaleVoice(isKo ? "출금이 신청되었습니다." : "Withdrawal requested.");
       alert(isKo ? "신청 완료!" : "Done!");
       return true;

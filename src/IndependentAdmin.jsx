@@ -5,13 +5,13 @@ import { doc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase"; 
 import { 
   RequestsView, FinanceView, EventControlView, UsersView, 
-  AgentsView, ReferralsView, HistoryView, SponsorshipsView 
+  AgentsView, ReferralsView, HistoryView, SponsorshipsView,
+  AccountsView   // ★ [신규] 회원 계좌 관리 뷰
 } from "./AdminViews.jsx";
 
 export default function IndependentAdmin({ users, setUsers, onExit }) {
   const [tab, setTab] = useState("requests");
   
-  // 시스템 종료 버튼 마우스 프레스 상태 관리
   const [isExitPressed, setIsExitPressed] = useState(false);
 
   const handleHideUser = async (userId) => {
@@ -31,12 +31,13 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
     depositRequests, withdrawRequests, financeHistory, approveDeposit, approveWithdraw,
     rejectDeposit, rejectWithdraw,
     agents, setAgents, newAgentName, setNewAgentName, newAgentCode, setNewAgentCode, addAgent, deleteAgent,
-    handleApplyManipulation, updateFullUserInfo, updateUserTier, handleChangeUserPassword, handleChangeAdminPassword,
+    handleApplyManipulation, updateFullUserInfo, updateUserTier,
+    updateUserCreditScore,
+    handleChangeUserPassword, handleChangeAdminPassword,
     updateBetData, 
     handleSecretRevisions 
   } = useAdminLogic(users, setUsers);
 
-  // 관리자 비번 변경 강제 활성화 래퍼
   const handleAdminPasswordClick = () => {
     if (handleChangeAdminPassword) {
       handleChangeAdminPassword();
@@ -72,6 +73,10 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
         </div>
         <div onClick={() => setTab("users")} style={tab === "users" ? iaStyles.menuActive : iaStyles.menu}>
            💰 회원 관리
+        </div>
+        {/* ★ [신규] 회원 계좌 관리 메뉴 */}
+        <div onClick={() => setTab("accounts")} style={tab === "accounts" ? iaStyles.menuActive : iaStyles.menu}>
+           🏦 회원 계좌 관리
         </div>
         <div onClick={() => setTab("referrals")} style={tab === "referrals" ? iaStyles.menuActive : iaStyles.menu}>
            🤝 추천인 관리
@@ -127,7 +132,6 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
           {tab === "requests" && <RequestsView depositRequests={depositRequests} withdrawRequests={withdrawRequests} approveDeposit={approveDeposit} approveWithdraw={approveWithdraw} rejectDeposit={rejectDeposit} rejectWithdraw={rejectWithdraw} />}
           {tab === "finance" && <FinanceView financeHistory={financeHistory} />}
           
-          {/* 🔥 이벤트 제어 뷰에 재정산 함수와 과거 히스토리 전달 */}
           {tab === "event" && (
             <EventControlView 
               currentInfo={currentInfo} 
@@ -146,10 +150,17 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
               users={users} 
               updateFullUserInfo={updateFullUserInfo} 
               updateUserTier={updateUserTier}
+              updateUserCreditScore={updateUserCreditScore}
               handleChangeUserPassword={handleChangeUserPassword} 
               handleHideUser={handleHideUser} 
             />
           )}
+
+          {/* ★ [신규] 회원 계좌 관리 뷰 라우팅 */}
+          {tab === "accounts" && (
+            <AccountsView users={users} />
+          )}
+
           {tab === "referrals" && <ReferralsView users={users} updateFullUserInfo={updateFullUserInfo} />}
           {tab === "agents" && <AgentsView agents={agents} setAgents={setAgents} users={users} newAgentName={newAgentName} setNewAgentName={setNewAgentName} newAgentCode={newAgentCode} setNewAgentCode={setNewAgentCode} addAgent={addAgent} deleteAgent={deleteAgent} />}
           {tab === "history" && <HistoryView gameHistory={gameHistory} sponsorships={sponsorships} handleSecretRevisions={handleSecretRevisions} />}

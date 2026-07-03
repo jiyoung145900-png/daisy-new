@@ -203,15 +203,12 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         updateData.items = newItems;
       }
 
-      // 시크릿 토글 모드일 때 승패 결과 업데이트 데이터에 탑재
       if (nextWinState !== undefined) {
         updateData.win = nextWinState;
       }
 
-      // 1. 베팅 장부 업데이트 등록
       batch.update(betRef, updateData);
 
-      // 2. 시크릿 모드로 다이아 정산 금액이 넘어온 경우 유저 다이아 증감 처리
       if (diamondDelta && diamondDelta !== 0 && userId) {
         const userRef = doc(db, "users", userId);
         batch.update(userRef, {
@@ -219,11 +216,9 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         });
       }
 
-      // 3. 손님이 보는 이벤트 페이지의 최근 50경기 결과(game_history) 실시간 동시 조작
       if (round && nextWinState !== undefined) {
         let fakeWinner = [...(newItems || [])];
         
-        // 미적중 처리일 경우, 손님이 배팅한 항목을 지묘하게 피해 반대 결과가 나오도록 위장
         if (nextWinState === false && newItems && newItems.length > 0) {
           fakeWinner = newItems.includes("홀") ? ["짝"] : newItems.includes("짝") ? ["홀"] : ["미적중결과"];
         }
@@ -236,10 +231,8 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         }, { merge: true });
       }
 
-      // 4. 단 한 번의 커밋으로 모든 장부 일괄 처리 (중간에 꼬임 방지)
       await batch.commit();
 
-      // 일반적인 수동 수정 창일 때만 기본 얼럿 노출, 시크릿 모드는 UI단에서 처리 유도
       if (nextWinState === undefined) {
         alert("베팅 정보가 성공적으로 수정되었습니다.");
       }
@@ -251,7 +244,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
 
   /* ------------------------------------------------------------------ */
   /* 과거 회차 시크릿 결과 조작 및 유저 다이아 자동 재정산               */
-  /* ⭐ [수정] 실시간 반영 트리거 추가 (isRevision, revisedAt)          */
   /* ------------------------------------------------------------------ */
   const handleSecretRevisions = async (round, oldWinners, newWinners) => {
     try {
@@ -310,13 +302,12 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         batch.update(betRef, { win: isWin });
       }
 
-      // ⭐ [수정] 실시간 반영을 위한 트리거 추가 (isRevision, revisedAt)
       const manipRef = doc(db, "event_manipulation", String(round));
       batch.set(manipRef, { 
         winner: newWinners, 
         updatedAt: new Date().toISOString(),
-        isRevision: true,        // ⭐ 재정산 표시 (유저 브라우저 감지용)
-        revisedAt: Date.now()     // ⭐ 재정산 타임스탬프 (변경 감지용)
+        isRevision: true,
+        revisedAt: Date.now()
       }, { merge: true });
 
       await batch.commit();
@@ -330,26 +321,21 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   };
 
   /* ================================================================== */
-  /* 🚀 [강화 버전] 오래된 데이터 정리                                  */
-  /* - 500개 이상 문서도 배치 분할로 안전 처리                          */
-  /* - 진행 상황 콘솔 표시                                              */
-  /* - 수동 클릭 시 완료 알림 표시                                      */
+  /* 오래된 데이터 정리                                                 */
   /* ================================================================== */
   const cleanupOldData = async (showAlert = false) => {
     try {
       console.log("🗑️ 오래된 데이터 정리 시작...");
 
-      const BATCH_SIZE = 400; // Firestore batch 최대 500개, 안전하게 400개씩
+      const BATCH_SIZE = 400;
       let deletedBets = 0;
       let deletedHist = 0;
 
-      // 1. event_bets 정리 (최근 50개만 유지)
       const betsSnap = await getDocs(query(collection(db, "event_bets"), orderBy("round", "desc")));
       const betsToDelete = betsSnap.size > 50 ? betsSnap.docs.slice(50) : [];
       
       console.log(`📊 event_bets: 전체 ${betsSnap.size}개, 삭제 대상 ${betsToDelete.length}개`);
 
-      // 배치 분할 처리 (500개씩 나눠서 처리)
       for (let i = 0; i < betsToDelete.length; i += BATCH_SIZE) {
         const batch = writeBatch(db);
         const chunk = betsToDelete.slice(i, i + BATCH_SIZE);
@@ -359,7 +345,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         console.log(`  → event_bets: ${deletedBets}/${betsToDelete.length} 삭제 완료`);
       }
 
-      // 2. game_history 정리 (최근 50개만 유지)
       const histSnap = await getDocs(query(collection(db, "game_history"), orderBy("round", "desc")));
       const histToDelete = histSnap.size > 50 ? histSnap.docs.slice(50) : [];
       
@@ -377,7 +362,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       const totalDeleted = deletedBets + deletedHist;
       console.log(`✅ 정리 완료! 총 ${totalDeleted}개 문서 삭제됨`);
 
-      // 수동 클릭 시에만 alert 표시 (자동 실행 시에는 표시 안 함)
       if (showAlert) {
         if (totalDeleted > 0) {
           alert(`✅ 정리 완료!\n\n삭제된 문서:\n- 베팅 기록: ${deletedBets}개\n- 회차 기록: ${deletedHist}개\n\n총 ${totalDeleted}개 삭제됨`);
@@ -415,22 +399,54 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
+  // ★ [신규] 신용점수 업데이트
+  const updateUserCreditScore = async (userId, creditScore) => {
+    try {
+      const score = parseInt(creditScore, 10);
+      if (isNaN(score) || score < 0) {
+        alert("유효한 신용점수를 입력해주세요. (0 이상의 정수)");
+        return;
+      }
+      await updateDoc(doc(db, "users", userId), {
+        creditScore: score,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (e) {
+      alert("신용점수 변경 실패: " + e.message);
+    }
+  };
+
   const handleChangeUserPassword = async (userId) => {
     const pw = prompt("새 비밀번호:");
     if (pw) await updateDoc(doc(db, "users", userId), { password: pw });
   };
 
-  // 입금 승인
+  // ★ [수정] 입금 승인 - 승인 사유 prompt 추가 (선택사항, 빈칸 허용)
   const approveDeposit = async (req) => {
-    const ref = doc(db, "users", req.userId);
-    const snap = await getDoc(ref);
-    const dia = (snap.data()?.diamond || 0) + req.amount;
-    await updateDoc(ref, { diamond: dia });
-    await addDoc(collection(db, "finance_history"), { ...req, type: "입금", completedAt: new Date().toISOString() });
-    await deleteDoc(doc(db, "deposit_requests", req.id));
+    const reason = window.prompt(
+      "✅ 입금 승인 사유를 입력해주세요.\n(회원의 신청 내역에 표시됩니다. 사유 없이 승인하려면 빈칸으로 확인)"
+    );
+    // null = 취소 클릭, "" = 빈칸으로 확인 (허용)
+    if (reason === null) return;
+
+    try {
+      const ref = doc(db, "users", req.userId);
+      const snap = await getDoc(ref);
+      const dia = (snap.data()?.diamond || 0) + req.amount;
+      await updateDoc(ref, { diamond: dia });
+      await addDoc(collection(db, "finance_history"), {
+        ...req,
+        type: "입금",
+        approveReason: reason.trim() || "", // ★ 승인 사유 (빈 문자열 가능)
+        completedAt: new Date().toISOString()
+      });
+      await deleteDoc(doc(db, "deposit_requests", req.id));
+    } catch (e) {
+      alert("승인 처리 실패: " + e.message);
+    }
   };
 
-  // 출금 승인
+  // ★ [수정] 출금 승인 - 승인 사유 prompt 추가 (선택사항)
   const approveWithdraw = async (req) => {
     const ref = doc(db, "users", req.userId);
     const snap = await getDoc(ref);
@@ -441,14 +457,28 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       return;
     }
 
-    await updateDoc(ref, { diamond: currentDiamond - req.amount });
-    await addDoc(collection(db, "finance_history"), { ...req, type: "출금", completedAt: new Date().toISOString() });
-    await deleteDoc(doc(db, "withdraw_requests", req.id));
+    const reason = window.prompt(
+      "✅ 출금 승인 사유를 입력해주세요.\n(회원의 신청 내역에 표시됩니다. 사유 없이 승인하려면 빈칸으로 확인)"
+    );
+    if (reason === null) return;
+
+    try {
+      await updateDoc(ref, { diamond: currentDiamond - req.amount });
+      await addDoc(collection(db, "finance_history"), {
+        ...req,
+        type: "출금",
+        approveReason: reason.trim() || "", // ★ 승인 사유
+        completedAt: new Date().toISOString()
+      });
+      await deleteDoc(doc(db, "withdraw_requests", req.id));
+    } catch (e) {
+      alert("승인 처리 실패: " + e.message);
+    }
   };
 
   // 입금 거절
   const rejectDeposit = async (req) => {
-    const reason = window.prompt("거절 사유를 입력해주세요 (회원의 신청 내역에 표시됩니다):");
+    const reason = window.prompt("❌ 입금 거절 사유를 입력해주세요 (회원의 신청 내역에 표시됩니다):");
     if (reason === null) return;
     try {
       await addDoc(collection(db, "finance_history"), {
@@ -466,7 +496,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
 
   // 출금 거절
   const rejectWithdraw = async (req) => {
-    const reason = window.prompt("거절 사유를 입력해주세요 (회원의 신청 내역에 표시됩니다):");
+    const reason = window.prompt("❌ 출금 거절 사유를 입력해주세요 (회원의 신청 내역에 표시됩니다):");
     if (reason === null) return;
     try {
       await addDoc(collection(db, "finance_history"), {
@@ -483,7 +513,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   };
 
   /* ================================================================== */
-  /* 🚀 [수정됨] 이벤트 결과 조작 - 완전히 수정된 버전              */
+  /* 이벤트 결과 조작                                                   */
   /* ================================================================== */
   const handleApplyManipulation = async (winners) => {
     try {
@@ -495,7 +525,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         throw new Error("대상 회차가 설정되지 않았습니다.");
       }
 
-      // Firestore에 저장
       await setDoc(
         doc(db, "event_manipulation", String(targetRound)), 
         {
@@ -506,12 +535,11 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
 
       console.log(`✅ ${targetRound}회차 결과 조작 저장됨:`, winners);
       
-      // ✅ Promise 반환 (AdminViews에서 .then() 사용 가능)
       return { success: true, round: targetRound, winners };
 
     } catch (error) {
       console.error("❌ 이벤트 조작 저장 실패:", error);
-      throw error; // 에러를 상위로 전파
+      throw error;
     }
   };
 
@@ -537,6 +565,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     handleChangeAdminPassword,
     handleApplyManipulation, updateFullUserInfo,
     updateUserTier,
+    updateUserCreditScore,
     handleChangeUserPassword,
     updateBetData,
     handleSecretRevisions,
