@@ -13,12 +13,7 @@ const CONFIG = {
 };
 
 /* ============================================================
- * ★ [신규] 배당 계산 공통 유틸 - useEventEngine.js와 완벽히 동일한 규칙
- * ------------------------------------------------------------
- * 새 규칙 (2026-07 개편):
- *   - 이기면 무조건 배팅 총액의 2배 지급 (1개든 2개든 동일)
- *   - 2개 걸었을 경우 2개 다 맞아야만 승리 (본전 방어 없음)
- *   - 지면 0 지급 (배팅액 소실)
+ * 배당 계산 공통 유틸 (useEventEngine.js와 동일한 규칙)
  * ============================================================ */
 function calcWinAmount(items, matchedCount, totalCost) {
   if (!items || items.length === 0 || !totalCost) return 0;
@@ -236,13 +231,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  /* ------------------------------------------------------------------ */
-  /* 과거 회차 시크릿 결과 조작 및 유저 다이아 자동 재정산               */
-  /* ★ [수정] 배당 계산을 새 규칙으로 통일 (이기면 2배, 지면 0)         */
-  /*   기존: 1개 맞음 = betAmount * 2 / 2개 다 맞음 = betAmount * 4     */
-  /*         2개 중 1개만 = betAmount (본전) / draw 상태 존재            */
-  /*   신규: 이기면 = totalCost * 2 / 지면 = 0 / draw 없음               */
-  /* ------------------------------------------------------------------ */
   const handleSecretRevisions = async (round, oldWinners, newWinners) => {
     try {
       console.log(`🎯 ${round}회차 재정산 시작:`, { oldWinners, newWinners });
@@ -265,15 +253,12 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         const betItems = bet.items || [];
         const betAmount = bet.betAmount || 0;
 
-        // ★ [수정] 기존 결과 기준 지급액 - 공통 함수 사용
         const oldMatched = betItems.filter(name => cleanOldWinners.includes(name)).length;
         const oldWinAmount = calcWinAmount(betItems, oldMatched, betAmount);
 
-        // ★ [수정] 새 결과 기준 지급액 - 공통 함수 사용
         const newMatched = betItems.filter(name => newWinners.includes(name)).length;
         const newWinAmount = calcWinAmount(betItems, newMatched, betAmount);
 
-        // 지급액 차이만큼 유저 다이아 증감
         const delta = newWinAmount - oldWinAmount;
 
         if (delta !== 0 && bet.userId) {
@@ -282,7 +267,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
           console.log(`💎 ${bet.userId}: ${delta > 0 ? '+' : ''}${delta} 다이아`);
         }
 
-        // ★ [수정] win 상태도 새 규칙으로 통일 - 이기면 true, 지면 false (draw 없음)
         const isWin = newWinAmount > 0;
 
         const betRef = doc(db, "event_bets", bet.id);
@@ -399,6 +383,62 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   const handleChangeUserPassword = async (userId) => {
     const pw = prompt("새 비밀번호:");
     if (pw) await updateDoc(doc(db, "users", userId), { password: pw });
+  };
+
+  // ★ [신규] 회원 계좌 정보 수정
+  //   - users/{userId}.savedBankInfo 필드에 저장
+  //   - 은행명, 계좌번호, 예금주 세 값 모두 검증
+  //   - 성공 시 true 반환
+  const updateUserBankInfo = async (userId, bankInfo) => {
+    if (!bankInfo?.bank?.trim() || !bankInfo?.account?.trim() || !bankInfo?.holder?.trim()) {
+      alert("은행명, 계좌번호, 예금주를 모두 입력해주세요.");
+      return false;
+    }
+    try {
+      await updateDoc(doc(db, "users", userId), {
+        savedBankInfo: {
+          bank: bankInfo.bank.trim(),
+          account: bankInfo.account.trim(),
+          holder: bankInfo.holder.trim(),
+        },
+        updatedAt: serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      alert("계좌 정보 저장 실패: " + e.message);
+      return false;
+    }
+  };
+
+  // ★ [신규] 회원 계좌 정보 삭제
+  //   - savedBankInfo를 null로 세팅 (필드 자체 유지, 값만 비움)
+  //   - 확인창으로 실수 방지
+  const deleteUserBankInfo = async (userId) => {
+    if (!window.confirm("이 회원의 저장된 계좌 정보를 삭제하시겠습니까?")) return false;
+    try {
+      await updateDoc(doc(db, "users", userId), {
+        savedBankInfo: null,
+        updatedAt: serverTimestamp(),
+      });
+      return true;
+    } catch (e) {
+      alert("계좌 정보 삭제 실패: " + e.message);
+      return false;
+    }
+  };
+
+  // ★ [신규] 완료된 장부 개별 삭제
+  //   - finance_history/{historyId} 문서 영구 삭제
+  //   - 확인창으로 실수 방지 (복구 불가 알림)
+  const deleteFinanceHistoryItem = async (historyId) => {
+    if (!window.confirm("이 장부 기록을 영구 삭제하시겠습니까?\n\n⚠️ 복구할 수 없습니다.")) return false;
+    try {
+      await deleteDoc(doc(db, "finance_history", historyId));
+      return true;
+    } catch (e) {
+      alert("장부 삭제 실패: " + e.message);
+      return false;
+    }
   };
 
   const approveDeposit = async (req) => {
@@ -539,6 +579,10 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     updateUserTier,
     updateUserCreditScore,
     handleChangeUserPassword,
+    // ★ [신규] 3개 함수 export
+    updateUserBankInfo,
+    deleteUserBankInfo,
+    deleteFinanceHistoryItem,
     updateBetData,
     handleSecretRevisions,
     cleanupOldData,

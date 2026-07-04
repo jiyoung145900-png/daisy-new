@@ -1,18 +1,23 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { iaStyles } from "./AdminStyles";
 import { useAdminLogic } from "./useAdminLogic.js"; 
 import { doc, updateDoc } from "firebase/firestore"; 
 import { db } from "./firebase"; 
 import { 
-  RequestsView, FinanceView, EventControlView, UsersView, 
+  RequestsView, EventControlView, UsersView, 
   AgentsView, ReferralsView, HistoryView, SponsorshipsView,
-  AccountsView
+  UserDetailView   // ★ [신규] 회원 상세 페이지
 } from "./AdminViews.jsx";
 
 export default function IndependentAdmin({ users, setUsers, onExit }) {
   const [tab, setTab] = useState("requests");
   
   const [isExitPressed, setIsExitPressed] = useState(false);
+
+  // ★ [신규] 회원 상세 페이지에서 조회 중인 회원 ID
+  //   - null이면 회원 목록(UsersView) 표시
+  //   - 특정 ID이면 UserDetailView 표시
+  const [selectedUserId, setSelectedUserId] = useState(null);
 
   const handleHideUser = async (userId) => {
     if (!window.confirm("이 유저를 목록에서 숨기시겠습니까?")) return;
@@ -33,6 +38,10 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
     agents, setAgents, newAgentName, setNewAgentName, newAgentCode, setNewAgentCode, addAgent, deleteAgent,
     handleApplyManipulation, updateFullUserInfo, updateUserTier,
     updateUserCreditScore,
+    // ★ [신규] 3개 함수 받기
+    updateUserBankInfo,
+    deleteUserBankInfo,
+    deleteFinanceHistoryItem,
     handleChangeUserPassword, handleChangeAdminPassword,
     updateBetData, 
     handleSecretRevisions 
@@ -47,6 +56,18 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
     }
   };
 
+  // ★ [신규] 사이드바 탭 클릭 시 상세 페이지 자동 종료
+  const handleTabChange = (newTab) => {
+    setSelectedUserId(null); // 다른 메뉴 이동 시 상세 페이지 리셋
+    setTab(newTab);
+  };
+
+  // ★ [신규] 상세 페이지 대상 회원 찾기
+  const selectedUser = useMemo(() => {
+    if (!selectedUserId) return null;
+    return users.find(u => u.id === selectedUserId) || null;
+  }, [selectedUserId, users]);
+
   return (
     <div style={iaStyles.container}>
       <aside style={iaStyles.sidebar}>
@@ -59,34 +80,34 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
            <div style={{color:'#00ff00', fontSize:22, fontWeight:'bold'}}>● {activeUsers?.length || 0}명</div>
         </div>
 
-        <div onClick={() => setTab("requests")} style={tab === "requests" ? iaStyles.menuActive : iaStyles.menu}>
+        {/* 입/출금 관리(심사중) - 유지 */}
+        <div onClick={() => handleTabChange("requests")} style={tab === "requests" ? iaStyles.menuActive : iaStyles.menu}>
            🔔 입/출금 관리 <span style={iaStyles.countTag}>{depositRequests?.length + withdrawRequests?.length || 0}</span>
         </div>
-        <div onClick={() => setTab("finance")} style={tab === "finance" ? iaStyles.menuActive : iaStyles.menu}>
-           📜 완료된 장부
-        </div>
-        
+
+        {/* ❌ [제거] "📜 완료된 장부" 메뉴 → 회원 관리 상세 페이지로 통합 */}
+
         <div style={{height:1, background:'#333', margin:'10px 0'}}></div>
         
-        <div onClick={() => setTab("event")} style={tab === "event" ? iaStyles.menuActive : iaStyles.menu}>
+        <div onClick={() => handleTabChange("event")} style={tab === "event" ? iaStyles.menuActive : iaStyles.menu}>
            🎰 이벤트 결과 제어
         </div>
-        <div onClick={() => setTab("users")} style={tab === "users" ? iaStyles.menuActive : iaStyles.menu}>
+        <div onClick={() => handleTabChange("users")} style={tab === "users" ? iaStyles.menuActive : iaStyles.menu}>
            💰 회원 관리
         </div>
-        <div onClick={() => setTab("accounts")} style={tab === "accounts" ? iaStyles.menuActive : iaStyles.menu}>
-           🏦 회원 계좌 관리
-        </div>
-        <div onClick={() => setTab("referrals")} style={tab === "referrals" ? iaStyles.menuActive : iaStyles.menu}>
+
+        {/* ❌ [제거] "🏦 회원 계좌 관리" 메뉴 → 회원 관리 상세 페이지로 통합 */}
+
+        <div onClick={() => handleTabChange("referrals")} style={tab === "referrals" ? iaStyles.menuActive : iaStyles.menu}>
            🤝 추천인 관리
         </div>
-        <div onClick={() => setTab("agents")} style={tab === "agents" ? iaStyles.menuActive : iaStyles.menu}>
+        <div onClick={() => handleTabChange("agents")} style={tab === "agents" ? iaStyles.menuActive : iaStyles.menu}>
            👔 파트너/직원 장부
         </div>
-        <div onClick={() => setTab("history")} style={tab === "history" ? iaStyles.menuActive : iaStyles.menu}>
+        <div onClick={() => handleTabChange("history")} style={tab === "history" ? iaStyles.menuActive : iaStyles.menu}>
            📋 이벤트 통계
         </div>
-        <div onClick={() => setTab("sponsorships")} style={tab === "sponsorships" ? iaStyles.menuActive : iaStyles.menu}>
+        <div onClick={() => handleTabChange("sponsorships")} style={tab === "sponsorships" ? iaStyles.menuActive : iaStyles.menu}>
            💎 실시간 배팅 모니터링
         </div>
         
@@ -129,7 +150,8 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
 
         <div style={{flex: 1, overflowY: 'auto', padding: '20px'}}>
           {tab === "requests" && <RequestsView depositRequests={depositRequests} withdrawRequests={withdrawRequests} approveDeposit={approveDeposit} approveWithdraw={approveWithdraw} rejectDeposit={rejectDeposit} rejectWithdraw={rejectWithdraw} />}
-          {tab === "finance" && <FinanceView financeHistory={financeHistory} />}
+          
+          {/* ❌ [제거] finance 탭 - 완료된 장부는 상세 페이지로 이동 */}
           
           {tab === "event" && (
             <EventControlView 
@@ -144,22 +166,31 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
             />
           )}
 
+          {/* ★ [핵심 라우팅] 회원 관리 - selectedUserId 유무에 따라 목록 or 상세 */}
           {tab === "users" && (
-            <UsersView 
-              users={users} 
-              updateFullUserInfo={updateFullUserInfo} 
-              updateUserTier={updateUserTier}
-              updateUserCreditScore={updateUserCreditScore}
-              handleChangeUserPassword={handleChangeUserPassword} 
-              handleHideUser={handleHideUser} 
-            />
+            selectedUserId && selectedUser ? (
+              <UserDetailView 
+                user={selectedUser}
+                allUsers={users}
+                onBack={() => setSelectedUserId(null)}
+                updateFullUserInfo={updateFullUserInfo}
+                updateUserTier={updateUserTier}
+                updateUserCreditScore={updateUserCreditScore}
+                handleChangeUserPassword={handleChangeUserPassword}
+                updateUserBankInfo={updateUserBankInfo}
+                deleteUserBankInfo={deleteUserBankInfo}
+                deleteFinanceHistoryItem={deleteFinanceHistoryItem}
+              />
+            ) : (
+              <UsersView 
+                users={users} 
+                onSelectUser={(userId) => setSelectedUserId(userId)}
+              />
+            )
           )}
 
-          {tab === "accounts" && (
-            <AccountsView users={users} />
-          )}
+          {/* ❌ [제거] accounts 탭 - 회원 계좌 관리는 상세 페이지로 이동 */}
 
-          {/* ★ [수정] ReferralsView에 agents props 추가 전달 */}
           {tab === "referrals" && (
             <ReferralsView users={users} agents={agents} />
           )}
