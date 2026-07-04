@@ -729,6 +729,61 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
+  // ═════════════════════════════════════════════════════════════════
+  // ★ [신규] 회원 완전 삭제
+  //   해당 회원과 관련된 모든 Firestore 데이터를 지웁니다.
+  //   - users/{userId}
+  //   - event_bets (userId 필드로 매칭)
+  //   - deposit_requests (userId 필드로 매칭)
+  //   - withdraw_requests (userId 필드로 매칭)
+  //   - finance_history (userId 필드로 매칭)
+  //   반환: { success, counts } - 각 컬렉션별 삭제 건수
+  //   ※ Firestore batch 한도(500 writes)를 넘지 않게 400개씩 청크 처리
+  // ═════════════════════════════════════════════════════════════════
+  const deleteUserCompletely = async (userId) => {
+    if (!userId) throw new Error("삭제할 회원 ID가 없습니다.");
+
+    const collectionsToClean = [
+      "event_bets",
+      "deposit_requests",
+      "withdraw_requests",
+      "finance_history",
+    ];
+    const counts = {};
+
+    try {
+      // 각 컬렉션별로 userId 매칭되는 문서 조회 후 청크 삭제
+      for (const coll of collectionsToClean) {
+        const snap = await getDocs(
+          query(collection(db, coll), where("userId", "==", userId))
+        );
+        counts[coll] = snap.size;
+
+        // 400개씩 나눠서 batch 커밋 (Firestore 500 write 한도 안전 마진)
+        const docs = snap.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const batch = writeBatch(db);
+          docs.slice(i, i + 400).forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
+      }
+
+      // 마지막으로 users 문서 자체 삭제
+      await deleteDoc(doc(db, "users", userId));
+
+      // 로컬 상태 반영 (onSnapshot이 곧 갱신하지만 즉시 UI 반영 위해)
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      if (setInitialUsers) {
+        setInitialUsers(prev => (prev || []).filter(u => u.id !== userId));
+      }
+
+      return { success: true, counts };
+    } catch (error) {
+      console.error("❌ 회원 완전 삭제 실패:", error);
+      throw error;
+    }
+  };
+
   return {
     users,
     currentInfo, targetRound, setTargetRound, queue, deleteQueue,
@@ -754,5 +809,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     editBetWithSync,
     handleSecretRevisions,
     cleanupOldData,
+    // ★ [신규] 회원 완전 삭제 (관련 데이터 전부 정리)
+    deleteUserCompletely,
   };
 };

@@ -12,13 +12,15 @@ import { useRecentUsers } from "./useRecentUsers";
 //   - 아이디 클릭 시 onSelectUser(userId) 호출 → 상세 페이지로 이동
 //   - 각 행은 클릭 가능한 카드 스타일 (호버 시 강조)
 // =========================================================================
-export const UsersView = ({ users = [], onSelectUser }) => {
+export const UsersView = ({ users = [], onSelectUser, deleteUserCompletely }) => {
   const [term, setTerm] = useState("");
   const [localHidden, setLocalHidden] = useState(new Set());
   const { recentIds, addRecentIds, removeRecentId } = useRecentUsers('admin_recent_users', 20);
   const isSearching = term.trim() !== "";
 
   const [hoveredId, setHoveredId] = useState(null);
+  // ★ [신규] 삭제 진행 중 상태 (중복 클릭 방지)
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     setLocalHidden(new Set());
@@ -59,6 +61,67 @@ export const UsersView = ({ users = [], onSelectUser }) => {
     // 최근 조회에 추가 (검색 없이 최근 목록에서 클릭해도 갱신)
     addRecentIds([userId]);
     onSelectUser?.(userId);
+  };
+
+  // ★ [신규] 회원 완전 삭제 - 2단계 확인 후 Firestore에서 모든 관련 데이터 제거
+  const handleDeleteUser = async (e, userId) => {
+    e.stopPropagation(); // 카드 클릭 방지
+
+    if (!deleteUserCompletely) {
+      alert("삭제 기능이 연결되지 않았습니다. (deleteUserCompletely 없음)");
+      return;
+    }
+    if (deletingId) return; // 중복 클릭 방지
+
+    // ─── 1차 경고 ───
+    const first = window.confirm(
+      `⚠️ 회원 삭제 경고\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `[${userId}] 회원을 완전히 삭제합니다.\n\n` +
+      `삭제되는 데이터:\n` +
+      `  • 회원 정보\n` +
+      `  • 배팅 기록 전체\n` +
+      `  • 입금 신청 내역\n` +
+      `  • 출금 신청 내역\n` +
+      `  • 다이아 증감 이력\n\n` +
+      `계속하시겠습니까?`
+    );
+    if (!first) return;
+
+    // ─── 2차 최종 확인 ───
+    const final = window.confirm(
+      `🚨 최종 확인\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `[${userId}] 회원과 관련된 모든 데이터가\n` +
+      `영구적으로 삭제됩니다.\n\n` +
+      `❗ 되돌릴 수 없습니다.\n\n` +
+      `정말 삭제하시겠습니까?`
+    );
+    if (!final) return;
+
+    // ─── 실행 ───
+    try {
+      setDeletingId(userId);
+      const result = await deleteUserCompletely(userId);
+      const c = result?.counts || {};
+      alert(
+        `✅ 회원 삭제 완료\n` +
+        `━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `[${userId}]\n\n` +
+        `삭제된 데이터:\n` +
+        `  • 배팅 기록: ${c.event_bets || 0}건\n` +
+        `  • 입금 신청: ${c.deposit_requests || 0}건\n` +
+        `  • 출금 신청: ${c.withdraw_requests || 0}건\n` +
+        `  • 다이아 이력: ${c.finance_history || 0}건\n` +
+        `  • 회원 정보 본체 삭제 완료`
+      );
+      // 최근 조회 목록에서도 제거
+      removeRecentId(userId);
+    } catch (err) {
+      alert(`❌ 삭제 실패: ${err.message}`);
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -102,9 +165,9 @@ export const UsersView = ({ users = [], onSelectUser }) => {
               <th style={{ width: "20%" }}>아이디</th>
               <th style={{ width: "18%" }}>다이아</th>
               <th style={{ width: "14%" }}>등급</th>
-              <th style={{ width: "18%" }}>신용점수</th>
-              <th style={{ width: "14%" }}>계좌</th>
-              <th style={{ width: "10%" }}>관리</th>
+              <th style={{ width: "14%" }}>신용점수</th>
+              <th style={{ width: "13%" }}>계좌</th>
+              <th style={{ width: "15%" }}>관리</th>
             </tr>
           </thead>
           <tbody>
@@ -196,21 +259,43 @@ export const UsersView = ({ users = [], onSelectUser }) => {
                     )}
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    <button
-                      onClick={(e) => handleDeleteUI(e, u.id)}
-                      style={{
-                        background: 'transparent',
-                        border: '1px solid #444',
-                        color: '#ef4444',
-                        padding: '5px 10px',
-                        borderRadius: 6,
-                        fontSize: 11,
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                      }}
-                    >
-                      숨김
-                    </button>
+                    {/* ★ [수정] 숨김 + 삭제 두 버튼을 나란히 배치 */}
+                    <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                      <button
+                        onClick={(e) => handleDeleteUI(e, u.id)}
+                        style={{
+                          background: 'transparent',
+                          border: '1px solid #444',
+                          color: '#ef4444',
+                          padding: '5px 8px',
+                          borderRadius: 6,
+                          fontSize: 11,
+                          cursor: 'pointer',
+                          fontWeight: 700,
+                        }}
+                      >
+                        숨김
+                      </button>
+                      {/* ★ [신규] 삭제 버튼 - 실제 Firestore 데이터 완전 삭제 */}
+                      <button
+                        onClick={(e) => handleDeleteUser(e, u.id)}
+                        disabled={deletingId === u.id}
+                        style={{
+                          background: deletingId === u.id ? '#7f1d1d' : '#ef4444',
+                          border: '1px solid #ef4444',
+                          color: '#fff',
+                          padding: '5px 8px',
+                          borderRadius: 6,
+                          fontSize: 11,
+                          cursor: deletingId === u.id ? 'not-allowed' : 'pointer',
+                          fontWeight: 900,
+                          opacity: deletingId === u.id ? 0.7 : 1,
+                        }}
+                        title="회원 관련 데이터 완전 삭제 (되돌릴 수 없음)"
+                      >
+                        {deletingId === u.id ? "삭제중..." : "삭제"}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

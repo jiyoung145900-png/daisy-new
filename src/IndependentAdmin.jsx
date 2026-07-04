@@ -44,7 +44,9 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
     updateBetData, 
     // ★ [신규] 배팅 수정 + 잔액 동기화 함수
     editBetWithSync,
-    handleSecretRevisions 
+    handleSecretRevisions,
+    // ★ [신규] 회원 완전 삭제 (관련 데이터 전부 정리)
+    deleteUserCompletely 
   } = useAdminLogic(users, setUsers);
 
   const handleAdminPasswordClick = () => {
@@ -162,6 +164,7 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
               <UsersView 
                 users={users} 
                 onSelectUser={(userId) => setSelectedUserId(userId)}
+                deleteUserCompletely={deleteUserCompletely}
               />
             )
           )}
