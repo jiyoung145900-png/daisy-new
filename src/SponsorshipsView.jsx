@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { iaStyles } from "./AdminStyles";
 import { ITEM_CONFIG } from "./EventService";
 import { db } from "./firebase"; 
@@ -10,6 +10,21 @@ import { doc, updateDoc, collection, query, where, orderBy, getDocs, deleteDoc }
 function calcWinAmount(items, matchedCount, totalCost) {
   if (!items || items.length === 0 || !totalCost) return 0;
   return matchedCount === items.length ? totalCost * 2 : 0;
+}
+
+// ★ [신규] 승패 추정: bet.win이 null인 과거 배팅에 대해 gameHistory에서 결과 조회해 추정
+//   반환값:
+//     true  → 승리 (아이템 전부 매치)
+//     false → 패배 (매치 못함)
+//     null  → 추정 불가 (해당 회차 결과 없음)
+function inferBetWinFromHistory(bet, gameHistory) {
+  if (!bet || !gameHistory) return null;
+  const round = gameHistory.find(h => h.round === bet.round);
+  if (!round || !round.winner || round.winner.length === 0) return null;
+  const items = bet.items || [];
+  if (items.length === 0) return null;
+  const matched = items.filter(n => round.winner.includes(n)).length;
+  return matched === items.length;
 }
 
 // =========================================================================
@@ -48,6 +63,23 @@ export const SponsorshipsView = ({
 
   const isLocked = !currentInfo || currentInfo.timeLeft <= 5;
   const isPastRound = targetRound && targetRound < currentRound;
+
+  // ★ [신규] 회차 번호 → 당첨 아이템 배열 룩업 (실시간 모니터링 표에 회차별 결과 아이콘 표시용)
+  //   gameHistory의 winItems(이모지 포함)를 우선, 없으면 winner(이름만) fallback
+  const winnersByRound = useMemo(() => {
+    const map = {};
+    (gameHistory || []).forEach(h => {
+      if (!h?.round) return;
+      const items = (h.winItems && h.winItems.length > 0)
+        ? h.winItems
+        : (h.winner || []).map(name => {
+            const cfg = ITEM_CONFIG.find(c => c.name === name);
+            return cfg ? `${cfg.icon} ${cfg.name}` : name;
+          });
+      map[h.round] = items;
+    });
+    return map;
+  }, [gameHistory]);
 
   // ─────────────── 50개 초과 데이터 자동 삭제 ───────────────
   useEffect(() => {
@@ -139,8 +171,10 @@ export const SponsorshipsView = ({
     const newAmount = Number(editAmount);
     const originalAmount = bet.betAmount || 0;
     const originalItems = bet.items || [];
-    // 진행중 여부: win이 null이거나 undefined면 아직 결과 나오지 않음
-    const isOngoing = bet.win === null || bet.win === undefined;
+    // ★ [수정] 진행중 여부: "현재 회차 진행 중 && win이 null" 인 경우에만 진짜 진행중
+    //   과거 회차인데 win이 null인 배팅은 자연종료된 레거시 배팅 → 종료된 배팅으로 취급
+    const isBetOnCurrentRound = bet.round === currentRound;
+    const isOngoing = isBetOnCurrentRound && (bet.win === null || bet.win === undefined);
     // ★ [수정] 수정 다이얼로그의 "현재 잔액"은 반드시 실시간 잔액 기준
     //   (currentUserDiamond는 종료된 배팅의 경우 종료시점 스냅샷일 수 있으므로,
     //    실제 delta 계산은 liveUserDiamond를 우선 사용)
@@ -164,14 +198,17 @@ export const SponsorshipsView = ({
       winStateInfo = "결과 대기 중이므로 승패 판정은 변경 없음";
     } else {
       // ═════════════════════════════════════════════════
-      // 종료된 게임: winners 조회 후 순손익 재계산
+      // 종료된 게임: winners 조회 후 순이익 기준 재정산 (Option A)
+      //   차액 = (새 지급 - 새 배팅) - (옛 지급 - 옛 배팅)
+      //   = 배팅 늘어난 만큼 유저 본인 돈도 더 나간 걸로 계산
+      //   예) 배팅 2,000→4,000 (둘 다 승리): 지급 4,000→8,000 이지만
+      //       배팅도 2,000 더 나갔으니 순수 이득 차이는 +2,000
       // ═════════════════════════════════════════════════
       const pastGame = gameHistory.find(h => h.round === bet.round);
       if (!pastGame) {
         alert(`❌ ${bet.round}회차의 결과 정보를 찾을 수 없어 재정산할 수 없습니다.\n\n(gameHistory 컬렉션에 해당 회차 데이터 없음)`);
         return;
       }
-      // game_history에는 winner 필드가 name 배열 형태로 저장됨 (예: ["홀"])
       const winners = pastGame.winner || [];
 
       if (winners.length === 0) {
@@ -179,24 +216,32 @@ export const SponsorshipsView = ({
         return;
       }
 
-      // 예전 결과 정산액 (win 상태 기반)
+      // 예전 지급액 (win 상태 기반)
       const oldMatched = originalItems.filter(n => winners.includes(n)).length;
       const oldWinAmount = calcWinAmount(originalItems, oldMatched, originalAmount);
-      // draw 케이스는 옛날 규칙 - 순손익 0으로 간주
-      const oldNetProfit = bet.win === "draw" ? 0 : (oldWinAmount - originalAmount);
+      const oldNetProfit = oldWinAmount - originalAmount;
 
-      // 새 결과 정산액
+      // 새 지급액
       const newMatched = editItems.filter(n => winners.includes(n)).length;
       const newWinAmount = calcWinAmount(editItems, newMatched, newAmount);
       const newNetProfit = newWinAmount - newAmount;
 
+      // ★ Option A: 순이익 기준 차액
       diamondDelta = newNetProfit - oldNetProfit;
       newWin = newWinAmount > 0;
 
-      const oldStatus = bet.win === true ? "승리" : bet.win === false ? "패배" : bet.win === "draw" ? "무승부" : "미정";
+      // ★ 옛 상태 - win이 null인 레거시 배팅은 실제 지급액으로 추정
+      const oldStatus = 
+        bet.win === true ? "승리" :
+        bet.win === false ? "패배" :
+        bet.win === "draw" ? "무승부" :
+        (oldWinAmount > 0 ? "승리 (추정)" : "패배 (추정)");
       const newStatus = newWin ? "승리" : "패배";
-      stateInfo = `🔴 종료됨 (재정산)`;
-      winStateInfo = `승패: ${oldStatus} → ${newStatus}`;
+      stateInfo = `🔴 종료됨 (재정산 · 순이익 기준)`;
+      winStateInfo = 
+        `승패: ${oldStatus} → ${newStatus}\n` +
+        `  • 지급:      ${oldWinAmount.toLocaleString()} → ${newWinAmount.toLocaleString()}\n` +
+        `  • 순이익:   ${oldNetProfit >= 0 ? '+' : ''}${oldNetProfit.toLocaleString()} → ${newNetProfit >= 0 ? '+' : ''}${newNetProfit.toLocaleString()}`;
     }
 
     // ═════════════════════════════════════════════════
@@ -485,23 +530,53 @@ export const SponsorshipsView = ({
                 <th>유저 잔액</th>
                 <th>베팅 시간</th>
                 <th>결과</th>
+                <th>회차 당첨</th>
                 <th>관리</th> 
               </tr>
             </thead>
             <tbody>
               {displayBets.length === 0 ? (
-                <tr><td colSpan="8" style={{ padding: 30, textAlign: "center", color: "#555" }}>아직 베팅 내역이 없습니다.</td></tr>
+                <tr><td colSpan="9" style={{ padding: 30, textAlign: "center", color: "#555" }}>아직 베팅 내역이 없습니다.</td></tr>
               ) : (
                 displayBets.map((s, i) => {
                   const isCurrentRound = s.round === currentRound;
                   const isEditing = editingId === s.id;
-                  const isOngoing = s.win === null || s.win === undefined;
+                  // ★ [수정] "진짜 진행중"은 현재 라운드 + win null 인 경우로만 한정
+                  const isOngoing = isCurrentRound && (s.win === null || s.win === undefined);
 
+                  // ★ [수정] 상태 배지 로직 개선
+                  //   1) 확정된 win 값이 있으면 그대로 (승리/패배/무승부)
+                  //   2) 진짜 진행중(=현재 라운드 + null)이면 "진행중"
+                  //   3) 과거 회차인데 win null (레거시): gameHistory에서 결과 추정 → 승리/패배 표시
+                  //   4) 그마저 추정 불가면 "종료됨 (결과 미상)"
                   let statusBadge;
-                  if (s.win === true) statusBadge = <span style={{ color: '#00ff00', fontWeight: 'bold' }}>승리 👑</span>;
-                  else if (s.win === false) statusBadge = <span style={{ color: '#ff3b30', fontWeight: 'bold' }}>패배 ☠️</span>;
-                  else if (s.win === "draw") statusBadge = <span style={{ color: '#888', fontWeight: 'bold' }}>무승부 🤝</span>;
-                  else statusBadge = isCurrentRound ? <span style={{ color: '#ffb347', fontSize: '12px', fontWeight: 'bold' }}>진행중 ⏳</span> : <span style={{ color: '#888' }}>종료됨</span>;
+                  if (s.win === true) {
+                    statusBadge = <span style={{ color: '#00ff00', fontWeight: 'bold' }}>승리 👑</span>;
+                  } else if (s.win === false) {
+                    statusBadge = <span style={{ color: '#ff3b30', fontWeight: 'bold' }}>패배 ☠️</span>;
+                  } else if (s.win === "draw") {
+                    statusBadge = <span style={{ color: '#888', fontWeight: 'bold' }}>무승부 🤝</span>;
+                  } else if (isOngoing) {
+                    statusBadge = <span style={{ color: '#ffb347', fontSize: '12px', fontWeight: 'bold' }}>진행중 ⏳</span>;
+                  } else {
+                    // 과거 회차 + win null → gameHistory로 추정
+                    const inferred = inferBetWinFromHistory(s, gameHistory);
+                    if (inferred === true) {
+                      statusBadge = (
+                        <span style={{ color: '#00ff00', fontWeight: 'bold' }}>
+                          승리 👑 <span style={{ fontSize: '9px', color: '#5a9', fontWeight: 'normal' }}>(추정)</span>
+                        </span>
+                      );
+                    } else if (inferred === false) {
+                      statusBadge = (
+                        <span style={{ color: '#ff3b30', fontWeight: 'bold' }}>
+                          패배 ☠️ <span style={{ fontSize: '9px', color: '#a55', fontWeight: 'normal' }}>(추정)</span>
+                        </span>
+                      );
+                    } else {
+                      statusBadge = <span style={{ color: '#666' }}>종료됨 <span style={{ fontSize: '10px' }}>(결과 미상)</span></span>;
+                    }
+                  }
 
                   const displayName = (s.userName && s.userName !== "알 수 없는 유저" && s.userName !== s.userId) ? s.userName : "";
 
@@ -594,6 +669,40 @@ export const SponsorshipsView = ({
                       </td>
                       <td style={{ color: '#aaa', fontSize: '12px' }}>{formatKoreanTime(s)}</td>
                       <td>{statusBadge}</td>
+                      {/* ★ [신규] 회차 당첨 아이콘 - 해당 회차 결과가 있으면 표시, 없으면 진행중 표시 */}
+                      <td style={{ minWidth: '110px' }}>
+                        {(() => {
+                          const roundWinners = winnersByRound[s.round];
+                          if (!roundWinners || roundWinners.length === 0) {
+                            return <span style={{ color: '#555', fontSize: '11px' }}>-</span>;
+                          }
+                          return (
+                            <div style={{ display: 'flex', gap: '3px', flexWrap: 'wrap' }}>
+                              {roundWinners.map((str, idx) => {
+                                // "🚀 로켓" 형식에서 아이콘 + 이름 분리
+                                const parts = str.split(" ");
+                                const icon = parts[0];
+                                const name = parts.slice(1).join(" ");
+                                const cfg = ITEM_CONFIG.find(c => c.name === name);
+                                return (
+                                  <span key={idx} style={{
+                                    padding: '3px 7px',
+                                    borderRadius: '5px',
+                                    background: cfg ? `${cfg.color}22` : '#222',
+                                    color: cfg?.color || '#aaa',
+                                    border: `1px solid ${cfg?.color || '#333'}55`,
+                                    fontSize: '11px',
+                                    fontWeight: 'bold',
+                                    whiteSpace: 'nowrap',
+                                  }}>
+                                    {icon} {name}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td>
                         {isEditing ? (
                           <div style={{ display: 'flex', gap: '5px' }}>
@@ -617,7 +726,7 @@ export const SponsorshipsView = ({
                               fontSize: '11px',
                               fontWeight: isOngoing ? 'bold' : 'normal',
                             }}
-                            title={isOngoing ? "진행중 - 수정 시 차액 반환" : "종료 - 수정 시 순손익 재계산"}
+                            title={isOngoing ? "진행중 - 수정 시 차액 반환" : "종료 - 수정 시 순이익 차이만큼 정산"}
                           >
                             수정
                           </button>

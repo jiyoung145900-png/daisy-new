@@ -5,7 +5,7 @@ import { doc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase"; 
 import { 
   RequestsView, UsersView, 
-  AgentsView, ReferralsView, HistoryView, SponsorshipsView,
+  AgentsView, ReferralsView, SponsorshipsView,
   UserDetailView
 } from "./AdminViews.jsx";
 
@@ -96,9 +96,6 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
         <div onClick={() => handleTabChange("agents")} style={tab === "agents" ? iaStyles.menuActive : iaStyles.menu}>
            👔 파트너/직원 장부
         </div>
-        <div onClick={() => handleTabChange("history")} style={tab === "history" ? iaStyles.menuActive : iaStyles.menu}>
-           📋 이벤트 통계
-        </div>
         <div onClick={() => handleTabChange("sponsorships")} style={tab === "sponsorships" ? iaStyles.menuActive : iaStyles.menu}>
            💎 실시간 배팅 모니터링
         </div>
@@ -174,7 +171,6 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
           )}
 
           {tab === "agents" && <AgentsView agents={agents} setAgents={setAgents} users={users} newAgentName={newAgentName} setNewAgentName={setNewAgentName} newAgentCode={newAgentCode} setNewAgentCode={setNewAgentCode} addAgent={addAgent} deleteAgent={deleteAgent} />}
-          {tab === "history" && <HistoryView gameHistory={gameHistory} sponsorships={sponsorships} handleSecretRevisions={handleSecretRevisions} />}
           
           {/* ★ [수정] SponsorshipsView에 editBetWithSync 추가 전달 */}
           {tab === "sponsorships" && (

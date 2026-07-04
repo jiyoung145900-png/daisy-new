@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { useEventEngine, allItems } from "./useEventEngine"; 
 import { EventBanner, ImpactBurst } from "./EventComponents";
 import { db } from "./firebase"; 
-import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, increment } from "firebase/firestore";
 import { avatarStyles, getAvatarUrl } from "./MyPage.utils";
 
 export default function EventSection({ user, userPoint = 0, confirmedImage, confirmedAvatarIdx, onBack, onUpdatePoint, t }) {
@@ -97,9 +97,11 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     updatePointWithAnim(newPoint); 
 
     try {
-      // Firestore 잔액 즉시 차감 (다른 페이지 실시간 sync)
+      // ★ [수정] Firestore 잔액 delta 방식으로 차감 (관리자 편집과 충돌 방지)
+      //   기존: updateDoc(userRef, { diamond: newPoint }) - 절대값 덮어쓰기
+      //   신규: updateDoc(userRef, { diamond: increment(-totalCost) }) - 원자적 차감
       if (user?.id) {
-        await updateDoc(doc(db, "users", user.id), { diamond: newPoint });
+        await updateDoc(doc(db, "users", user.id), { diamond: increment(-totalCost) });
       }
 
       const docRef = await addDoc(collection(db, "event_bets"), {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { EventService, soundManager, ITEM_CONFIG } from "./EventService"; 
 import { db } from "./firebase";
-import { collection, onSnapshot, query, where, doc, setDoc, updateDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, setDoc, updateDoc, increment } from "firebase/firestore";
 
 export { ITEM_CONFIG as allItems }; 
 
@@ -60,10 +60,27 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     }
   }, [onUpdatePoint, pointControls]);
 
+  // ★ [수정] 관리자 실시간 편집과 충돌 방지를 위해 increment 방식으로 저장
+  //   기존: updateDoc(userRef, { diamond: newPoint }) - 절대값 덮어쓰기 → 관리자 편집 유실 위험
+  //   신규: updateDoc(userRef, { diamond: increment(delta) }) - 원자적 증감 → 충돌 없음
+  //   호환: 기존 syncDiamondToFirestore(newPoint) 호출도 계속 지원 (내부에서 delta 계산)
+  const syncDiamondDelta = useCallback(async (delta) => {
+    if (!user?.id || !delta) return;
+    try {
+      await updateDoc(doc(db, "users", user.id), { diamond: increment(delta) });
+    } catch (err) {
+      console.error("💎 잔액 증감 실패:", err);
+    }
+  }, [user?.id]);
+
   const syncDiamondToFirestore = useCallback(async (newPoint) => {
     if (!user?.id) return;
+    // 절대값을 delta로 변환 (현재 pointRef 기준)
+    const currentRemote = pointRef.current;
+    const delta = newPoint - currentRemote;
+    if (delta === 0) return;
     try {
-      await updateDoc(doc(db, "users", user.id), { diamond: newPoint });
+      await updateDoc(doc(db, "users", user.id), { diamond: increment(delta) });
     } catch (err) {
       console.error("💎 잔액 동기화 실패:", err);
     }
@@ -155,7 +172,9 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
           if (totalMissedWin > 0) {
             const newPoint = pointRef.current + totalMissedWin;
             updatePointWithAnim(newPoint);
-            syncDiamondToFirestore(newPoint);
+            // ★ [수정] 절대값 대신 delta로 증감 - 관리자 편집과 충돌 방지
+            syncDiamondDelta(totalMissedWin);
+            pointRef.current = newPoint;
           }
         }
 
@@ -192,6 +211,30 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     window.addEventListener("event_history_update", handleHistoryUpdate);
     return () => window.removeEventListener("event_history_update", handleHistoryUpdate);
   }, []);
+
+  // ★ [신규] 유저 본인 다이아 실시간 구독
+  //   관리자가 실시간 배팅 모니터링에서 배팅/잔액을 수정하면
+  //   Firestore users/{userId} 문서의 diamond가 즉시 갱신되고,
+  //   여기서 감지해서 로컬 UI(마이페이지·이벤트섹션)에 바로 반영.
+  //   ※ 무한 루프 방지를 위해 원격 값이 로컬과 다를 때만 업데이트
+  useEffect(() => {
+    if (!user?.id) return;
+    const userDocRef = doc(db, "users", user.id);
+    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+      if (!docSnap.exists()) return;
+      const remoteDiamond = docSnap.data()?.diamond;
+      if (typeof remoteDiamond !== "number") return;
+      // 정산 처리 중이면 스킵 (라운드 종료 중간에 덮어쓰지 않도록)
+      if (isProcessingRef.current) return;
+      // 로컬과 다르면 로컬 상태 갱신
+      if (remoteDiamond !== pointRef.current) {
+        console.log(`💎 원격 다이아 변경 감지: ${pointRef.current} → ${remoteDiamond}`);
+        pointRef.current = remoteDiamond;
+        updatePointWithAnim(remoteDiamond);
+      }
+    });
+    return () => unsubscribe();
+  }, [user?.id, updatePointWithAnim]);
 
   // --- 관리자 과거 회차 조작 실시간 감지 리스너 ---
   useEffect(() => {
@@ -455,7 +498,34 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
 
           const newPoint = pointRef.current + totalWinAmount;
           updatePointWithAnim(newPoint);
-          syncDiamondToFirestore(newPoint);
+          // ★ [수정] 절대값 대신 delta(=totalWinAmount)로 증감 - 관리자 편집과 충돌 방지
+          syncDiamondDelta(totalWinAmount);
+          pointRef.current = newPoint;
+
+          // ★ [신규] 각 event_bets 문서에 win + balanceAtEnd 기록
+          //   자연 종료 정산도 관리자 SponsorshipsView와 같은 데이터 형식으로 남게 됨
+          //   → 관리자 모니터링에서 "진행중"이 아닌 "승리/패배"로 올바르게 표시
+          //   → balanceAtEnd 스냅샷을 기준으로 이후 관리자가 재정산할 때 정확한 기준값이 확보됨
+          //
+          //   중요: 각 베팅의 balanceAtEnd = 그 베팅 정산 이후 유저의 잔액
+          //   여러 개 베팅이면 순차적으로 누적 계산
+          let runningBalance = pointRef.current - totalWinAmount; // 이 라운드 정산 전 잔액
+          const nowIso = new Date().toISOString();
+          for (const bet of activeBets) {
+            if (!bet.docId) continue;
+            const betItems = bet.items || [];
+            const matchedCount = betItems.filter(name => winNames.includes(name)).length;
+            const winAmount = calcWinAmount(betItems, matchedCount, bet.totalCost || 0);
+            runningBalance += winAmount; // 이 베팅 지급액 반영
+            const isWin = winAmount > 0;
+            updateDoc(doc(db, "event_bets", bet.docId), {
+              win: isWin,
+              balanceAtEnd: runningBalance,
+              balanceAtEndAt: nowIso,
+            }).catch(err => {
+              console.error(`event_bets 정산 저장 실패 (${bet.docId}):`, err);
+            });
+          }
           
           setShowResult({ 
             winItems: winObjs.map(v => `${v.icon} ${v.name}`), 
@@ -475,7 +545,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       }, 2600);
 
     }, 3000); 
-  }, [user?.id, updatePointWithAnim, syncDiamondToFirestore]);
+  }, [user?.id, updatePointWithAnim, syncDiamondToFirestore, syncDiamondDelta]);
 
   // --- 시간 동기화 루프 ---
   useEffect(() => {
