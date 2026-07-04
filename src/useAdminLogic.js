@@ -228,15 +228,51 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
+  // ★ [신규] 배팅 수정 + 유저 다이아 실시간 동기화
+  //   - 진행중 게임(win === null): 예전 베팅액과 새 베팅액 차이만큼 유저 잔액 반환
+  //   - 종료된 게임(win === true/false): 예전 순손익 vs 새 순손익 차이만큼 유저 잔액 조정
+  //   - game_history는 건드리지 않음 (실제 결과 그대로 유지 - 다른 유저에게 영향 없도록)
+  //
+  //   호출측(SponsorshipsView)이 diamondDelta와 newWin을 직접 계산해서 전달:
+  //     - isOngoing=true: newWin은 무시되고 win 필드는 null 그대로 유지
+  //     - isOngoing=false: newWin으로 win 필드 갱신 (true 또는 false)
+  const editBetWithSync = async (betId, userId, newAmount, newItems, newWin, diamondDelta, isOngoing) => {
+    try {
+      const batch = writeBatch(db);
+
+      // 1. 베팅 데이터 갱신
+      const betRef = doc(db, "event_bets", betId);
+      const betUpdate = {
+        betAmount: Number(newAmount),
+        amount: Number(newAmount),
+        items: newItems,
+      };
+      // 종료된 게임만 win 상태 갱신 (진행중은 그대로 null)
+      if (!isOngoing) {
+        betUpdate.win = newWin;
+      }
+      batch.update(betRef, betUpdate);
+
+      // 2. 유저 다이아 정산
+      if (diamondDelta !== 0 && userId) {
+        const userRef = doc(db, "users", userId);
+        batch.update(userRef, { diamond: increment(diamondDelta) });
+      }
+
+      await batch.commit();
+      return true;
+    } catch (e) {
+      console.error("배팅 수정 + 잔액 동기화 실패:", e);
+      alert("배팅 수정 실패: " + e.message);
+      return false;
+    }
+  };
+
   const handleSecretRevisions = async (round, oldWinners, newWinners) => {
     try {
-      console.log(`🎯 ${round}회차 재정산 시작:`, { oldWinners, newWinners });
-
       const q = query(collection(db, "event_bets"), where("round", "==", round));
       const snap = await getDocs(q);
       const bets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      console.log(`📊 ${round}회차 베팅 ${bets.length}건 발견`);
 
       const batch = writeBatch(db);
 
@@ -412,10 +448,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  // ★ [신규] 관리자 직접 다이아 입금
-  //   - users/{userId}.diamond 증가
-  //   - finance_history에 adminAction:true 플래그로 저장 → 회원/관리자 구분 표시
-  //   - "회원 요청"이 아닌 관리자 직접 처리이므로 별도 탭에서 볼 수 있음
   const adminAddDiamond = async (userId, amount, reason) => {
     const amt = Number(amount);
     if (!amt || amt <= 0) {
@@ -440,7 +472,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         amount: amt,
         type: "입금",
         approveReason: reason || "관리자 직접 지급",
-        adminAction: true, // ★ 관리자 직접 처리 플래그
+        adminAction: true,
         completedAt: new Date().toISOString(),
       });
 
@@ -451,9 +483,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  // ★ [신규] 관리자 직접 다이아 출금 (회수)
-  //   - 잔액 부족 시 처리 거부
-  //   - finance_history에 adminAction:true 플래그로 저장
   const adminSubDiamond = async (userId, amount, reason) => {
     const amt = Number(amount);
     if (!amt || amt <= 0) {
@@ -483,7 +512,7 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         amount: amt,
         type: "출금",
         approveReason: reason || "관리자 직접 출금",
-        adminAction: true, // ★ 관리자 직접 처리 플래그
+        adminAction: true,
         completedAt: new Date().toISOString(),
       });
 
@@ -494,8 +523,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  // ★ [신규] 완료된 장부의 사유 수정
-  //   - isRejected가 true면 rejectReason, 아니면 approveReason 업데이트
   const updateFinanceHistoryReason = async (historyId, newReason, isRejected) => {
     try {
       const updateData = isRejected
@@ -646,11 +673,12 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     updateUserBankInfo,
     deleteUserBankInfo,
     deleteFinanceHistoryItem,
-    // ★ [신규] 3개 함수 export
     adminAddDiamond,
     adminSubDiamond,
     updateFinanceHistoryReason,
     updateBetData,
+    // ★ [신규] 배팅 수정 + 잔액 동기화 함수
+    editBetWithSync,
     handleSecretRevisions,
     cleanupOldData,
   };

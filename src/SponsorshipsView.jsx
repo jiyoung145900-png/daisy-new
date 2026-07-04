@@ -4,20 +4,25 @@ import { ITEM_CONFIG } from "./EventService";
 import { db } from "./firebase"; 
 import { doc, updateDoc, collection, query, where, orderBy, getDocs, deleteDoc } from "firebase/firestore"; 
 
+// ★ [신규] 배당 계산 공통 유틸 (useEventEngine.js와 완벽히 동일한 규칙)
+//   - 이기면 배팅액 * 2 지급, 지면 0
+//   - 2개 선택 시 2개 모두 맞아야 승리
+function calcWinAmount(items, matchedCount, totalCost) {
+  if (!items || items.length === 0 || !totalCost) return 0;
+  return matchedCount === items.length ? totalCost * 2 : 0;
+}
+
 // =========================================================================
 // --- 실시간 배팅 모니터링 + 이벤트 결과 제어 (통합 뷰) ---
 // -------------------------------------------------------------------------
-// 기존 배치:
-//   - 상단: 배팅 현황판 (아이템별 총액)
-//   - 하단: 전체 배팅 로그
-// 변경 후:
-//   - 상단: 🎯 이벤트 결과 제어 (기존 EventControlView 통째로 이식)
-//   - 하단: 전체 배팅 로그 (기존 유지, 아이템별 총액은 로그에서 다 볼 수 있어 제거)
+// v3 개편:
+//   - 진행중 게임(win===null) 수정 시: 예전 - 새 만큼 유저 잔액 반환
+//   - 종료된 게임 수정 시: 예전 순손익 vs 새 순손익 차이만큼 유저 잔액 정산
+//   - 저장 전 확인창으로 예상 잔액 변동 미리 보여줌
 // =========================================================================
 export const SponsorshipsView = ({
   sponsorships = [],
   currentInfo,
-  // ★ [신규] EventControlView 기능용 props
   targetRound,
   setTargetRound,
   queue = {},
@@ -25,24 +30,26 @@ export const SponsorshipsView = ({
   handleApplyManipulation,
   handleSecretRevisions,
   gameHistory = [],
+  // ★ [신규] 배팅 수정 + 잔액 동기화 함수
+  editBetWithSync,
 }) => {
   const currentRound = currentInfo?.currentRound || currentInfo?.round;
   const currentBets = sponsorships.filter(s => s.round === currentRound);
 
-  // ─────────────── 배팅 로그 편집 상태 (기존 유지) ───────────────
+  // ─────────────── 배팅 로그 편집 상태 ───────────────
   const [editingId, setEditingId] = useState(null); 
   const [editItems, setEditItems] = useState([]);
   const [editAmount, setEditAmount] = useState(0);   
   const [isSaving, setIsSaving] = useState(false);   
 
-  // ─────────────── 이벤트 결과 제어 상태 (EventControlView에서 이식) ───────────────
+  // ─────────────── 이벤트 결과 제어 상태 ───────────────
   const [selectedItems, setSelectedItems] = useState([]);
   const [isControlLoading, setIsControlLoading] = useState(false);
 
   const isLocked = !currentInfo || currentInfo.timeLeft <= 5;
   const isPastRound = targetRound && targetRound < currentRound;
 
-  // ─────────────── 50개 초과 데이터 자동 삭제 (기존 유지) ───────────────
+  // ─────────────── 50개 초과 데이터 자동 삭제 ───────────────
   useEffect(() => {
     if (!currentRound || currentBets.length <= 50) return;
 
@@ -71,7 +78,7 @@ export const SponsorshipsView = ({
     autoCleanOldBets();
   }, [currentBets.length, currentRound]);
 
-  // ─────────────── 한국시간(KST) 포맷 (기존 유지) ───────────────
+  // ─────────────── 한국시간(KST) 포맷 ───────────────
   const formatKoreanTime = (bet) => {
     let timestamp = bet.timestamp || bet.createdAt || bet.betAt || bet.time;
     if (!timestamp) return "-";
@@ -95,7 +102,7 @@ export const SponsorshipsView = ({
     }
   };
 
-  // ─────────────── 배팅 로그 편집 (기존 유지) ───────────────
+  // ─────────────── 편집 시작 ───────────────
   const startEdit = (bet) => {
     setEditingId(bet.id);
     setEditItems(bet.items || []);
@@ -114,7 +121,8 @@ export const SponsorshipsView = ({
     }
   };
 
-  const saveEdit = async (betId) => {
+  // ★ [신규] 저장 로직 재작성 - 잔액 자동 동기화 + 확인창
+  const saveEdit = async (bet) => {
     if (editItems.length === 0) {
       alert("최소 1개 이상의 배팅 항목을 선택해주세요.");
       return;
@@ -123,25 +131,133 @@ export const SponsorshipsView = ({
       alert("올바른 배팅 금액을 입력해주세요.");
       return;
     }
+    if (!editBetWithSync) {
+      alert("수정 함수가 연결되지 않았습니다. (editBetWithSync 없음)");
+      return;
+    }
 
+    const newAmount = Number(editAmount);
+    const originalAmount = bet.betAmount || 0;
+    const originalItems = bet.items || [];
+    // 진행중 여부: win이 null이거나 undefined면 아직 결과 나오지 않음
+    const isOngoing = bet.win === null || bet.win === undefined;
+    const currentDia = bet.currentUserDiamond || 0;
+
+    let diamondDelta = 0;
+    let newWin = null;
+    let stateInfo = "";
+    let winStateInfo = "";
+
+    if (isOngoing) {
+      // ═════════════════════════════════════════════════
+      // 진행중 게임: 예전 베팅액 - 새 베팅액 만큼 유저에게 반환
+      //   예) 1000 → 500 = +500 (유저에게 500 되돌려줌)
+      //   예) 500 → 1000 = -500 (유저에게 500 추가 차감)
+      // ═════════════════════════════════════════════════
+      diamondDelta = originalAmount - newAmount;
+      stateInfo = "🟡 진행중 (승패 미정)";
+      winStateInfo = "결과 대기 중이므로 승패 판정은 변경 없음";
+    } else {
+      // ═════════════════════════════════════════════════
+      // 종료된 게임: winners 조회 후 순손익 재계산
+      // ═════════════════════════════════════════════════
+      const pastGame = gameHistory.find(h => h.round === bet.round);
+      if (!pastGame) {
+        alert(`❌ ${bet.round}회차의 결과 정보를 찾을 수 없어 재정산할 수 없습니다.\n\n(gameHistory 컬렉션에 해당 회차 데이터 없음)`);
+        return;
+      }
+      // game_history에는 winner 필드가 name 배열 형태로 저장됨 (예: ["홀"])
+      const winners = pastGame.winner || [];
+
+      if (winners.length === 0) {
+        alert(`❌ ${bet.round}회차의 우승 아이템 정보가 없어 재정산할 수 없습니다.`);
+        return;
+      }
+
+      // 예전 결과 정산액 (win 상태 기반)
+      const oldMatched = originalItems.filter(n => winners.includes(n)).length;
+      const oldWinAmount = calcWinAmount(originalItems, oldMatched, originalAmount);
+      // draw 케이스는 옛날 규칙 - 순손익 0으로 간주
+      const oldNetProfit = bet.win === "draw" ? 0 : (oldWinAmount - originalAmount);
+
+      // 새 결과 정산액
+      const newMatched = editItems.filter(n => winners.includes(n)).length;
+      const newWinAmount = calcWinAmount(editItems, newMatched, newAmount);
+      const newNetProfit = newWinAmount - newAmount;
+
+      diamondDelta = newNetProfit - oldNetProfit;
+      newWin = newWinAmount > 0;
+
+      const oldStatus = bet.win === true ? "승리" : bet.win === false ? "패배" : bet.win === "draw" ? "무승부" : "미정";
+      const newStatus = newWin ? "승리" : "패배";
+      stateInfo = `🔴 종료됨 (재정산)`;
+      winStateInfo = `승패: ${oldStatus} → ${newStatus}`;
+    }
+
+    // ═════════════════════════════════════════════════
+    // 확인창 - 예상 잔액 변동 미리 보여주기
+    // ═════════════════════════════════════════════════
+    const willChange = diamondDelta !== 0;
+    const newBalance = currentDia + diamondDelta;
+    const willBeNegative = newBalance < 0;
+    const isItemsChanged = JSON.stringify(originalItems) !== JSON.stringify(editItems);
+    const isAmountChanged = originalAmount !== newAmount;
+
+    if (!isItemsChanged && !isAmountChanged) {
+      alert("변경된 내용이 없습니다.");
+      return;
+    }
+
+    const confirmMsg = 
+      `⚠️  배팅 수정 확인\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `👤 유저: ${bet.userId}\n` +
+      `📅 회차: ${bet.round}\n` +
+      `상태: ${stateInfo}\n\n` +
+      `📝 변경 내역:\n` +
+      `  • 아이템: ${originalItems.join(", ") || "없음"} → ${editItems.join(", ")}\n` +
+      `  • 금액:    ${originalAmount.toLocaleString()} → ${newAmount.toLocaleString()} DIA\n` +
+      `  • ${winStateInfo}\n\n` +
+      `💎 유저 잔액 변동:\n` +
+      `  • 현재 잔액:    ${currentDia.toLocaleString()} DIA\n` +
+      `  • 변동:          ${diamondDelta > 0 ? '+' : ''}${diamondDelta.toLocaleString()} DIA\n` +
+      `  • 수정 후 잔액: ${newBalance.toLocaleString()} DIA${willBeNegative ? "  ⚠️ 음수 주의!" : ""}\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━\n` +
+      `이대로 저장하시겠습니까?`;
+
+    if (!window.confirm(confirmMsg)) return;
+
+    // ═════════════════════════════════════════════════
+    // 저장 실행
+    // ═════════════════════════════════════════════════
     try {
       setIsSaving(true);
-      const betRef = doc(db, "event_bets", betId);
-      await updateDoc(betRef, {
-        items: editItems, 
-        betAmount: Number(editAmount),
-        amount: Number(editAmount)
-      });
-      setEditingId(null); 
+      const ok = await editBetWithSync(
+        bet.id,
+        bet.userId,
+        newAmount,
+        editItems,
+        newWin,       // 진행중이면 null (내부에서 무시됨)
+        diamondDelta,
+        isOngoing
+      );
+      if (ok) {
+        if (willChange) {
+          alert(`✅ 배팅 수정 완료\n\n유저 잔액이 ${diamondDelta > 0 ? '+' : ''}${diamondDelta.toLocaleString()} DIA 반영되었습니다.\n(수정 후 잔액: ${newBalance.toLocaleString()} DIA)`);
+        } else {
+          alert("✅ 배팅 정보만 수정되었습니다.\n(잔액 변동 없음)");
+        }
+        setEditingId(null);
+      }
     } catch (error) {
-      console.error("베팅 수정 실패:", error);
-      alert("수정 중 오류가 발생했습니다.");
+      console.error("수정 실패:", error);
+      alert("수정 실패: " + error.message);
     } finally {
       setIsSaving(false);
     }
   };
 
-  // ─────────────── ★ 이벤트 결과 제어 로직 (기존 EventControlView에서 이식) ───────────────
+  // ─────────────── 이벤트 결과 제어 로직 ───────────────
   const handleControlSave = async () => {
     if (!targetRound) return alert("회차를 입력해주세요.");
     if (selectedItems.length === 0) return alert("아이템을 선택해주세요.");
@@ -188,7 +304,7 @@ export const SponsorshipsView = ({
     }
   };
 
-  // 전체 배팅 로그 정렬 (기존 유지)
+  // 전체 배팅 로그 정렬
   const displayBets = [...sponsorships]
     .sort((a, b) => {
       if (b.round !== a.round) return b.round - a.round;
@@ -209,7 +325,7 @@ export const SponsorshipsView = ({
   return (
     <div>
       {/* ═══════════════════════════════════════════════════════════ */}
-      {/* ★ [신규] 상단: 이벤트 결과 제어 (기존 EventControlView 이식) */}
+      {/* 상단: 이벤트 결과 제어 */}
       {/* ═══════════════════════════════════════════════════════════ */}
       <div style={iaStyles.card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -324,13 +440,29 @@ export const SponsorshipsView = ({
       </div>
 
       {/* ═══════════════════════════════════════════════════════════ */}
-      {/* 하단: 전체 배팅 로그 (기존 유지 - 아이템별 총액 현황판은 제거) */}
+      {/* 하단: 전체 배팅 로그 */}
       {/* ═══════════════════════════════════════════════════════════ */}
       <div style={iaStyles.card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
           <h1 style={{ ...iaStyles.bigTabTitle, margin: 0 }}>💎 실시간 배팅 모니터링</h1>
           <span style={{ background: '#ff3b30', color: '#fff', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 'bold' }}>
             🔥 {currentRound || '-'}회차 진행중
+          </span>
+        </div>
+
+        {/* 안내 문구 - 잔액 자동 동기화 로직 안내 */}
+        <div style={{
+          background: 'rgba(255,179,71,0.06)',
+          border: '1px solid rgba(255,179,71,0.2)',
+          borderRadius: 10,
+          padding: '10px 14px',
+          marginBottom: 15,
+          color: '#ffb347',
+          fontSize: 12,
+        }}>
+          💡 <b>수정 안내:</b> 배팅 정보 수정 시 유저 잔액이 자동 반영됩니다.
+          <span style={{ color: '#aaa', marginLeft: 8 }}>
+            (진행중: 차액 반환 / 종료: 승패 재계산 후 순손익 정산)
           </span>
         </div>
 
@@ -358,6 +490,7 @@ export const SponsorshipsView = ({
                 displayBets.map((s, i) => {
                   const isCurrentRound = s.round === currentRound;
                   const isEditing = editingId === s.id;
+                  const isOngoing = s.win === null || s.win === undefined;
 
                   let statusBadge;
                   if (s.win === true) statusBadge = <span style={{ color: '#00ff00', fontWeight: 'bold' }}>승리 👑</span>;
@@ -426,15 +559,28 @@ export const SponsorshipsView = ({
                       <td>
                         {isEditing ? (
                           <div style={{ display: 'flex', gap: '5px' }}>
-                            <button onClick={() => saveEdit(s.id)} disabled={isSaving} style={{ padding: '4px 8px', background: '#4cd137', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold' }}>
-                              {isSaving ? "저장중" : "저장"}
+                            <button onClick={() => saveEdit(s)} disabled={isSaving} style={{ padding: '4px 8px', background: '#4cd137', color: '#fff', border: 'none', borderRadius: '4px', cursor: isSaving ? 'not-allowed' : 'pointer', fontSize: '11px', fontWeight: 'bold', opacity: isSaving ? 0.6 : 1 }}>
+                              {isSaving ? "저장중..." : "저장"}
                             </button>
                             <button onClick={() => setEditingId(null)} disabled={isSaving} style={{ padding: '4px 8px', background: '#555', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
                               취소
                             </button>
                           </div>
                         ) : (
-                          <button onClick={() => startEdit(s)} style={{ padding: '4px 8px', background: '#222', color: '#aaa', border: '1px solid #444', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}>
+                          <button 
+                            onClick={() => startEdit(s)} 
+                            style={{ 
+                              padding: '4px 8px', 
+                              background: isOngoing ? 'rgba(255,179,71,0.15)' : '#222', 
+                              color: isOngoing ? '#ffb347' : '#aaa', 
+                              border: `1px solid ${isOngoing ? 'rgba(255,179,71,0.4)' : '#444'}`, 
+                              borderRadius: '4px', 
+                              cursor: 'pointer', 
+                              fontSize: '11px',
+                              fontWeight: isOngoing ? 'bold' : 'normal',
+                            }}
+                            title={isOngoing ? "진행중 - 수정 시 차액 반환" : "종료 - 수정 시 순손익 재계산"}
+                          >
                             수정
                           </button>
                         )}

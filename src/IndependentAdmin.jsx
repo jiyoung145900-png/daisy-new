@@ -37,12 +37,13 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
     updateUserBankInfo,
     deleteUserBankInfo,
     deleteFinanceHistoryItem,
-    // ★ [신규] 관리자 입출금 + 사유수정
     adminAddDiamond,
     adminSubDiamond,
     updateFinanceHistoryReason,
     handleChangeUserPassword, handleChangeAdminPassword,
     updateBetData, 
+    // ★ [신규] 배팅 수정 + 잔액 동기화 함수
+    editBetWithSync,
     handleSecretRevisions 
   } = useAdminLogic(users, setUsers);
 
@@ -82,8 +83,6 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
         </div>
 
         <div style={{height:1, background:'#333', margin:'10px 0'}}></div>
-
-        {/* ❌ [제거] "🎰 이벤트 결과 제어" 메뉴 → 실시간 배팅 모니터링으로 통합됨 */}
 
         <div onClick={() => handleTabChange("users")} style={tab === "users" ? iaStyles.menuActive : iaStyles.menu}>
            💰 회원 관리
@@ -141,8 +140,6 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
 
         <div style={{flex: 1, overflowY: 'auto', padding: '20px'}}>
           {tab === "requests" && <RequestsView depositRequests={depositRequests} withdrawRequests={withdrawRequests} approveDeposit={approveDeposit} approveWithdraw={approveWithdraw} rejectDeposit={rejectDeposit} rejectWithdraw={rejectWithdraw} />}
-          
-          {/* ❌ [제거] tab === "event" 라우팅 - EventControlView를 SponsorshipsView로 이식했으므로 불필요 */}
 
           {tab === "users" && (
             selectedUserId && selectedUser ? (
@@ -157,7 +154,6 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
                 updateUserBankInfo={updateUserBankInfo}
                 deleteUserBankInfo={deleteUserBankInfo}
                 deleteFinanceHistoryItem={deleteFinanceHistoryItem}
-                // ★ [신규] 3개 함수 전달
                 adminAddDiamond={adminAddDiamond}
                 adminSubDiamond={adminSubDiamond}
                 updateFinanceHistoryReason={updateFinanceHistoryReason}
@@ -177,12 +173,11 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
           {tab === "agents" && <AgentsView agents={agents} setAgents={setAgents} users={users} newAgentName={newAgentName} setNewAgentName={setNewAgentName} newAgentCode={newAgentCode} setNewAgentCode={setNewAgentCode} addAgent={addAgent} deleteAgent={deleteAgent} />}
           {tab === "history" && <HistoryView gameHistory={gameHistory} sponsorships={sponsorships} handleSecretRevisions={handleSecretRevisions} />}
           
-          {/* ★ [수정] SponsorshipsView에 이벤트 결과 제어용 props 전부 전달 */}
+          {/* ★ [수정] SponsorshipsView에 editBetWithSync 추가 전달 */}
           {tab === "sponsorships" && (
             <SponsorshipsView 
               sponsorships={sponsorships} 
               currentInfo={currentInfo} 
-              // ★ [신규 전달] 이벤트 결과 제어 기능을 위한 props
               targetRound={targetRound}
               setTargetRound={setTargetRound}
               queue={queue}
@@ -191,6 +186,8 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
               handleSecretRevisions={handleSecretRevisions}
               gameHistory={gameHistory}
               updateBetData={updateBetData}
+              // ★ [신규] 배팅 수정 시 유저 잔액 자동 동기화
+              editBetWithSync={editBetWithSync}
             />
           )}
         </div>
