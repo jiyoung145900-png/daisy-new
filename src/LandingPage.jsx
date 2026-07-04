@@ -33,7 +33,7 @@ export default function LandingPage({
   users,
   setUsers,
   onLogin,
-  onGuestLogin,
+  onGuestLogin, // 기존 Props 구조 유지를 위해 남겨둠 (사용하지 않음)
   hero,
   videoURL,
   logo,
@@ -320,6 +320,7 @@ export default function LandingPage({
                 />
               )}
 
+              {/* 메인 액션 버튼 */}
               <button
                 style={{
                   ...styles.primaryBtn,
@@ -333,24 +334,12 @@ export default function LandingPage({
                 {mode === "login" ? t.login : t.signup}
               </button>
 
-              {mode === "login" && (
-                <button
-                  style={{
-                    ...styles.guestBtn,
-                    height: "55px",
-                    marginTop: "15px",
-                  }}
-                  onClick={onGuestLogin}
-                >
-                  {t.guest}
-                </button>
-              )}
-
-              <div
+              {/* 게스트 로그인을 대체한 회원가입/로그인 모드 전환 버튼 */}
+              <button
                 style={{
-                  ...styles.authToggle,
-                  fontSize: "15px",
-                  marginTop: "30px",
+                  ...styles.guestBtn,
+                  height: "55px",
+                  marginTop: "15px",
                 }}
                 onClick={() => {
                   setMode(mode === "login" ? "signup" : "login");
@@ -359,8 +348,8 @@ export default function LandingPage({
                   setRef("");
                 }}
               >
-                {mode === "login" ? texts.newHere : texts.haveAccount}
-              </div>
+                {mode === "login" ? t.signup : t.login}
+              </button>
             </div>
           </div>
         )}
