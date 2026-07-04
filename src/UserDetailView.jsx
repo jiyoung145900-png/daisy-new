@@ -5,35 +5,38 @@ import { db } from "./firebase";
 import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
 
 // =========================================================================
-// --- 회원 상세 페이지 (신규) ---
+// --- 회원 상세 페이지 ---
 // -------------------------------------------------------------------------
-// 구성:
-//   1. 상단 뒤로가기 헤더
-//   2. 기본 정보 카드 (다이아, 등급, 신용점수, 비밀번호)
-//   3. 통계 요약 카드 (초대 인원, 누적 입금/출금, 순변동)
-//   4. 계좌 정보 카드 (수정 + 삭제)
-//   5. 완료된 장부 카드 (개별 삭제 + 아이디 검색 없이 이 회원 전용)
+// 개편 사항 (v2):
+//   1. 통계 요약에서 "초대한 인원" 제거
+//   2. 그 자리에 관리자 직접 입/출금 버튼 추가 (금액 + 사유 입력)
+//   3. 기본 정보에서 "내 초대코드" 행 제거
+//   4. 완료된 장부에 탭 추가: 전체 / 회원 요청 / 관리자 직접
+//   5. 각 장부 사유 수정 기능 (Prompt 창)
 // =========================================================================
 export const UserDetailView = ({
-  user,                       // 상세 조회 대상 회원 데이터
-  allUsers = [],              // 초대 인원 계산용
-  onBack,                     // 목록으로 돌아가기
-  updateFullUserInfo,         // 다이아 수정
-  updateUserTier,             // 등급 변경
-  updateUserCreditScore,      // 신용점수 변경
-  handleChangeUserPassword,   // 비밀번호 변경
-  updateUserBankInfo,         // 계좌 정보 수정
-  deleteUserBankInfo,         // 계좌 정보 삭제
-  deleteFinanceHistoryItem,   // 장부 개별 삭제
+  user,
+  allUsers = [],
+  onBack,
+  updateFullUserInfo,
+  updateUserTier,
+  updateUserCreditScore,
+  handleChangeUserPassword,
+  updateUserBankInfo,
+  deleteUserBankInfo,
+  deleteFinanceHistoryItem,
+  // ★ [신규] 3개 함수 추가
+  adminAddDiamond,
+  adminSubDiamond,
+  updateFinanceHistoryReason,
 }) => {
-  // ★ 계좌 정보 편집용 로컬 상태
+  // 계좌 편집 상태
   const [bankEdit, setBankEdit] = useState({
     bank: user?.savedBankInfo?.bank || "",
     account: user?.savedBankInfo?.account || "",
     holder: user?.savedBankInfo?.holder || "",
   });
 
-  // user 정보 바뀌면 계좌 편집 상태도 sync
   useEffect(() => {
     setBankEdit({
       bank: user?.savedBankInfo?.bank || "",
@@ -42,9 +45,7 @@ export const UserDetailView = ({
     });
   }, [user?.id, user?.savedBankInfo?.bank, user?.savedBankInfo?.account, user?.savedBankInfo?.holder]);
 
-  // ★ [실시간] 이 회원의 전체 finance_history 실시간 구독
-  //    - useAdminLogic은 limit(50)만 구독하므로 여기서 별도로 이 유저의 전체 조회
-  //    - onSnapshot으로 삭제/추가가 즉시 반영됨
+  // 실시간 finance_history 구독 (해당 유저 전체)
   const [userFinanceHistory, setUserFinanceHistory] = useState([]);
   const [financeLoading, setFinanceLoading] = useState(true);
 
@@ -67,8 +68,6 @@ export const UserDetailView = ({
       },
       (err) => {
         console.error("finance_history 조회 실패:", err);
-        // where + orderBy 복합 인덱스 필요 시 에러 발생 가능
-        // 콘솔에 안내 링크 나옴 (Firebase Console에서 인덱스 생성)
         setFinanceLoading(false);
       }
     );
@@ -76,17 +75,14 @@ export const UserDetailView = ({
     return () => unsub();
   }, [user?.id]);
 
-  // ★ 통계 계산 (초대 인원 + 누적 입금/출금)
+  // 통계 계산 (초대 인원 제거)
   const stats = useMemo(() => {
-    const referredUsers = allUsers.filter((u) => (u.referral || "") === (user?.refCode || user?.id || ""));
-
     let totalDeposit = 0;
     let totalWithdraw = 0;
     let depositCount = 0;
     let withdrawCount = 0;
 
     for (const f of userFinanceHistory) {
-      // 거절된 건은 제외
       if (f.status === "거절") continue;
       const amt = Number(f.amount || 0);
       if (f.type === "입금") {
@@ -99,16 +95,61 @@ export const UserDetailView = ({
     }
 
     return {
-      referredCount: referredUsers.length,
       totalDeposit,
       totalWithdraw,
       netChange: totalDeposit - totalWithdraw,
       depositCount,
       withdrawCount,
     };
-  }, [allUsers, user, userFinanceHistory]);
+  }, [userFinanceHistory]);
 
-  // ★ 저장 버튼: 다이아 + 신용점수 동시 저장
+  // ★ [신규] 관리자 입금/출금 모달 상태
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminModalType, setAdminModalType] = useState("입금"); // "입금" or "출금"
+  const [modalAmount, setModalAmount] = useState("");
+  const [modalReason, setModalReason] = useState("");
+  const [modalSaving, setModalSaving] = useState(false);
+
+  const openAdminModal = (type) => {
+    setAdminModalType(type);
+    setModalAmount("");
+    setModalReason("");
+    setShowAdminModal(true);
+  };
+
+  const closeAdminModal = () => {
+    if (modalSaving) return;
+    setShowAdminModal(false);
+  };
+
+  const handleAdminSubmit = async () => {
+    const amt = parseInt(modalAmount, 10);
+    if (!amt || amt <= 0) {
+      alert("올바른 금액을 입력해주세요.");
+      return;
+    }
+    if (!modalReason.trim()) {
+      if (!window.confirm("사유를 입력하지 않으셨습니다. 그대로 진행하시겠습니까?")) return;
+    }
+
+    setModalSaving(true);
+    try {
+      let ok = false;
+      if (adminModalType === "입금") {
+        ok = await adminAddDiamond?.(user.id, amt, modalReason.trim());
+      } else {
+        ok = await adminSubDiamond?.(user.id, amt, modalReason.trim());
+      }
+      if (ok) {
+        alert(`✅ 관리자 ${adminModalType} 처리 완료`);
+        setShowAdminModal(false);
+      }
+    } finally {
+      setModalSaving(false);
+    }
+  };
+
+  // 저장 버튼
   const handleSaveInfo = () => {
     const newDiamond = document.getElementById(`ud-diamond-${user.id}`).value;
     const newCredit = document.getElementById(`ud-credit-${user.id}`).value;
@@ -121,13 +162,11 @@ export const UserDetailView = ({
     }
   };
 
-  // ★ 계좌 저장
   const handleSaveBank = async () => {
     const ok = await updateUserBankInfo?.(user.id, bankEdit);
     if (ok) alert("✅ 계좌 정보가 저장되었습니다.");
   };
 
-  // ★ 계좌 삭제
   const handleDeleteBank = async () => {
     const ok = await deleteUserBankInfo?.(user.id);
     if (ok) {
@@ -136,15 +175,29 @@ export const UserDetailView = ({
     }
   };
 
-  // ★ 장부 개별 삭제
   const handleDeleteFinance = async (historyId) => {
     await deleteFinanceHistoryItem?.(historyId);
+  };
+
+  // ★ [신규] 장부 사유 수정
+  const handleEditReason = async (f) => {
+    const isRejected = (f.status === "거절");
+    const currentReason = isRejected ? f.rejectReason : f.approveReason;
+    const label = isRejected ? "거절 사유" : "승인/입출금 사유";
+
+    const newReason = window.prompt(
+      `📝 ${label} 수정\n(취소 누르면 변경 없음)`,
+      currentReason || ""
+    );
+    if (newReason === null) return; // 취소
+
+    const ok = await updateFinanceHistoryReason?.(f.id, newReason.trim(), isRejected);
+    if (ok) alert("✅ 사유가 수정되었습니다.");
   };
 
   const tier = getTierInfo(user?.tier);
   const credit = getCreditInfo(user?.creditScore);
 
-  // 가입일 표시 유틸
   const formatDate = (val) => {
     if (!val) return "-";
     try {
@@ -154,6 +207,22 @@ export const UserDetailView = ({
       return "-";
     }
   };
+
+  // ★ [신규] 완료된 장부 탭
+  const [financeTab, setFinanceTab] = useState("all"); // "all" | "user" | "admin"
+
+  const filteredHistory = useMemo(() => {
+    if (financeTab === "user") {
+      return userFinanceHistory.filter((f) => !f.adminAction);
+    }
+    if (financeTab === "admin") {
+      return userFinanceHistory.filter((f) => !!f.adminAction);
+    }
+    return userFinanceHistory;
+  }, [userFinanceHistory, financeTab]);
+
+  const userReqCount = userFinanceHistory.filter((f) => !f.adminAction).length;
+  const adminReqCount = userFinanceHistory.filter((f) => !!f.adminAction).length;
 
   if (!user) {
     return (
@@ -208,14 +277,10 @@ export const UserDetailView = ({
             <span style={ds.infoLabel}>추천인 코드</span>
             <span style={ds.infoValueSmall}>{user.referral || "-"}</span>
           </div>
-          <div style={ds.infoRow}>
-            <span style={ds.infoLabel}>내 초대코드</span>
-            <span style={{ ...ds.infoValueSmall, color: "#ffb347" }}>{user.refCode || "-"}</span>
-          </div>
+          {/* ❌ [제거] "내 초대코드" 행 - 회원끼리 초대하지 않음 */}
 
           <div style={ds.divider} />
 
-          {/* 편집 가능 항목 */}
           <div style={ds.editField}>
             <label style={ds.editLabel}>💎 다이아몬드</label>
             <input
@@ -279,16 +344,46 @@ export const UserDetailView = ({
           </div>
         </div>
 
-        {/* 통계 요약 카드 */}
+        {/* 통계 요약 카드 (개편) */}
         <div style={{ ...iaStyles.card, marginBottom: 0 }}>
           <h2 style={ds.sectionTitle}>📊 통계 요약</h2>
 
-          <div style={ds.statBig}>
-            <div style={ds.statLabel}>🤝 초대한 인원</div>
-            <div style={{ ...ds.statValue, color: "#ffb347" }}>
-              {stats.referredCount}
-              <span style={ds.statUnit}>명</span>
-            </div>
+          {/* ★ [신규] 관리자 직접 입/출금 버튼 (상단 강조) */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            <button
+              onClick={() => openAdminModal("입금")}
+              style={{
+                flex: 1,
+                background: "linear-gradient(135deg, #34D399, #10b981)",
+                color: "#000",
+                border: "none",
+                padding: "14px 10px",
+                borderRadius: 12,
+                fontWeight: 900,
+                fontSize: 14,
+                cursor: "pointer",
+                boxShadow: "0 3px 10px rgba(52,211,153,0.2)",
+              }}
+            >
+              💵 다이아 입금
+            </button>
+            <button
+              onClick={() => openAdminModal("출금")}
+              style={{
+                flex: 1,
+                background: "linear-gradient(135deg, #FB7185, #ef4444)",
+                color: "#fff",
+                border: "none",
+                padding: "14px 10px",
+                borderRadius: 12,
+                fontWeight: 900,
+                fontSize: 14,
+                cursor: "pointer",
+                boxShadow: "0 3px 10px rgba(251,113,133,0.2)",
+              }}
+            >
+              💸 다이아 출금
+            </button>
           </div>
 
           <div style={ds.divider} />
@@ -329,7 +424,7 @@ export const UserDetailView = ({
         </div>
       </div>
 
-      {/* ────────── 계좌 정보 카드 ────────── */}
+      {/* ────────── 계좌 정보 카드 (기존 유지) ────────── */}
       <div style={iaStyles.card}>
         <div style={ds.sectionHeaderRow}>
           <h2 style={ds.sectionTitle}>🏦 계좌 정보</h2>
@@ -380,40 +475,94 @@ export const UserDetailView = ({
         </div>
       </div>
 
-      {/* ────────── 완료된 장부 카드 ────────── */}
+      {/* ────────── 완료된 장부 카드 (탭 추가 + 사유 수정) ────────── */}
       <div style={iaStyles.card}>
         <div style={ds.sectionHeaderRow}>
           <h2 style={ds.sectionTitle}>📜 완료된 장부</h2>
           <span style={ds.countTag}>총 {userFinanceHistory.length}건</span>
         </div>
 
+        {/* ★ [신규] 탭 (전체 / 회원 요청 / 관리자 직접) */}
+        <div style={ds.tabRow}>
+          <button
+            onClick={() => setFinanceTab("all")}
+            style={financeTab === "all" ? ds.tabActive : ds.tab}
+          >
+            📚 전체 ({userFinanceHistory.length})
+          </button>
+          <button
+            onClick={() => setFinanceTab("user")}
+            style={financeTab === "user" ? ds.tabActive : ds.tab}
+          >
+            🙋 회원 요청 ({userReqCount})
+          </button>
+          <button
+            onClick={() => setFinanceTab("admin")}
+            style={financeTab === "admin" ? ds.tabActive : ds.tab}
+          >
+            🛠️ 관리자 직접 ({adminReqCount})
+          </button>
+        </div>
+
         {financeLoading ? (
           <div style={ds.emptyBox}>불러오는 중...</div>
-        ) : userFinanceHistory.length === 0 ? (
-          <div style={ds.emptyBox}>이 회원의 완료된 장부 기록이 없습니다.</div>
+        ) : filteredHistory.length === 0 ? (
+          <div style={ds.emptyBox}>
+            {financeTab === "all" && "이 회원의 완료된 장부 기록이 없습니다."}
+            {financeTab === "user" && "회원이 직접 요청한 입출금 내역이 없습니다."}
+            {financeTab === "admin" && "관리자가 직접 처리한 입출금 내역이 없습니다."}
+          </div>
         ) : (
           <table style={iaStyles.table}>
             <thead>
               <tr>
-                <th style={{ width: "20%" }}>일시</th>
-                <th style={{ width: "10%" }}>구분</th>
-                <th style={{ width: "15%" }}>금액</th>
-                <th style={{ width: "10%" }}>상태</th>
-                <th style={{ width: "30%" }}>사유</th>
-                <th style={{ width: "15%" }}>관리</th>
+                <th style={{ width: "16%" }}>일시</th>
+                <th style={{ width: "8%" }}>출처</th>
+                <th style={{ width: "8%" }}>구분</th>
+                <th style={{ width: "14%" }}>금액</th>
+                <th style={{ width: "9%" }}>상태</th>
+                <th style={{ width: "25%" }}>사유</th>
+                <th style={{ width: "20%" }}>관리</th>
               </tr>
             </thead>
             <tbody>
-              {userFinanceHistory.map((f) => {
-                // FinanceView 기존 로직 그대로 이식
+              {filteredHistory.map((f) => {
                 const displayStatus = f.status === "pending" ? "완료" : (f.status || "완료");
                 const reasonText = displayStatus === "거절" ? f.rejectReason : f.approveReason;
                 const isRejected = displayStatus === "거절";
+                const isAdmin = !!f.adminAction;
 
                 return (
                   <tr key={f.id} style={{ borderBottom: "1px solid #222" }}>
                     <td style={{ color: "#888", fontSize: 12 }}>
                       {f.completedAt ? new Date(f.completedAt).toLocaleString() : "-"}
+                    </td>
+                    <td>
+                      {isAdmin ? (
+                        <span style={{
+                          background: "rgba(88,86,214,0.15)",
+                          color: "#8b88ff",
+                          padding: "3px 7px",
+                          borderRadius: 5,
+                          fontSize: 10,
+                          fontWeight: "bold",
+                          border: "1px solid rgba(88,86,214,0.3)",
+                        }}>
+                          🛠️ 관리자
+                        </span>
+                      ) : (
+                        <span style={{
+                          background: "rgba(255,179,71,0.1)",
+                          color: "#ffb347",
+                          padding: "3px 7px",
+                          borderRadius: 5,
+                          fontSize: 10,
+                          fontWeight: "bold",
+                          border: "1px solid rgba(255,179,71,0.3)",
+                        }}>
+                          🙋 회원
+                        </span>
+                      )}
                     </td>
                     <td>
                       <span
@@ -455,12 +604,21 @@ export const UserDetailView = ({
                       {reasonText || "-"}
                     </td>
                     <td>
-                      <button
-                        onClick={() => handleDeleteFinance(f.id)}
-                        style={ds.rowDelBtn}
-                      >
-                        🗑️ 삭제
-                      </button>
+                      <div style={{ display: "flex", gap: 5 }}>
+                        {/* ★ [신규] 사유 수정 버튼 */}
+                        <button
+                          onClick={() => handleEditReason(f)}
+                          style={ds.rowEditBtn}
+                        >
+                          📝 사유
+                        </button>
+                        <button
+                          onClick={() => handleDeleteFinance(f.id)}
+                          style={ds.rowDelBtn}
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -469,84 +627,147 @@ export const UserDetailView = ({
           </table>
         )}
       </div>
+
+      {/* ★ [신규] 관리자 직접 입/출금 모달 */}
+      {showAdminModal && (
+        <div style={ds.modalOverlay} onClick={closeAdminModal}>
+          <div style={ds.modalCard} onClick={(e) => e.stopPropagation()}>
+            <h3 style={{
+              margin: 0,
+              marginBottom: 20,
+              color: adminModalType === "입금" ? "#34D399" : "#FB7185",
+              fontSize: 20,
+              fontWeight: 900,
+            }}>
+              {adminModalType === "입금" ? "💵 다이아 직접 입금" : "💸 다이아 직접 출금"}
+            </h3>
+
+            <div style={ds.modalInfoRow}>
+              <span style={ds.modalLabel}>회원 아이디</span>
+              <span style={{ color: "#fff", fontWeight: 800 }}>{user.id}</span>
+            </div>
+            <div style={ds.modalInfoRow}>
+              <span style={ds.modalLabel}>현재 다이아</span>
+              <span style={{ color: "#ffb347", fontWeight: 800 }}>
+                💎 {(user.diamond ?? 0).toLocaleString()}
+              </span>
+            </div>
+
+            <div style={{ height: 15 }} />
+
+            <label style={ds.editLabel}>💰 금액</label>
+            <input
+              type="number"
+              value={modalAmount}
+              onChange={(e) => setModalAmount(e.target.value)}
+              placeholder="입력 예: 10000"
+              autoFocus
+              style={{ ...iaStyles.giantInput, textAlign: "left", marginBottom: 15 }}
+            />
+
+            <label style={ds.editLabel}>📝 사유</label>
+            <textarea
+              value={modalReason}
+              onChange={(e) => setModalReason(e.target.value)}
+              placeholder="예: 이벤트 보상, 오류 정정, 프로모션 등"
+              rows={3}
+              style={{
+                ...iaStyles.giantInput,
+                textAlign: "left",
+                marginBottom: 20,
+                resize: "vertical",
+                fontFamily: "inherit",
+              }}
+            />
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={closeAdminModal}
+                disabled={modalSaving}
+                style={{
+                  flex: 1,
+                  padding: "13px",
+                  background: "#333",
+                  color: "#aaa",
+                  border: "none",
+                  borderRadius: 10,
+                  fontWeight: 700,
+                  cursor: modalSaving ? "not-allowed" : "pointer",
+                }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleAdminSubmit}
+                disabled={modalSaving}
+                style={{
+                  flex: 2,
+                  padding: "13px",
+                  background: adminModalType === "입금"
+                    ? "linear-gradient(135deg, #34D399, #10b981)"
+                    : "linear-gradient(135deg, #FB7185, #ef4444)",
+                  color: adminModalType === "입금" ? "#000" : "#fff",
+                  border: "none",
+                  borderRadius: 10,
+                  fontWeight: 900,
+                  cursor: modalSaving ? "not-allowed" : "pointer",
+                  opacity: modalSaving ? 0.5 : 1,
+                }}
+              >
+                {modalSaving ? "⏳ 처리 중..." : `✅ ${adminModalType} 확정`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-// ─────────────────────────────────────────────────────────
-// 상세 페이지 전용 로컬 스타일 (iaStyles 로 부족한 것만)
-// ─────────────────────────────────────────────────────────
+// 로컬 스타일
 const ds = {
   pageHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: 20,
-    padding: "15px 25px",
-    background: "#111",
-    borderRadius: 16,
-    marginBottom: 25,
-    border: "1px solid #222",
+    display: "flex", alignItems: "center", gap: 20,
+    padding: "15px 25px", background: "#111",
+    borderRadius: 16, marginBottom: 25, border: "1px solid #222",
   },
   backBtn: {
-    background: "#1c1c1c",
-    color: "#ffb347",
-    border: "1px solid #333",
-    padding: "10px 16px",
-    borderRadius: 10,
-    cursor: "pointer",
-    fontWeight: 800,
-    fontSize: 14,
+    background: "#1c1c1c", color: "#ffb347", border: "1px solid #333",
+    padding: "10px 16px", borderRadius: 10, cursor: "pointer",
+    fontWeight: 800, fontSize: 14,
   },
   pageTitle: {
-    flex: 1,
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    fontSize: 20,
-    fontWeight: 900,
-    color: "#fff",
+    flex: 1, display: "flex", alignItems: "center", gap: 10,
+    fontSize: 20, fontWeight: 900, color: "#fff",
   },
   pageTitleIcon: { fontSize: 24 },
   pageTitleId: { color: "#ffb347" },
   headerTierBadge: {
-    fontSize: 11,
-    color: "#000",
-    padding: "3px 10px",
-    borderRadius: 5,
-    fontWeight: 900,
-    marginLeft: 5,
+    fontSize: 11, color: "#000",
+    padding: "3px 10px", borderRadius: 5,
+    fontWeight: 900, marginLeft: 5,
   },
   headerRight: { display: "flex", alignItems: "center" },
   onlineDot: { color: "#0f0", fontSize: 12, fontWeight: 800 },
   offlineDot: { color: "#555", fontSize: 12, fontWeight: 800 },
 
   gridTwoCol: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 25,
-    marginBottom: 25,
+    display: "grid", gridTemplateColumns: "1fr 1fr",
+    gap: 25, marginBottom: 25,
   },
 
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: 900,
-    color: "#fff",
-    marginTop: 0,
-    marginBottom: 20,
+    fontSize: 18, fontWeight: 900, color: "#fff",
+    marginTop: 0, marginBottom: 20,
   },
   sectionHeaderRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
+    display: "flex", justifyContent: "space-between", alignItems: "center",
     marginBottom: 20,
   },
 
   infoRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "10px 0",
-    borderBottom: "1px solid rgba(255,255,255,0.05)",
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)",
   },
   infoLabel: { color: "#888", fontSize: 13, fontWeight: 600 },
   infoValueId: { color: "#ffb347", fontSize: 16, fontWeight: 900 },
@@ -556,57 +777,32 @@ const ds = {
 
   editField: { marginBottom: 15 },
   editLabel: {
-    display: "block",
-    color: "#888",
-    fontSize: 12,
-    marginBottom: 6,
-    fontWeight: 700,
+    display: "block", color: "#888", fontSize: 12,
+    marginBottom: 6, fontWeight: 700,
   },
 
   btnGroup: { display: "flex", gap: 10, marginTop: 15 },
   primaryBtn: {
-    flex: 1,
-    background: "#ffb347",
-    color: "#000",
-    border: "none",
-    padding: "13px 15px",
-    borderRadius: 10,
-    fontWeight: 900,
-    fontSize: 14,
-    cursor: "pointer",
+    flex: 1, background: "#ffb347", color: "#000",
+    border: "none", padding: "13px 15px",
+    borderRadius: 10, fontWeight: 900, fontSize: 14, cursor: "pointer",
   },
   dangerBtn: {
-    flex: 1,
-    background: "#ef4444",
-    color: "#fff",
-    border: "none",
-    padding: "13px 15px",
-    borderRadius: 10,
-    fontWeight: 900,
-    fontSize: 14,
-    cursor: "pointer",
+    flex: 1, background: "#ef4444", color: "#fff",
+    border: "none", padding: "13px 15px",
+    borderRadius: 10, fontWeight: 900, fontSize: 14, cursor: "pointer",
   },
 
-  statBig: {
-    textAlign: "center",
-    padding: "10px 0",
-  },
   statLabel: { color: "#888", fontSize: 12, fontWeight: 700 },
   statValue: {
-    fontSize: 32,
-    fontWeight: 900,
-    marginTop: 8,
-    letterSpacing: 0.5,
+    fontSize: 32, fontWeight: 900,
+    marginTop: 8, letterSpacing: 0.5,
   },
-  statUnit: { fontSize: 14, marginLeft: 4, color: "#888" },
   statRow: { display: "flex", gap: 15 },
   statSmall: {
-    flex: 1,
-    textAlign: "center",
-    padding: "12px 8px",
-    background: "#1a1a1a",
-    borderRadius: 12,
-    border: "1px solid #2a2a2a",
+    flex: 1, textAlign: "center",
+    padding: "12px 8px", background: "#1a1a1a",
+    borderRadius: 12, border: "1px solid #2a2a2a",
   },
   statSubText: { fontSize: 11, color: "#666", marginTop: 4 },
   netBox: {
@@ -618,41 +814,77 @@ const ds = {
   },
 
   tagGreen: {
-    fontSize: 11,
-    color: "#34D399",
+    fontSize: 11, color: "#34D399",
     background: "rgba(52,211,153,0.1)",
     border: "1px solid rgba(52,211,153,0.3)",
-    padding: "4px 10px",
-    borderRadius: 8,
-    fontWeight: 700,
+    padding: "4px 10px", borderRadius: 8, fontWeight: 700,
   },
   countTag: {
-    fontSize: 12,
-    color: "#ffb347",
+    fontSize: 12, color: "#ffb347",
     background: "rgba(255,179,71,0.1)",
     border: "1px solid rgba(255,179,71,0.3)",
-    padding: "4px 10px",
-    borderRadius: 8,
-    fontWeight: 700,
+    padding: "4px 10px", borderRadius: 8, fontWeight: 700,
   },
 
   emptyBox: {
-    padding: 40,
-    textAlign: "center",
-    color: "#555",
-    fontSize: 13,
-    background: "#0a0a0a",
-    borderRadius: 10,
+    padding: 40, textAlign: "center",
+    color: "#555", fontSize: 13,
+    background: "#0a0a0a", borderRadius: 10,
   },
 
-  rowDelBtn: {
-    background: "#2a1a1a",
-    color: "#ef4444",
-    border: "1px solid rgba(239,68,68,0.3)",
-    padding: "6px 12px",
-    borderRadius: 6,
-    cursor: "pointer",
-    fontSize: 12,
-    fontWeight: 700,
+  // 탭 스타일
+  tabRow: {
+    display: "flex", gap: 8, marginBottom: 20,
+    borderBottom: "1px solid #222", paddingBottom: 0,
   },
+  tab: {
+    background: "transparent", color: "#888",
+    border: "none", padding: "12px 20px",
+    fontSize: 13, fontWeight: 700, cursor: "pointer",
+    borderBottom: "3px solid transparent",
+    transition: "all 0.15s",
+  },
+  tabActive: {
+    background: "transparent", color: "#ffb347",
+    border: "none", padding: "12px 20px",
+    fontSize: 13, fontWeight: 900, cursor: "pointer",
+    borderBottom: "3px solid #ffb347",
+  },
+
+  rowEditBtn: {
+    background: "#1a1a2a",
+    color: "#8b88ff",
+    border: "1px solid rgba(139,136,255,0.3)",
+    padding: "6px 10px", borderRadius: 6,
+    cursor: "pointer", fontSize: 11, fontWeight: 700,
+  },
+  rowDelBtn: {
+    background: "#2a1a1a", color: "#ef4444",
+    border: "1px solid rgba(239,68,68,0.3)",
+    padding: "6px 10px", borderRadius: 6,
+    cursor: "pointer", fontSize: 12, fontWeight: 700,
+  },
+
+  // 모달
+  modalOverlay: {
+    position: "fixed", inset: 0,
+    background: "rgba(0,0,0,0.85)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    zIndex: 30000, padding: 20,
+    backdropFilter: "blur(8px)",
+  },
+  modalCard: {
+    background: "#161616",
+    padding: 30,
+    borderRadius: 20,
+    width: "100%", maxWidth: 480,
+    border: "1px solid #333",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+  },
+  modalInfoRow: {
+    display: "flex", justifyContent: "space-between",
+    padding: "6px 0",
+    fontSize: 13,
+  },
+  modalLabel: { color: "#888", fontWeight: 700 },
 };

@@ -4,19 +4,15 @@ import { useAdminLogic } from "./useAdminLogic.js";
 import { doc, updateDoc } from "firebase/firestore"; 
 import { db } from "./firebase"; 
 import { 
-  RequestsView, EventControlView, UsersView, 
+  RequestsView, UsersView, 
   AgentsView, ReferralsView, HistoryView, SponsorshipsView,
-  UserDetailView   // ★ [신규] 회원 상세 페이지
+  UserDetailView
 } from "./AdminViews.jsx";
 
 export default function IndependentAdmin({ users, setUsers, onExit }) {
   const [tab, setTab] = useState("requests");
-  
   const [isExitPressed, setIsExitPressed] = useState(false);
 
-  // ★ [신규] 회원 상세 페이지에서 조회 중인 회원 ID
-  //   - null이면 회원 목록(UsersView) 표시
-  //   - 특정 ID이면 UserDetailView 표시
   const [selectedUserId, setSelectedUserId] = useState(null);
 
   const handleHideUser = async (userId) => {
@@ -38,10 +34,13 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
     agents, setAgents, newAgentName, setNewAgentName, newAgentCode, setNewAgentCode, addAgent, deleteAgent,
     handleApplyManipulation, updateFullUserInfo, updateUserTier,
     updateUserCreditScore,
-    // ★ [신규] 3개 함수 받기
     updateUserBankInfo,
     deleteUserBankInfo,
     deleteFinanceHistoryItem,
+    // ★ [신규] 관리자 입출금 + 사유수정
+    adminAddDiamond,
+    adminSubDiamond,
+    updateFinanceHistoryReason,
     handleChangeUserPassword, handleChangeAdminPassword,
     updateBetData, 
     handleSecretRevisions 
@@ -56,13 +55,11 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
     }
   };
 
-  // ★ [신규] 사이드바 탭 클릭 시 상세 페이지 자동 종료
   const handleTabChange = (newTab) => {
-    setSelectedUserId(null); // 다른 메뉴 이동 시 상세 페이지 리셋
+    setSelectedUserId(null);
     setTab(newTab);
   };
 
-  // ★ [신규] 상세 페이지 대상 회원 찾기
   const selectedUser = useMemo(() => {
     if (!selectedUserId) return null;
     return users.find(u => u.id === selectedUserId) || null;
@@ -80,23 +77,17 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
            <div style={{color:'#00ff00', fontSize:22, fontWeight:'bold'}}>● {activeUsers?.length || 0}명</div>
         </div>
 
-        {/* 입/출금 관리(심사중) - 유지 */}
         <div onClick={() => handleTabChange("requests")} style={tab === "requests" ? iaStyles.menuActive : iaStyles.menu}>
            🔔 입/출금 관리 <span style={iaStyles.countTag}>{depositRequests?.length + withdrawRequests?.length || 0}</span>
         </div>
 
-        {/* ❌ [제거] "📜 완료된 장부" 메뉴 → 회원 관리 상세 페이지로 통합 */}
-
         <div style={{height:1, background:'#333', margin:'10px 0'}}></div>
-        
-        <div onClick={() => handleTabChange("event")} style={tab === "event" ? iaStyles.menuActive : iaStyles.menu}>
-           🎰 이벤트 결과 제어
-        </div>
+
+        {/* ❌ [제거] "🎰 이벤트 결과 제어" 메뉴 → 실시간 배팅 모니터링으로 통합됨 */}
+
         <div onClick={() => handleTabChange("users")} style={tab === "users" ? iaStyles.menuActive : iaStyles.menu}>
            💰 회원 관리
         </div>
-
-        {/* ❌ [제거] "🏦 회원 계좌 관리" 메뉴 → 회원 관리 상세 페이지로 통합 */}
 
         <div onClick={() => handleTabChange("referrals")} style={tab === "referrals" ? iaStyles.menuActive : iaStyles.menu}>
            🤝 추천인 관리
@@ -151,22 +142,8 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
         <div style={{flex: 1, overflowY: 'auto', padding: '20px'}}>
           {tab === "requests" && <RequestsView depositRequests={depositRequests} withdrawRequests={withdrawRequests} approveDeposit={approveDeposit} approveWithdraw={approveWithdraw} rejectDeposit={rejectDeposit} rejectWithdraw={rejectWithdraw} />}
           
-          {/* ❌ [제거] finance 탭 - 완료된 장부는 상세 페이지로 이동 */}
-          
-          {tab === "event" && (
-            <EventControlView 
-              currentInfo={currentInfo} 
-              targetRound={targetRound} 
-              setTargetRound={setTargetRound} 
-              queue={queue} 
-              deleteQueue={deleteQueue} 
-              handleApplyManipulation={handleApplyManipulation} 
-              handleSecretRevisions={handleSecretRevisions} 
-              gameHistory={gameHistory} 
-            />
-          )}
+          {/* ❌ [제거] tab === "event" 라우팅 - EventControlView를 SponsorshipsView로 이식했으므로 불필요 */}
 
-          {/* ★ [핵심 라우팅] 회원 관리 - selectedUserId 유무에 따라 목록 or 상세 */}
           {tab === "users" && (
             selectedUserId && selectedUser ? (
               <UserDetailView 
@@ -180,6 +157,10 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
                 updateUserBankInfo={updateUserBankInfo}
                 deleteUserBankInfo={deleteUserBankInfo}
                 deleteFinanceHistoryItem={deleteFinanceHistoryItem}
+                // ★ [신규] 3개 함수 전달
+                adminAddDiamond={adminAddDiamond}
+                adminSubDiamond={adminSubDiamond}
+                updateFinanceHistoryReason={updateFinanceHistoryReason}
               />
             ) : (
               <UsersView 
@@ -189,15 +170,29 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
             )
           )}
 
-          {/* ❌ [제거] accounts 탭 - 회원 계좌 관리는 상세 페이지로 이동 */}
-
           {tab === "referrals" && (
             <ReferralsView users={users} agents={agents} />
           )}
 
           {tab === "agents" && <AgentsView agents={agents} setAgents={setAgents} users={users} newAgentName={newAgentName} setNewAgentName={setNewAgentName} newAgentCode={newAgentCode} setNewAgentCode={setNewAgentCode} addAgent={addAgent} deleteAgent={deleteAgent} />}
           {tab === "history" && <HistoryView gameHistory={gameHistory} sponsorships={sponsorships} handleSecretRevisions={handleSecretRevisions} />}
-          {tab === "sponsorships" && <SponsorshipsView sponsorships={sponsorships} currentInfo={currentInfo} updateBetData={updateBetData} />}
+          
+          {/* ★ [수정] SponsorshipsView에 이벤트 결과 제어용 props 전부 전달 */}
+          {tab === "sponsorships" && (
+            <SponsorshipsView 
+              sponsorships={sponsorships} 
+              currentInfo={currentInfo} 
+              // ★ [신규 전달] 이벤트 결과 제어 기능을 위한 props
+              targetRound={targetRound}
+              setTargetRound={setTargetRound}
+              queue={queue}
+              deleteQueue={deleteQueue}
+              handleApplyManipulation={handleApplyManipulation}
+              handleSecretRevisions={handleSecretRevisions}
+              gameHistory={gameHistory}
+              updateBetData={updateBetData}
+            />
+          )}
         </div>
       </main>
     </div>

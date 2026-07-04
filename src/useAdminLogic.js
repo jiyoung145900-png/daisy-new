@@ -12,9 +12,6 @@ const CONFIG = {
   START_TIME: new Date("2024-01-01T00:00:00Z").getTime(),
 };
 
-/* ============================================================
- * 배당 계산 공통 유틸 (useEventEngine.js와 동일한 규칙)
- * ============================================================ */
 function calcWinAmount(items, matchedCount, totalCost) {
   if (!items || items.length === 0 || !totalCost) return 0;
   const isFullMatch = matchedCount === items.length;
@@ -264,11 +261,9 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         if (delta !== 0 && bet.userId) {
           const userRef = doc(db, "users", bet.userId);
           batch.update(userRef, { diamond: increment(delta) });
-          console.log(`💎 ${bet.userId}: ${delta > 0 ? '+' : ''}${delta} 다이아`);
         }
 
         const isWin = newWinAmount > 0;
-
         const betRef = doc(db, "event_bets", bet.id);
         batch.update(betRef, { win: isWin });
       }
@@ -282,8 +277,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       }, { merge: true });
 
       await batch.commit();
-      
-      console.log(`✅ ${round}회차 재정산 완료! 유저들에게 실시간 반영됨`);
       return true;
     } catch (e) {
       console.error("❌ 재정산 처리 중 오류:", e);
@@ -293,16 +286,12 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
 
   const cleanupOldData = async (showAlert = false) => {
     try {
-      console.log("🗑️ 오래된 데이터 정리 시작...");
-
       const BATCH_SIZE = 400;
       let deletedBets = 0;
       let deletedHist = 0;
 
       const betsSnap = await getDocs(query(collection(db, "event_bets"), orderBy("round", "desc")));
       const betsToDelete = betsSnap.size > 50 ? betsSnap.docs.slice(50) : [];
-      
-      console.log(`📊 event_bets: 전체 ${betsSnap.size}개, 삭제 대상 ${betsToDelete.length}개`);
 
       for (let i = 0; i < betsToDelete.length; i += BATCH_SIZE) {
         const batch = writeBatch(db);
@@ -310,13 +299,10 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         chunk.forEach(d => batch.delete(d.ref));
         await batch.commit();
         deletedBets += chunk.length;
-        console.log(`  → event_bets: ${deletedBets}/${betsToDelete.length} 삭제 완료`);
       }
 
       const histSnap = await getDocs(query(collection(db, "game_history"), orderBy("round", "desc")));
       const histToDelete = histSnap.size > 50 ? histSnap.docs.slice(50) : [];
-      
-      console.log(`📊 game_history: 전체 ${histSnap.size}개, 삭제 대상 ${histToDelete.length}개`);
 
       for (let i = 0; i < histToDelete.length; i += BATCH_SIZE) {
         const batch = writeBatch(db);
@@ -324,26 +310,21 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         chunk.forEach(d => batch.delete(d.ref));
         await batch.commit();
         deletedHist += chunk.length;
-        console.log(`  → game_history: ${deletedHist}/${histToDelete.length} 삭제 완료`);
       }
 
       const totalDeleted = deletedBets + deletedHist;
-      console.log(`✅ 정리 완료! 총 ${totalDeleted}개 문서 삭제됨`);
 
       if (showAlert) {
         if (totalDeleted > 0) {
-          alert(`✅ 정리 완료!\n\n삭제된 문서:\n- 베팅 기록: ${deletedBets}개\n- 회차 기록: ${deletedHist}개\n\n총 ${totalDeleted}개 삭제됨`);
+          alert(`✅ 정리 완료!\n\n삭제된 문서:\n- 베팅 기록: ${deletedBets}개\n- 회차 기록: ${deletedHist}개`);
         } else {
-          alert("💡 삭제할 오래된 데이터가 없습니다.\n이미 최근 50개만 유지되고 있습니다.");
+          alert("💡 삭제할 오래된 데이터가 없습니다.");
         }
       }
-      
       return { deletedBets, deletedHist, totalDeleted };
     } catch (e) {
       console.error("❌ 자동 삭제 실패:", e);
-      if (showAlert) {
-        alert(`❌ 정리 중 오류 발생: ${e.message}\n\n다시 시도해주세요.`);
-      }
+      if (showAlert) alert(`❌ 정리 중 오류 발생: ${e.message}`);
       throw e;
     }
   };
@@ -385,10 +366,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     if (pw) await updateDoc(doc(db, "users", userId), { password: pw });
   };
 
-  // ★ [신규] 회원 계좌 정보 수정
-  //   - users/{userId}.savedBankInfo 필드에 저장
-  //   - 은행명, 계좌번호, 예금주 세 값 모두 검증
-  //   - 성공 시 true 반환
   const updateUserBankInfo = async (userId, bankInfo) => {
     if (!bankInfo?.bank?.trim() || !bankInfo?.account?.trim() || !bankInfo?.holder?.trim()) {
       alert("은행명, 계좌번호, 예금주를 모두 입력해주세요.");
@@ -410,9 +387,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  // ★ [신규] 회원 계좌 정보 삭제
-  //   - savedBankInfo를 null로 세팅 (필드 자체 유지, 값만 비움)
-  //   - 확인창으로 실수 방지
   const deleteUserBankInfo = async (userId) => {
     if (!window.confirm("이 회원의 저장된 계좌 정보를 삭제하시겠습니까?")) return false;
     try {
@@ -427,9 +401,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     }
   };
 
-  // ★ [신규] 완료된 장부 개별 삭제
-  //   - finance_history/{historyId} 문서 영구 삭제
-  //   - 확인창으로 실수 방지 (복구 불가 알림)
   const deleteFinanceHistoryItem = async (historyId) => {
     if (!window.confirm("이 장부 기록을 영구 삭제하시겠습니까?\n\n⚠️ 복구할 수 없습니다.")) return false;
     try {
@@ -437,6 +408,103 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       return true;
     } catch (e) {
       alert("장부 삭제 실패: " + e.message);
+      return false;
+    }
+  };
+
+  // ★ [신규] 관리자 직접 다이아 입금
+  //   - users/{userId}.diamond 증가
+  //   - finance_history에 adminAction:true 플래그로 저장 → 회원/관리자 구분 표시
+  //   - "회원 요청"이 아닌 관리자 직접 처리이므로 별도 탭에서 볼 수 있음
+  const adminAddDiamond = async (userId, amount, reason) => {
+    const amt = Number(amount);
+    if (!amt || amt <= 0) {
+      alert("올바른 금액을 입력해주세요.");
+      return false;
+    }
+    try {
+      const userRef = doc(db, "users", userId);
+      const snap = await getDoc(userRef);
+      if (!snap.exists()) {
+        alert("회원 정보를 찾을 수 없습니다.");
+        return false;
+      }
+      const currentDia = snap.data()?.diamond || 0;
+      const newDia = currentDia + amt;
+
+      await updateDoc(userRef, { diamond: newDia });
+
+      await addDoc(collection(db, "finance_history"), {
+        userId,
+        userName: snap.data()?.name || userId,
+        amount: amt,
+        type: "입금",
+        approveReason: reason || "관리자 직접 지급",
+        adminAction: true, // ★ 관리자 직접 처리 플래그
+        completedAt: new Date().toISOString(),
+      });
+
+      return true;
+    } catch (e) {
+      alert("관리자 입금 실패: " + e.message);
+      return false;
+    }
+  };
+
+  // ★ [신규] 관리자 직접 다이아 출금 (회수)
+  //   - 잔액 부족 시 처리 거부
+  //   - finance_history에 adminAction:true 플래그로 저장
+  const adminSubDiamond = async (userId, amount, reason) => {
+    const amt = Number(amount);
+    if (!amt || amt <= 0) {
+      alert("올바른 금액을 입력해주세요.");
+      return false;
+    }
+    try {
+      const userRef = doc(db, "users", userId);
+      const snap = await getDoc(userRef);
+      if (!snap.exists()) {
+        alert("회원 정보를 찾을 수 없습니다.");
+        return false;
+      }
+      const currentDia = snap.data()?.diamond || 0;
+
+      if (currentDia < amt) {
+        alert(`잔액 부족\n\n현재 보유: ${currentDia.toLocaleString()} DIA\n출금 요청: ${amt.toLocaleString()} DIA`);
+        return false;
+      }
+
+      const newDia = currentDia - amt;
+      await updateDoc(userRef, { diamond: newDia });
+
+      await addDoc(collection(db, "finance_history"), {
+        userId,
+        userName: snap.data()?.name || userId,
+        amount: amt,
+        type: "출금",
+        approveReason: reason || "관리자 직접 출금",
+        adminAction: true, // ★ 관리자 직접 처리 플래그
+        completedAt: new Date().toISOString(),
+      });
+
+      return true;
+    } catch (e) {
+      alert("관리자 출금 실패: " + e.message);
+      return false;
+    }
+  };
+
+  // ★ [신규] 완료된 장부의 사유 수정
+  //   - isRejected가 true면 rejectReason, 아니면 approveReason 업데이트
+  const updateFinanceHistoryReason = async (historyId, newReason, isRejected) => {
+    try {
+      const updateData = isRejected
+        ? { rejectReason: newReason }
+        : { approveReason: newReason };
+      await updateDoc(doc(db, "finance_history", historyId), updateData);
+      return true;
+    } catch (e) {
+      alert("사유 수정 실패: " + e.message);
       return false;
     }
   };
@@ -544,11 +612,8 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
           updatedAt: new Date().toISOString()
         }
       );
-
-      console.log(`✅ ${targetRound}회차 결과 조작 저장됨:`, winners);
       
       return { success: true, round: targetRound, winners };
-
     } catch (error) {
       console.error("❌ 이벤트 조작 저장 실패:", error);
       throw error;
@@ -558,7 +623,6 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   const deleteQueue = async (round) => {
     try {
       await deleteDoc(doc(db, "event_manipulation", String(round)));
-      console.log(`✅ ${round}회차 예약 삭제됨`);
     } catch (error) {
       console.error("❌ 예약 삭제 실패:", error);
       throw error;
@@ -579,10 +643,13 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     updateUserTier,
     updateUserCreditScore,
     handleChangeUserPassword,
-    // ★ [신규] 3개 함수 export
     updateUserBankInfo,
     deleteUserBankInfo,
     deleteFinanceHistoryItem,
+    // ★ [신규] 3개 함수 export
+    adminAddDiamond,
+    adminSubDiamond,
+    updateFinanceHistoryReason,
     updateBetData,
     handleSecretRevisions,
     cleanupOldData,
