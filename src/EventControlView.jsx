@@ -146,7 +146,10 @@ export const EventControlView = ({
         {Object.entries(queue).length === 0 ? (
           <div style={{ color: "#555", textAlign: "center", padding: "20px" }}>예약된 회차가 없습니다.</div>
         ) : (
-          Object.entries(queue).map(([k, v]) => (
+          Object.entries(queue)
+            .sort((a, b) => Number(b[0]) - Number(a[0])) // 최신 회차(숫자가 큰 순서)가 위로 오게 정렬
+            .slice(0, 5) // 상위 5개만 자르기
+            .map(([k, v]) => (
             <div key={k} style={{ ...iaStyles.queueRow, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <b style={{ color: "#ffb347" }}>{k}회 예약</b>
