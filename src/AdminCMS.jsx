@@ -31,9 +31,10 @@ export default function AdminCMS({
   const regions = Object.keys(regionData);
   const videoCategories = ["한국", "일본", "중국", "동남아", "서양"];
 
+  // ★ 초기 멤버 설정에 desc(소개글) 추가
   const initialMember = { 
     name: '', region: '서울', loc: regionData["서울"][0], img: '', video: '', 
-    age: '', height: '', weight: '', bust: '' 
+    age: '', height: '', weight: '', bust: '', desc: '' 
   };
   
   const [newM, setNewM] = useState(initialMember);
@@ -130,10 +131,8 @@ export default function AdminCMS({
     }
   };
 
-  // ✅ [수정] 시스템 설정(텔레그램/비밀번호/공지 티커)만 따로 저장하는 함수
   const handleSaveSystemSettings = async () => {
     setLoading(true);
-    // syncToFirebase를 통해 텔레그램 링크, 관리자 비밀번호, 공지 티커 문구를 전송
     const success = await syncToFirebase({ 
       telegramLink: telegramLink, 
       adminPw: adminPw,
@@ -145,15 +144,62 @@ export default function AdminCMS({
     }
   };
 
+  // ★ 랜덤 소개글 생성기 (1000가지 이상의 조합 생성)
+  const generateRandomIntro = () => {
+    const name = newM.name || "매니저";
+    
+    const part1 = [
+      `세련된 매너와 눈부신 미소를 지닌 ${name},`,
+      `철저한 자기관리로 완성된 완벽한 비율의 ${name},`,
+      `도회적인 우아함과 단아한 자태를 겸비한 ${name},`,
+      `청순하면서도 매혹적인 분위기를 풍기는 ${name},`,
+      `화려한 비주얼과 톡톡 튀는 상큼함을 가진 ${name},`,
+      `부드러운 인상과 귀여운 매력이 돋보이는 ${name},`,
+      `섹시하면서도 고급스러운 아우라를 지닌 ${name},`,
+      `맑고 투명한 피부와 청초한 미모를 자랑하는 ${name},`,
+      `이국적인 외모와 남다른 분위기로 시선을 사로잡는 ${name},`,
+      `누구나 호감을 가질 만한 눈웃음이 매력적인 ${name},`
+    ];
+    
+    const part2 = [
+      "특유의 다정함과 섬세한 배려심으로",
+      "센스 넘치는 대화와 깊은 공감 능력으로",
+      "어색함 없이 분위기를 리드하는 친화력으로",
+      "지친 마음을 녹여주는 따뜻한 말투로",
+      "상대를 기분 좋게 만드는 긍정적인 에너지로",
+      "눈빛만 봐도 마음을 알아채는 세심함으로",
+      "언제나 미소를 잃지 않는 프로페셔널한 마인드로",
+      "시간 가는 줄 모르게 만드는 유쾌한 성격으로",
+      "나만을 위해주는 듯한 헌신적인 태도로",
+      "긴장감을 풀어주는 편안하고 부드러운 리드로"
+    ];
+    
+    const part3 = [
+      "잊지 못할 최고의 힐링을 선사합니다.",
+      "일상의 스트레스를 완벽하게 날려드립니다.",
+      "VIP 고객님들께 가장 사랑받는 이유를 증명합니다.",
+      "기대 이상의 특별한 감동을 약속드립니다.",
+      "한 번 만나면 꼭 다시 찾게 될 매력을 보여드립니다.",
+      "편안하고 달콤한 휴식처가 되어드리겠습니다.",
+      "후회 없는 완벽한 시간을 만들어 드립니다.",
+      "당신의 가장 완벽한 파트너가 될 것입니다.",
+      "특별한 하루를 더욱 빛나게 완성해 드립니다.",
+      "만족을 넘어선 진한 여운을 남겨드립니다."
+    ];
+
+    const r1 = part1[Math.floor(Math.random() * part1.length)];
+    const r2 = part2[Math.floor(Math.random() * part2.length)];
+    const r3 = part3[Math.floor(Math.random() * part3.length)];
+
+    setNewM({ ...newM, desc: `${r1} ${r2} ${r3}` });
+  };
+
   return (
     <div style={cmsStyles.cms}>
-      {/* ❶ 프리뷰 전환 탭 - 기능 복구 */}
+      {/* ❶ 프리뷰 전환 탭 */}
       <div style={cmsStyles.toggleArea}>
         <button 
-          onClick={() => {
-            console.log("Landing Mode Clicked");
-            setAdminPreviewMode("landing");
-          }} 
+          onClick={() => setAdminPreviewMode("landing")} 
           style={{
             ...cmsStyles.tabBtn, 
             background: adminPreviewMode === "landing" ? "#ffb347" : "#222", 
@@ -162,10 +208,7 @@ export default function AdminCMS({
           }}
         >❶ 랜딩페이지 보기</button>
         <button 
-          onClick={() => {
-            console.log("Dashboard Mode Clicked");
-            setAdminPreviewMode("dashboard");
-          }} 
+          onClick={() => setAdminPreviewMode("dashboard")} 
           style={{
             ...cmsStyles.tabBtn, 
             background: adminPreviewMode === "dashboard" ? "#ffb347" : "#222", 
@@ -210,7 +253,6 @@ export default function AdminCMS({
         <div style={{...cmsStyles.sectionBox, borderColor: '#FFD700'}}>
           <label style={{...cmsStyles.sectionLabel, color: '#FFD700'}}>❷ 홈페이지 설정</label>
 
-          {/* ★ [추가] 상단 공지 티커 문구 설정 */}
           <div style={cmsStyles.fieldGroup}>
             <label style={cmsStyles.fieldLabel}>상단 공지 티커 문구 (홈 화면 상단에 흐르는 문구)</label>
             <input 
@@ -266,7 +308,7 @@ export default function AdminCMS({
           <button onClick={() => openIndependent && openIndependent()} style={{...cmsStyles.modalOpenBtn, background: '#9C27B0', marginTop: 10}}>회원 포인트 관리 (독립 어드민)</button>
         </div>
 
-        {/* SECTION 4: 시스템 설정 (텔레그램/비밀번호) */}
+        {/* SECTION 4: 시스템 설정 */}
         <div style={cmsStyles.sectionBox}>
           <label style={cmsStyles.sectionLabel}>❹ 시스템 설정</label>
           <div style={cmsStyles.fieldGroup}>
@@ -344,7 +386,24 @@ export default function AdminCMS({
                 <input style={modalStyles.input} placeholder="몸무게 (kg)" value={newM.weight} onChange={e=>setNewM({...newM, weight: e.target.value})} />
                 <input style={modalStyles.input} placeholder="가슴 (컵)" value={newM.bust} onChange={e=>setNewM({...newM, bust: e.target.value})} />
               </div>
-              <div style={{display:'flex', gap: 10, marginBottom: 10, marginTop:10}}>
+
+              {/* ★ 추가된 매니저 소개글 및 랜덤 생성 버튼 */}
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <p style={{ fontSize: 11, color: '#ffb347', margin: 0 }}>매니저 소개글 (직접 입력 또는 자동 생성)</p>
+                  <button type="button" onClick={generateRandomIntro} style={modalStyles.randomBtn}>
+                    🎲 1000종 랜덤 자동생성
+                  </button>
+                </div>
+                <textarea 
+                  style={{...modalStyles.input, height: 75, resize: 'none', lineHeight: '1.5'}} 
+                  placeholder="소개글을 직접 입력하거나 우측 상단의 랜덤 생성 버튼을 눌러주세요." 
+                  value={newM.desc || ""} 
+                  onChange={e => setNewM({...newM, desc: e.target.value})} 
+                />
+              </div>
+
+              <div style={{display:'flex', gap: 10, marginBottom: 10, marginTop:15}}>
                 <div style={{flex:1}}>
                   <p style={{fontSize: 11, color: '#ffb347', margin:'0 0 5px 0'}}>사진 업로드</p>
                   <input type="file" accept="image/*" onChange={e => handleFileProcess(e, 'image', (url)=>setNewM({...newM, img: url}))} />
@@ -450,6 +509,7 @@ const modalStyles = {
   input: { width: '100%', padding: '12px', background: '#000', border: '1px solid #333', color: '#fff', borderRadius: '8px', boxSizing: 'border-box' },
   previewImg: { width: '100%', height: 100, objectFit: 'contain', background: '#000', marginTop: 10, borderRadius: 8 },
   actionBtn: { width: '100%', padding: '15px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', marginTop: 10 },
+  randomBtn: { background: '#ffb347', color: '#000', border: 'none', padding: '6px 10px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' },
   list: { background: '#000', borderRadius: '10px', border: '1px solid #222' },
   listItem: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #111' },
   editBtn: { background: 'none', color: '#4CAF50', border: 'none', cursor: 'pointer', fontWeight: 'bold' },
