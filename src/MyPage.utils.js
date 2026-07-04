@@ -20,21 +20,25 @@ export const getAvatarUrl = (idx, userId) => {
   return `https://api.dicebear.com/7.x/${avatarStyles[safeIdx]}/svg?seed=${userId}_${safeIdx}&backgroundColor=2a2a2e`;
 };
 
-// ★ [수정] 등급 시스템: 다이아 보유량 기반 자동계산 제거.
-// 관리자가 회원 관리 화면에서 직접 지정한 값(user.tier)을 그대로 사용.
-// 지정된 값이 없으면 기본값 SILVER로 표시.
-export const TIER_OPTIONS = ["SILVER", "GOLD", "PLATINUM", "DIAMOND"];
+// ★ [수정] 등급 시스템 개편: SILVER 제거 + VIP 추가
+//   신규 순서(낮음 → 높음): GOLD → VIP → PLATINUM → DIAMOND
+//   - 관리자가 회원 관리 화면에서 직접 지정한 값(user.tier)을 그대로 사용
+//   - 지정된 값이 없으면 기본값 GOLD로 표시 (신규 최하 등급)
+//   - 구버전 데이터(SILVER)가 남아있는 경우 자동으로 GOLD로 매핑되어 하위 호환
+export const TIER_OPTIONS = ["GOLD", "VIP", "PLATINUM", "DIAMOND"];
 
 const TIER_META = {
-  SILVER: { name: "SILVER", color: "#C0C0C0" },
-  GOLD: { name: "GOLD", color: "#D4AF37" },
-  PLATINUM: { name: "PLATINUM", color: "#e5e4e2" },
-  DIAMOND: { name: "DIAMOND", color: "#b9f2ff" },
+  GOLD:     { name: "GOLD",     color: "#D4AF37" }, // 골드 - 기본 등급
+  VIP:      { name: "VIP",      color: "#a855f7" }, // 로얄 퍼플 - 프리미엄 느낌
+  PLATINUM: { name: "PLATINUM", color: "#e5e4e2" }, // 플래티넘 실버
+  DIAMOND:  { name: "DIAMOND",  color: "#b9f2ff" }, // 다이아 블루
 };
 
 export const getTierInfo = (tierKey) => {
-  const key = (tierKey || "SILVER").toUpperCase();
-  return TIER_META[key] || TIER_META.SILVER;
+  const raw = (tierKey || "GOLD").toUpperCase();
+  // ★ 하위 호환: 구버전 SILVER 데이터는 신규 최하 등급 GOLD로 매핑
+  const key = raw === "SILVER" ? "GOLD" : raw;
+  return TIER_META[key] || TIER_META.GOLD;
 };
 
 // ★ [신규/수정] 신용점수 시스템 - 100점 만점 방식

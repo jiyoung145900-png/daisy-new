@@ -63,6 +63,18 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
   const pendingCount = myPendingBets?.length || 0;
   const isMaxReached = pendingCount >= maxBetsPerRound;
 
+  // ★ [신규] 회차 번호 → 당첨 아이콘 배열 룩업
+  //   "내 후원 기록" 탭에서도 회차별 결과 아이콘을 함께 보여주기 위해 사용.
+  //   myHistory 항목에 winItems가 이미 들어있으면 우선 사용하고,
+  //   없으면 이 맵에서 totalHistory 기준으로 조회하는 하이브리드 방식.
+  const winItemsByRound = useMemo(() => {
+    const map = {};
+    (totalHistory || []).forEach(h => {
+      if (h && h.round && h.winItems) map[h.round] = h.winItems;
+    });
+    return map;
+  }, [totalHistory]);
+
   // ★ [수정] handleDonate - 다중 베팅 지원
   //   - 최대 횟수 체크 → 초과 시 알림
   //   - Firestore 잔액 즉시 차감 (기존 유지)
@@ -217,14 +229,28 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                 </div>
                 <div style={localDs.histRight}>
                   {activeTab === 'mine' ? (
-                    // ★ [수정] 순손익 표시로 변경
-                    //   기존: 이기면 +earn(총지급액 40000), 지면 -cost(20000) 
-                    //   신규: 이기면 +(earn - cost) 순수익(20000), 지면 -cost(20000)
-                    <div style={{ color: h.earn > 0 ? '#34D399' : '#FB7185', fontWeight: 'bold' }}>
-                      {h.earn > 0 
-                        ? `+${(h.earn - h.cost).toLocaleString()}` 
-                        : `-${h.cost.toLocaleString()}`}
-                    </div>
+                    // ★ [수정] 순손익 표시 + 회차별 당첨 아이콘 함께 표시
+                    //   상단: 이기면 +(earn - cost), 지면 -cost
+                    //   하단: 해당 회차 당첨 아이콘 (회차별 결과 탭과 동일 포맷)
+                    <>
+                      <div style={{ color: h.earn > 0 ? '#34D399' : '#FB7185', fontWeight: 'bold' }}>
+                        {h.earn > 0 
+                          ? `+${(h.earn - h.cost).toLocaleString()}` 
+                          : `-${h.cost.toLocaleString()}`}
+                      </div>
+                      {/* ★ [신규] 해당 회차 당첨 아이콘 표시
+                          - h.winItems가 있으면 우선 사용
+                          - 없으면 winItemsByRound에서 조회 (totalHistory 기준) */}
+                      {(() => {
+                        const roundWinItems = h.winItems || winItemsByRound[h.round];
+                        if (!roundWinItems || roundWinItems.length === 0) return null;
+                        return (
+                          <div style={localDs.histWinIcons}>
+                            {roundWinItems.map(str => getLocalizedText(str)).join(" ")}
+                          </div>
+                        );
+                      })()}
+                    </>
                   ) : (
                     <div style={localDs.histWinIcons}>
                       {h.winItems?.map(str => getLocalizedText(str)).join(" ")}

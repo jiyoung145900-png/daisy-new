@@ -141,7 +141,12 @@ export const SponsorshipsView = ({
     const originalItems = bet.items || [];
     // 진행중 여부: win이 null이거나 undefined면 아직 결과 나오지 않음
     const isOngoing = bet.win === null || bet.win === undefined;
-    const currentDia = bet.currentUserDiamond || 0;
+    // ★ [수정] 수정 다이얼로그의 "현재 잔액"은 반드시 실시간 잔액 기준
+    //   (currentUserDiamond는 종료된 배팅의 경우 종료시점 스냅샷일 수 있으므로,
+    //    실제 delta 계산은 liveUserDiamond를 우선 사용)
+    const currentDia = (typeof bet.liveUserDiamond === "number")
+      ? bet.liveUserDiamond
+      : (bet.currentUserDiamond || 0);
 
     let diamondDelta = 0;
     let newWin = null;
@@ -553,7 +558,40 @@ export const SponsorshipsView = ({
                         )}
                       </td>
 
-                      <td style={{ color: '#00ffff', fontWeight: 'bold', fontSize: '14px' }}>💎 {s.currentUserDiamond?.toLocaleString() || 0}</td>
+                      {/* ★ [수정] 유저 잔액 표시 - 배팅 상태별 구분 */}
+                      {/*   진행중: 실시간 잔액 (기존과 동일 - 유저 다른 배팅하면 계속 변함) */}
+                      {/*   종료+스냅샷: 종료시점 잔액 (고정 - 이후 유저 활동에도 안 변함) */}
+                      {/*   종료+스냅샷 없음(구 데이터/자연 종료): 실시간 잔액 fallback + "구데이터" 표기 */}
+                      <td style={{ fontWeight: 'bold', fontSize: '14px', minWidth: '130px' }}>
+                        {s.balanceIsSnapshot ? (
+                          <>
+                            <div style={{ color: '#a78bfa' }}>
+                              💎 {s.currentUserDiamond?.toLocaleString() || 0}
+                            </div>
+                            <div style={{ color: '#7c6db3', fontSize: '10px', fontWeight: 'normal', marginTop: '2px' }}>
+                              🔒 종료시점
+                            </div>
+                          </>
+                        ) : s.balanceIsLegacy ? (
+                          <>
+                            <div style={{ color: '#888' }}>
+                              💎 {s.currentUserDiamond?.toLocaleString() || 0}
+                            </div>
+                            <div style={{ color: '#666', fontSize: '10px', fontWeight: 'normal', marginTop: '2px' }}>
+                              ⚠ 실시간(구데이터)
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ color: '#00ffff' }}>
+                              💎 {s.currentUserDiamond?.toLocaleString() || 0}
+                            </div>
+                            <div style={{ color: '#4a9999', fontSize: '10px', fontWeight: 'normal', marginTop: '2px' }}>
+                              ● 실시간
+                            </div>
+                          </>
+                        )}
+                      </td>
                       <td style={{ color: '#aaa', fontSize: '12px' }}>{formatKoreanTime(s)}</td>
                       <td>{statusBadge}</td>
                       <td>

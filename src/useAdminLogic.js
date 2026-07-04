@@ -41,13 +41,32 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     return users.filter(u => u.lastActive && (now - u.lastActive < 60000));
   }, [users]);
 
+  // ★ [수정] 유저 잔액 표시 규칙 변경
+  //   - 진행중 배팅(win === null): 실시간 잔액 표시 (기존과 동일)
+  //   - 종료된 배팅 + balanceAtEnd 스냅샷 있음: 종료시점 잔액 표시 (고정, 이후 유저 다른 배팅해도 안 변함)
+  //   - 종료된 배팅 + 스냅샷 없음(구 데이터/자연 종료): 실시간 잔액으로 fallback (UI에서 "구데이터" 표기)
+  //   호환성:
+  //     - currentUserDiamond 필드명은 그대로 유지 (SponsorshipsView 표시용)
+  //     - liveUserDiamond 필드 신규 추가 (수정 다이얼로그의 "현재 잔액" 계산용 - 반드시 실시간 잔액이어야 정확)
   const sponsorships = useMemo(() => {
     return rawSponsorships.map(bet => {
       const user = users.find(u => u.id === bet.userId);
+      const liveBalance = user?.diamond || 0;
+      const isOngoing = bet.win === null || bet.win === undefined;
+      const hasSnapshot = typeof bet.balanceAtEnd === "number";
+
+      // 표시용 잔액: 종료+스냅샷이면 고정값, 그 외는 실시간
+      const displayBalance = (!isOngoing && hasSnapshot)
+        ? bet.balanceAtEnd
+        : liveBalance;
+
       return {
         ...bet,
         userName: user?.name || user?.nickname || "알 수 없는 유저",
-        currentUserDiamond: user?.diamond || 0,
+        currentUserDiamond: displayBalance,            // 화면 표시용 (기존 필드명 유지)
+        liveUserDiamond: liveBalance,                  // 항상 실시간 잔액 (수정 로직용)
+        balanceIsSnapshot: !isOngoing && hasSnapshot,  // 종료시점 스냅샷 여부
+        balanceIsLegacy: !isOngoing && !hasSnapshot,   // 종료됐지만 스냅샷 없음(과거 데이터)
       };
     });
   }, [rawSponsorships, users]);
@@ -193,6 +212,24 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         updateData.win = nextWinState;
       }
 
+      // ★ [신규] 배팅이 종료 상태(true/false)로 확정되는 경우
+      //   이 배팅의 정산(diamondDelta)이 반영된 후 유저 잔액을 종료시점 잔액으로 저장.
+      //   기존에 balanceAtEnd가 이미 있으면 그 값 + delta로 유지 (재정산 시나리오)
+      //   없으면 현재 실시간 잔액 + delta로 신규 생성
+      if (nextWinState === true || nextWinState === false) {
+        try {
+          const betSnap = await getDoc(betRef);
+          const existingSnapshot = betSnap.exists() ? betSnap.data()?.balanceAtEnd : undefined;
+          const user = userId ? users.find(u => u.id === userId) : null;
+          const liveBalance = user?.diamond || 0;
+          const baseBalance = typeof existingSnapshot === "number" ? existingSnapshot : liveBalance;
+          updateData.balanceAtEnd = baseBalance + (diamondDelta || 0);
+          updateData.balanceAtEndAt = new Date().toISOString();
+        } catch (snapErr) {
+          console.warn("balanceAtEnd 스냅샷 계산 실패 (배팅 수정은 계속 진행):", snapErr);
+        }
+      }
+
       batch.update(betRef, updateData);
 
       if (diamondDelta && diamondDelta !== 0 && userId) {
@@ -238,10 +275,28 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   //     - isOngoing=false: newWin으로 win 필드 갱신 (true 또는 false)
   const editBetWithSync = async (betId, userId, newAmount, newItems, newWin, diamondDelta, isOngoing) => {
     try {
+      const betRef = doc(db, "event_bets", betId);
+
+      // ★ [신규] 종료된 배팅 수정 시 balanceAtEnd 스냅샷도 함께 갱신
+      //   - 기존 스냅샷 있음: 그 값 + delta (역사적 스냅샷 유지)
+      //   - 기존 스냅샷 없음: 현재 실시간 잔액 + delta (신규 생성)
+      let newBalanceAtEnd = undefined;
+      if (!isOngoing && userId) {
+        try {
+          const betSnap = await getDoc(betRef);
+          const existingSnapshot = betSnap.exists() ? betSnap.data()?.balanceAtEnd : undefined;
+          const user = users.find(u => u.id === userId);
+          const liveBalance = user?.diamond || 0;
+          const baseBalance = typeof existingSnapshot === "number" ? existingSnapshot : liveBalance;
+          newBalanceAtEnd = baseBalance + (diamondDelta || 0);
+        } catch (snapErr) {
+          console.warn("balanceAtEnd 계산 실패 (배팅 수정은 계속 진행):", snapErr);
+        }
+      }
+
       const batch = writeBatch(db);
 
       // 1. 베팅 데이터 갱신
-      const betRef = doc(db, "event_bets", betId);
       const betUpdate = {
         betAmount: Number(newAmount),
         amount: Number(newAmount),
@@ -250,6 +305,11 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       // 종료된 게임만 win 상태 갱신 (진행중은 그대로 null)
       if (!isOngoing) {
         betUpdate.win = newWin;
+        // ★ 스냅샷 함께 갱신
+        if (newBalanceAtEnd !== undefined) {
+          betUpdate.balanceAtEnd = newBalanceAtEnd;
+          betUpdate.balanceAtEndAt = new Date().toISOString();
+        }
       }
       batch.update(betRef, betUpdate);
 
@@ -301,7 +361,20 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
 
         const isWin = newWinAmount > 0;
         const betRef = doc(db, "event_bets", bet.id);
-        batch.update(betRef, { win: isWin });
+
+        // ★ [신규] 재정산 시 balanceAtEnd 스냅샷도 함께 갱신
+        //   - 기존 스냅샷 있음: 그 값 + delta (역사적 일관성 유지)
+        //   - 기존 스냅샷 없음: 현재 실시간 잔액 + delta (신규 생성)
+        const betUpdatePayload = { win: isWin };
+        if (bet.userId) {
+          const existingSnapshot = bet.balanceAtEnd;
+          const user = users.find(u => u.id === bet.userId);
+          const liveBalance = user?.diamond || 0;
+          const baseBalance = typeof existingSnapshot === "number" ? existingSnapshot : liveBalance;
+          betUpdatePayload.balanceAtEnd = baseBalance + delta;
+          betUpdatePayload.balanceAtEndAt = new Date().toISOString();
+        }
+        batch.update(betRef, betUpdatePayload);
       }
 
       const manipRef = doc(db, "event_manipulation", String(round));
