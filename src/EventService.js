@@ -1,5 +1,5 @@
 import { db } from "./firebase"; 
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, getDocFromServer } from "firebase/firestore";
 
 export const ITEM_CONFIG = [
   { 
@@ -30,6 +30,62 @@ export const CONFIG = {
   ROUND_DURATION: 180, 
   BASE_ROUND: 1824231, 
   START_TIME: new Date("2024-01-01T00:00:00Z").getTime(), 
+};
+
+/* ============================================================
+ * 서버 시간 동기화 모듈
+ * ------------------------------------------------------------
+ * 각 기기의 로컬 시계 오차(수십 초)로 인한 라운드 타이머 불일치를
+ * Firebase 서버 시간 기준으로 보정해 모든 기기를 동일하게 맞춤.
+ *
+ * 동작 원리:
+ *   1. Firebase 문서를 서버에서 직접 읽어 서버 readTime 타임스탬프 획득
+ *   2. serverTime - Date.now() = clockOffset 계산
+ *   3. 이후 모든 시간 계산은 Date.now() + clockOffset 사용
+ *   4. 앱 시작 시 1회 동기화, 이후 30분마다 재동기화 (drift 방지)
+ * ============================================================ */
+let _clockOffset = 0;      // ms 단위 보정값 (양수 = 로컬이 느림, 음수 = 로컬이 빠름)
+let _syncedAt = 0;         // 마지막 동기화 시각 (Date.now() 기준)
+const RESYNC_INTERVAL = 30 * 60 * 1000; // 30분마다 재동기화
+
+export const syncServerTime = async () => {
+  try {
+    // Firebase 서버에서 직접 읽기 (캐시 우회) → 응답 헤더의 서버 시각 사용
+    const ref = doc(db, "_time_sync", "ping");
+    const before = Date.now();
+    const snap = await getDocFromServer(ref).catch(() => null);
+    const after = Date.now();
+
+    if (snap) {
+      // readTime은 Firestore 서버가 문서를 읽은 시각
+      const serverMs = snap.readTime?.toMillis?.() ?? null;
+      if (serverMs) {
+        // 네트워크 왕복 절반을 보정 (RTT/2)
+        const rtt = after - before;
+        const estimatedServerNow = serverMs + rtt / 2;
+        _clockOffset = estimatedServerNow - after;
+        _syncedAt = after;
+        console.log(`⏱ 서버 시간 동기화 완료 | offset: ${_clockOffset > 0 ? "+" : ""}${Math.round(_clockOffset)}ms | RTT: ${rtt}ms`);
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn("서버 시간 동기화 실패, 로컬 시계 사용:", e);
+  }
+  // 실패 시 오프셋 유지 (이전 값 또는 0)
+};
+
+// 보정된 현재 시각 반환 (ms)
+export const getServerNow = () => Date.now() + _clockOffset;
+
+// 앱 시작 시 즉시 동기화 + 30분마다 재동기화
+let _resyncTimer = null;
+export const startTimeSyncLoop = () => {
+  syncServerTime();
+  if (_resyncTimer) clearInterval(_resyncTimer);
+  _resyncTimer = setInterval(() => {
+    if (Date.now() - _syncedAt >= RESYNC_INTERVAL) syncServerTime();
+  }, 60 * 1000); // 1분마다 재동기화 필요 여부 체크
 };
 
 class AudioController {
@@ -84,7 +140,7 @@ export const soundManager = new AudioController();
 
 export const EventService = {
   getCurrentRoundInfo: () => {
-    const now = Date.now();
+    const now = getServerNow(); // ★ 서버 시간 기준 (기기 시계 오차 보정)
     const elapsed = now - CONFIG.START_TIME;
     const durationMs = CONFIG.ROUND_DURATION * 1000;
     const currentRound = CONFIG.BASE_ROUND + Math.floor(elapsed / durationMs);

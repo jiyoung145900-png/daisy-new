@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { db } from "./firebase"; 
+import { startTimeSyncLoop } from "./EventService"; // ★ 서버 시간 동기화
 // ★ [핵심] Firestore 함수들 import
 import {
   doc,
@@ -83,6 +84,12 @@ export default function App() {
 
   const [adminPreviewMode, setAdminPreviewMode] = useState("dashboard");
   const t = useMemo(() => translations[lang] || translations.ko, [lang]);
+
+  // ★ 서버 시간 동기화 - 앱 최초 로드 시 1회 실행, 이후 30분마다 자동 재동기화
+  // 모든 기기(PC/갤럭시/아이폰)가 동일한 라운드 타이머를 보도록 보정
+  useEffect(() => {
+    startTimeSyncLoop();
+  }, []);
 
   // ★ Firebase Realtime Listener (Global Settings)
   useEffect(() => {

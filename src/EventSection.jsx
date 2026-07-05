@@ -570,7 +570,7 @@ return (
 const localDs = {
   screenContainer: { position: 'relative', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#0c0c0c', overflow: 'hidden', fontFamily: '-apple-system, sans-serif' },
   fixedHeader: { flex: '0 0 auto', height: '70px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 20px', backgroundColor: '#0c0c0c', zIndex: 10, paddingTop: 'env(safe-area-inset-top)' },
-  scrollBody: { flex: 1, overflowY: 'auto', padding: '20px 20px 250px', WebkitOverflowScrolling: 'touch' },
+  scrollBody: { flex: 1, overflowY: 'auto', padding: '20px 20px 320px', WebkitOverflowScrolling: 'touch' },
   navLeft: { display: "flex", alignItems: "center", gap: "12px", cursor: 'pointer' },
   navTitle: { fontSize: "17px", fontWeight: "900", color: "#fff" },
   backBtn: { fontSize: "22px", color: '#666' },
@@ -598,7 +598,7 @@ const localDs = {
   tabHeader: { display: 'flex', gap: '20px', borderBottom: '1px solid #222' },
   tabBtn: { background: 'none', border: 'none', padding: '15px 5px', fontSize: '14px', fontWeight: '800', cursor: 'pointer' },
   tabContent: { background: '#111', borderRadius: '20px', marginTop: '15px', border: '1px solid #222', overflow: 'hidden' },
-  histItem: { padding: '15px 20px', borderBottom: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+  histItem: { padding: '12px 14px', borderBottom: '1px solid #222', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '6px' },
   histLeft: { display: 'flex', flexDirection: 'column', gap: '4px' },
   histRound: { fontSize: '14px', fontWeight: '800', color: '#fff' },
   histDetail: { fontSize: '11px', color: '#555' },
@@ -632,9 +632,11 @@ const localDs = {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'flex-start',
-    gap: '24px', // 내 선택과 당첨 사이의 간격
+    flexWrap: 'wrap',
+    gap: '10px',
     width: '100%',
-    marginTop: '4px'
+    marginTop: '4px',
+    minWidth: 0,
   },
   // "내 선택", "당첨" 이라는 작은 회색 글씨용 스타일
   histSubLabel: {
@@ -647,10 +649,12 @@ const localDs = {
     fontSize: '12px',
     color: '#fff',
     fontWeight: '600',
-    whiteSpace: 'nowrap'
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    lineHeight: '1.4',
   },
   emptyText: { padding: '40px', textAlign: 'center', color: '#444', fontSize: '13px' },
-  bottomPanel: { position: "absolute", bottom: 20, left: 15, right: 15, background: "#1c1c1e", padding: "18px", borderRadius: "28px", border: "1px solid #333", zIndex: 100, boxShadow: '0 -10px 40px rgba(0,0,0,0.5)', boxSizing: 'border-box' },
+  bottomPanel: { position: "fixed", bottom: 'calc(20px + env(safe-area-inset-bottom))', left: 15, right: 15, background: "#1c1c1e", padding: "18px", borderRadius: "28px", border: "1px solid #333", zIndex: 999, boxShadow: '0 -10px 40px rgba(0,0,0,0.7)', boxSizing: 'border-box' },
 
   // ★ [신규] 다중 베팅 상태 표시 UI
   pendingBox: { 

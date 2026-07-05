@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { EventService, soundManager, ITEM_CONFIG } from "./EventService"; 
 import { db } from "./firebase";
-import { collection, onSnapshot, query, where, doc, setDoc, updateDoc, increment } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, setDoc, updateDoc, increment, addDoc, getDocs, orderBy, limit } from "firebase/firestore";
 
 export { ITEM_CONFIG as allItems }; 
 
@@ -34,10 +34,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
 
   const [totalHistory, setTotalHistory] = useState([]);
 
-  const [myHistory, setMyHistory] = useState(() => {
-    const saved = localStorage.getItem(`event_my_history_${user?.id}`);
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [myHistory, setMyHistory] = useState([]);
 
   const [gameState, setGameState] = useState({
     round: 0,
@@ -52,6 +49,58 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
   const [liveNoti, setLiveNoti] = useState("이벤트가 활성화되었습니다!");
 
   const [impactTick, setImpactTick] = useState(0);
+
+  // ★ [신규] Firebase에서 내 후원기록 불러오기 (다기기 동기화 핵심)
+  useEffect(() => {
+    if (!user?.id) return;
+    const loadMyHistory = async () => {
+      try {
+        const q = query(
+          collection(db, "user_bet_history"),
+          where("userId", "==", user.id),
+          orderBy("savedAt", "desc"),
+          limit(100)
+        );
+        const snapshot = await getDocs(q);
+        if (!snapshot.empty) {
+          const records = snapshot.docs.map(d => d.data());
+          setMyHistory(records);
+          // 로컬 캐시도 최신화
+          localStorage.setItem(`event_my_history_${user.id}`, JSON.stringify(records));
+        } else {
+          // Firebase에 없으면 로컬 캐시 fallback
+          const saved = localStorage.getItem(`event_my_history_${user.id}`);
+          if (saved) setMyHistory(JSON.parse(saved));
+        }
+      } catch (err) {
+        console.warn("후원기록 Firebase 불러오기 실패, 로컬 캐시 사용:", err);
+        const saved = localStorage.getItem(`event_my_history_${user.id}`);
+        if (saved) setMyHistory(JSON.parse(saved));
+      }
+    };
+    loadMyHistory();
+  }, [user?.id]);
+
+  // ★ [신규] 후원기록 1건을 Firebase + localStorage 동시에 저장하는 헬퍼
+  const saveMyHistoryRecord = useCallback(async (record) => {
+    if (!user?.id) return;
+    // 1) Firebase에 저장 (다기기 동기화)
+    try {
+      await addDoc(collection(db, "user_bet_history"), {
+        ...record,
+        userId: user.id,
+        savedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error("후원기록 Firebase 저장 실패:", err);
+    }
+    // 2) 로컬 상태 + localStorage 동시 업데이트 (즉각 반영)
+    setMyHistory(prev => {
+      const updated = [record, ...prev].slice(0, 100);
+      localStorage.setItem(`event_my_history_${user.id}`, JSON.stringify(updated));
+      return updated;
+    });
+  }, [user?.id]);
 
   const updatePointWithAnim = useCallback((newPoint) => {
     if (onUpdatePoint) {
@@ -159,11 +208,11 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
                 earn: winAmount, cost: totalCost, date: currentTime, status: "자동정산"
               };
 
+              // 중복 방지: 이미 같은 라운드+선택 기록이 있으면 스킵
               setMyHistory(prev => {
                 if (prev.find(h => h.round === roundNum && JSON.stringify(h.selected) === JSON.stringify(items))) return prev;
-                const updated = [newRecord, ...prev].slice(0, 100);
-                localStorage.setItem(`event_my_history_${user?.id}`, JSON.stringify(updated));
-                return updated;
+                saveMyHistoryRecord(newRecord);
+                return prev; // saveMyHistoryRecord 내부에서 상태 업데이트
               });
             }
           }
@@ -295,6 +344,18 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
 
           localStorage.setItem(`event_my_history_${user?.id}`, JSON.stringify(myUpdated));
           setMyHistory(myUpdated);
+          // ★ [신규] 재정산된 기록도 Firebase에 최신화
+          for (const record of myUpdated.filter(r => r.round === revisedRound && r.revised)) {
+            try {
+              await addDoc(collection(db, "user_bet_history"), {
+                ...record,
+                userId: user?.id,
+                savedAt: new Date().toISOString(),
+              });
+            } catch (e) {
+              console.warn("재정산 Firebase 저장 실패:", e);
+            }
+          }
 
           console.log(`✅ ${revisedRound}회차 로컬 캐시 갱신 완료`);
         }
@@ -474,14 +535,10 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
             isWin: winAmount > 0,
           });
 
-          // 히스토리에 각 베팅 개별 기록
-          setMyHistory(prev => {
-            const updated = [{
-              round: targetRound, selected: [...items], winNames, winIcons: winObjs.map(i => i.icon),
-              earn: winAmount, cost: totalCost, date: currentTime
-            }, ...prev].slice(0, 100);
-            localStorage.setItem(`event_my_history_${user?.id}`, JSON.stringify(updated));
-            return updated;
+          // 히스토리에 각 베팅 개별 기록 (Firebase + localStorage 동시 저장)
+          saveMyHistoryRecord({
+            round: targetRound, selected: [...items], winNames, winIcons: winObjs.map(i => i.icon),
+            earn: winAmount, cost: totalCost, date: currentTime
           });
         }
 
@@ -617,5 +674,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     syncDiamondToFirestore,
     // ★ [신규] 최대 베팅 회수 export
     maxBetsPerRound: MAX_BETS_PER_ROUND,
+    // ★ [신규] 후원기록 Firebase+로컬 동시 저장 (외부 컴포넌트에서 필요시 사용)
+    saveMyHistoryRecord,
   };
 }

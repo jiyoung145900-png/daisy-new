@@ -274,7 +274,7 @@ export default function HomeSection({
 }
 
 const h = {
-  container: { position: 'relative', overflow: 'hidden', backgroundColor: '#0a0a0a', paddingBottom: 50, minHeight: '100vh', color: '#fff' },
+  container: { position: 'relative', overflow: 'hidden', backgroundColor: '#0a0a0a', paddingBottom: 20, minHeight: '100vh', color: '#fff' },
   header: { padding: '25px 0 10px', textAlign: 'center' },
   logoArea: { marginBottom: 8 },
   logoImg: { maxWidth: '350px', filter: 'drop-shadow(0 0 10px rgba(255,215,0,0.3))' },
@@ -329,7 +329,10 @@ const h = {
   specText: { fontSize: '13px', color: '#bbb', fontWeight: 400 },
   specDivider: { fontSize: '12px', color: '#555' },
 
-  footerBtnArea: { padding: '0 24px', marginTop: 40, textAlign: 'center' },
-  teleBtn: { width: '100%', padding: '20px', borderRadius: '12px', background: 'linear-gradient(135deg, #0088cc, #005588)', color: '#fff', fontSize: '15px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  footerNotice: { fontSize: 10, color: '#444', marginTop: 15, letterSpacing: 2 }
+  footerBtnArea: { 
+    padding: '20px 24px 12px',
+    textAlign: 'center',
+  },
+  teleBtn: { width: '100%', padding: '16px', borderRadius: '12px', background: 'linear-gradient(135deg, #0088cc, #005588)', color: '#fff', fontSize: '15px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  footerNotice: { fontSize: 10, color: '#444', marginTop: 6, letterSpacing: 2 }
 };
