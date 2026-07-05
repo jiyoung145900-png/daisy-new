@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { useEventEngine, allItems } from "./useEventEngine"; 
 import { EventBanner, ImpactBurst } from "./EventComponents";
+import { EventService } from "./EventService";
 import { db } from "./firebase"; 
-import { collection, addDoc, doc, updateDoc, increment } from "firebase/firestore";
+import { collection, addDoc, doc, setDoc, updateDoc, increment } from "firebase/firestore";
 import { avatarStyles, getAvatarUrl } from "./MyPage.utils";
 
 export default function EventSection({ user, userPoint = 0, confirmedImage, confirmedAvatarIdx, onBack, onUpdatePoint, t }) {
@@ -74,6 +75,52 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     });
     return map;
   }, [totalHistory]);
+
+  // ═══════════════════════════════════════════════════════════════
+  // ★ [신규] game_history에 없는 회차의 결과를 즉석 계산하는 fallback
+  //   원인: 라운드 종료 시점에 아무도 이벤트 화면을 켜놓고 있지 않으면
+  //         game_history 문서가 아예 안 생겨서 "내 후원 기록"에 결과가 안 뜨는 문제.
+  //   → round 번호만으로 결정되는 EventService.generateResult로 그 자리에서
+  //     동일한 결과를 재계산 (진짜 결과이지 "추정"이 아니므로 유저에게 그대로 노출)
+  // ═══════════════════════════════════════════════════════════════
+  const [fallbackWinItems, setFallbackWinItems] = useState({});
+  const inFlightRoundsRef = useRef(new Set());
+
+  const resolveWinItems = useCallback(async (targetR) => {
+    try {
+      const fixed = await EventService.getFixedResult(targetR);
+      const winObjs = fixed || EventService.generateResult(targetR);
+      const winItemsStr = winObjs.map(v => `${v.icon} ${v.name}`);
+
+      setFallbackWinItems(prev => ({ ...prev, [targetR]: winItemsStr }));
+
+      // 계산한 결과를 game_history에도 저장해서 이후엔 정상 데이터처럼 조회되게 함
+      try {
+        await setDoc(doc(db, "game_history", String(targetR)), {
+          round: targetR,
+          winner: winObjs.map(v => v.name),
+          winItems: winItemsStr,
+          savedAt: new Date().toISOString(),
+        }, { merge: true });
+      } catch (writeErr) {
+        console.warn(`game_history 자동 복구 저장 실패 (${targetR}회차):`, writeErr);
+      }
+    } catch (e) {
+      console.error(`${targetR}회차 결과 계산 실패:`, e);
+    }
+  }, []);
+
+  // 내 후원 기록에서 결과가 비어있는 회차를 자동으로 감지해서 미리 계산해둠
+  useEffect(() => {
+    (myHistory || []).forEach(h => {
+      if (!h || !h.round) return;
+      if (h.winItems || winItemsByRound[h.round] || fallbackWinItems[h.round]) return;
+      if (inFlightRoundsRef.current.has(h.round)) return;
+
+      inFlightRoundsRef.current.add(h.round);
+      resolveWinItems(h.round).finally(() => inFlightRoundsRef.current.delete(h.round));
+    });
+  }, [myHistory, winItemsByRound, fallbackWinItems, resolveWinItems]);
 
   // ★ [수정] handleDonate - 다중 베팅 지원
   //   - 최대 횟수 체크 → 초과 시 알림
@@ -229,30 +276,62 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                   <div style={localDs.histRound}>{h.round}{isKo ? "회차" : " Rd"}</div>
                   <div style={localDs.histDetail}>{h.date}</div>
                 </div>
+
+                {/* ★ [신규] 내 후원 기록 - 가운데에 승/패 배지 + 내 선택/당첨 아이템 비교 표시 */}
+                {activeTab === 'mine' && (() => {
+                  const roundWinItems = h.winItems || winItemsByRound[h.round] || fallbackWinItems[h.round];
+                  const hasResult = roundWinItems && roundWinItems.length > 0;
+                  const isWin = h.earn > 0;
+                  const formatItemName = (name) => {
+                    const item = allItems.find(it => it.name === name);
+                    if (!item) return name;
+                    return `${item.icon} ${isKo ? item.name : item.nameEn}`;
+                  };
+                  // 기존 리턴문을 아래 코드로 변경 (대략 218번째 라인 부근)
+return (
+  <div style={localDs.histMiddle}>
+    {hasResult ? (
+      <>
+        {/* 승리/패배 배지 (상단 중앙 고정) */}
+        <span style={{
+          ...localDs.histResultBadge,
+          color: isWin ? '#34D399' : '#FB7185',
+          background: isWin ? 'rgba(52,211,153,0.12)' : 'rgba(251,113,133,0.12)'
+        }}>
+          {isWin ? (isKo ? "👑 승리" : "👑 WIN") : (isKo ? "💔 패배" : "💔 LOSE")}
+        </span>
+
+        {/* 내 선택과 당첨 결과를 가로로 나란히 정렬하는 컨테이너 */}
+        <div style={localDs.histRowContainer}>
+          {h.selected && h.selected.length > 0 && (
+            <div style={localDs.histMyPick}>
+              <span style={localDs.histSubLabel}>{isKo ? "내 선택" : "My pick"}</span>
+              <span style={localDs.histItemText}>{h.selected.map(formatItemName).join(" ")}</span>
+            </div>
+          )}
+          <div style={localDs.histWinIcons}>
+            <span style={localDs.histSubLabel}>{isKo ? "당첨" : "Winner"}</span>
+            <span style={localDs.histItemText}>{roundWinItems.map(str => getLocalizedText(str)).join(" ")}</span>
+          </div>
+        </div>
+      </>
+    ) : (
+      <span style={localDs.histNoData}>
+        {isKo ? "결과 없음" : "No result"}
+      </span>
+    )}
+  </div>
+);
+                })()}
+
                 <div style={localDs.histRight}>
                   {activeTab === 'mine' ? (
-                    // ★ [수정] 순손익 표시 + 회차별 당첨 아이콘 함께 표시
-                    //   상단: 이기면 +(earn - cost), 지면 -cost
-                    //   하단: 해당 회차 당첨 아이콘 (회차별 결과 탭과 동일 포맷)
-                    <>
-                      <div style={{ color: h.earn > 0 ? '#34D399' : '#FB7185', fontWeight: 'bold' }}>
-                        {h.earn > 0 
-                          ? `+${(h.earn - h.cost).toLocaleString()}` 
-                          : `-${h.cost.toLocaleString()}`}
-                      </div>
-                      {/* ★ [신규] 해당 회차 당첨 아이콘 표시
-                          - h.winItems가 있으면 우선 사용
-                          - 없으면 winItemsByRound에서 조회 (totalHistory 기준) */}
-                      {(() => {
-                        const roundWinItems = h.winItems || winItemsByRound[h.round];
-                        if (!roundWinItems || roundWinItems.length === 0) return null;
-                        return (
-                          <div style={localDs.histWinIcons}>
-                            {roundWinItems.map(str => getLocalizedText(str)).join(" ")}
-                          </div>
-                        );
-                      })()}
-                    </>
+                    // ★ [수정] 순손익 금액만 표시 (승/패 배지 + 당첨 아이콘은 가운데로 이동)
+                    <div style={{ color: h.earn > 0 ? '#34D399' : '#FB7185', fontWeight: 'bold' }}>
+                      {h.earn > 0 
+                        ? `+${(h.earn - h.cost).toLocaleString()}` 
+                        : `-${h.cost.toLocaleString()}`}
+                    </div>
                   ) : (
                     <div style={localDs.histWinIcons}>
                       {h.winItems?.map(str => getLocalizedText(str)).join(" ")}
@@ -524,7 +603,52 @@ const localDs = {
   histRound: { fontSize: '14px', fontWeight: '800', color: '#fff' },
   histDetail: { fontSize: '11px', color: '#555' },
   histRight: { textAlign: 'right' },
-  histWinIcons: { fontSize: '12px', color: '#ccc', marginTop: '2px', fontWeight: '600' },
+  histMiddle: { 
+    display: 'flex', 
+    flexDirection: 'column', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    gap: '8px', 
+    flex: 1, 
+    textAlign: 'center',
+    padding: '0 10px'
+  },
+  histResultBadge: { fontSize: '10px', fontWeight: '900', padding: '2px 9px', borderRadius: '8px', letterSpacing: '0.3px' },
+  histNoData: { fontSize: '11px', color: '#555' },
+  histMyPick: { 
+    display: 'flex', 
+    flexDirection: 'column', 
+    alignItems: 'center',
+    gap: '2px'
+  },
+  histWinIcons: { 
+    display: 'flex', 
+    flexDirection: 'column', 
+    alignItems: 'center',
+    gap: '2px'
+  },
+  // 가로 정렬 및 중앙 분할을 위한 컨테이너
+  histRowContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    gap: '24px', // 내 선택과 당첨 사이의 간격
+    width: '100%',
+    marginTop: '4px'
+  },
+  // "내 선택", "당첨" 이라는 작은 회색 글씨용 스타일
+  histSubLabel: {
+    fontSize: '10px',
+    color: '#555',
+    fontWeight: 'normal'
+  },
+  // 아이콘과 텍스트가 노출되는 본문 스타일
+  histItemText: {
+    fontSize: '12px',
+    color: '#fff',
+    fontWeight: '600',
+    whiteSpace: 'nowrap'
+  },
   emptyText: { padding: '40px', textAlign: 'center', color: '#444', fontSize: '13px' },
   bottomPanel: { position: "absolute", bottom: 20, left: 15, right: 15, background: "#1c1c1e", padding: "18px", borderRadius: "28px", border: "1px solid #333", zIndex: 100, boxShadow: '0 -10px 40px rgba(0,0,0,0.5)', boxSizing: 'border-box' },
 

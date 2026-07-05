@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { iaStyles } from "./AdminStyles";
-import { ITEM_CONFIG } from "./EventService";
+import { EventService, ITEM_CONFIG } from "./EventService";
 import { db } from "./firebase"; 
-import { doc, updateDoc, collection, query, where, orderBy, getDocs, deleteDoc } from "firebase/firestore"; 
+import { doc, setDoc, updateDoc, collection, query, where, orderBy, getDocs, deleteDoc } from "firebase/firestore"; 
 
 // ★ [신규] 배당 계산 공통 유틸 (useEventEngine.js와 완벽히 동일한 규칙)
 //   - 이기면 배팅액 * 2 지급, 지면 0
@@ -12,18 +12,27 @@ function calcWinAmount(items, matchedCount, totalCost) {
   return matchedCount === items.length ? totalCost * 2 : 0;
 }
 
-// ★ [신규] 승패 추정: bet.win이 null인 과거 배팅에 대해 gameHistory에서 결과 조회해 추정
+// ★ [수정] gameHistory 문서가 없는 회차의 당첨자 조회 - fallbackWinners 캐시까지 함께 확인
+//   원인: 라운드 종료 시점에 아무도 이벤트 화면을 켜놓고 있지 않으면
+//         useEventEngine.js의 handleRoundEnd가 실행되지 않아 game_history 문서 자체가 생기지 않음.
+//   → gameHistory에 없어도 fallbackWinners(즉석 계산 캐시)에 있으면 그걸 사용
+function getRoundWinners(round, gameHistory, fallbackWinners) {
+  const found = (gameHistory || []).find(h => h.round === round);
+  if (found?.winner?.length) return found.winner;
+  if (fallbackWinners?.[round]?.length) return fallbackWinners[round];
+  return null;
+}
+
+// ★ [신규] 승패 추정: bet.win이 null인 과거 배팅에 대해 winners 배열로 결과 추정
 //   반환값:
 //     true  → 승리 (아이템 전부 매치)
 //     false → 패배 (매치 못함)
 //     null  → 추정 불가 (해당 회차 결과 없음)
-function inferBetWinFromHistory(bet, gameHistory) {
-  if (!bet || !gameHistory) return null;
-  const round = gameHistory.find(h => h.round === bet.round);
-  if (!round || !round.winner || round.winner.length === 0) return null;
+function inferBetWinFromWinners(bet, winners) {
+  if (!bet || !winners || winners.length === 0) return null;
   const items = bet.items || [];
   if (items.length === 0) return null;
-  const matched = items.filter(n => round.winner.includes(n)).length;
+  const matched = items.filter(n => winners.includes(n)).length;
   return matched === items.length;
 }
 
@@ -61,11 +70,56 @@ export const SponsorshipsView = ({
   const [selectedItems, setSelectedItems] = useState([]);
   const [isControlLoading, setIsControlLoading] = useState(false);
 
+  // ═══════════════════════════════════════════════════════════════
+  // ★ [신규] game_history 누락 회차 fallback 계산
+  //   round: string[] (당첨 아이템 이름 배열) 형태로 캐시
+  //   - 라운드 종료 시 아무도 이벤트 화면을 안 켜놓고 있었다면
+  //     game_history 문서가 아예 안 생겨서 "결과 정보를 찾을 수 없다"는
+  //     알럿이 뜨던 문제를 해결하기 위한 즉석 계산 + DB 자동 복구
+  // ═══════════════════════════════════════════════════════════════
+  const [fallbackWinners, setFallbackWinners] = useState({});
+  const inFlightRoundsRef = useRef(new Set());
+
+  const resolveWinners = useCallback(async (round) => {
+    if (fallbackWinners[round]?.length) return fallbackWinners[round];
+
+    try {
+      // 1) 관리자가 결과를 조작(고정)해둔 회차인지 먼저 확인
+      const fixed = await EventService.getFixedResult(round);
+      // 2) 없으면 라운드 번호 기반 결정론적 결과로 계산 (클라이언트와 동일 로직)
+      const winObjs = fixed || EventService.generateResult(round);
+      const names = winObjs.map(i => i.name);
+      const winItemsStr = winObjs.map(i => `${i.icon} ${i.name}`);
+
+      setFallbackWinners(prev => ({ ...prev, [round]: names }));
+
+      // ★ [신규] 계산한 결과를 game_history에도 저장해서 "치유"
+      //   다음부터는 fallback 없이도 정상적으로 gameHistory에서 바로 조회됨
+      try {
+        await setDoc(doc(db, "game_history", String(round)), {
+          round,
+          winner: names,
+          winItems: winItemsStr,
+          savedAt: new Date().toISOString(),
+          healedByAdmin: true, // ★ 이 라운드가 자동 복구로 채워졌다는 표식
+        }, { merge: true });
+      } catch (writeErr) {
+        console.warn(`game_history 자동 복구 저장 실패 (${round}회차):`, writeErr);
+      }
+
+      return names;
+    } catch (e) {
+      console.error(`${round}회차 fallback 결과 계산 실패:`, e);
+      return [];
+    }
+  }, [fallbackWinners]);
+
   const isLocked = !currentInfo || currentInfo.timeLeft <= 5;
   const isPastRound = targetRound && targetRound < currentRound;
 
   // ★ [신규] 회차 번호 → 당첨 아이템 배열 룩업 (실시간 모니터링 표에 회차별 결과 아이콘 표시용)
   //   gameHistory의 winItems(이모지 포함)를 우선, 없으면 winner(이름만) fallback
+  //   ★ [수정] gameHistory에도 없는 회차는 fallbackWinners(즉석 계산 캐시)에서 채움
   const winnersByRound = useMemo(() => {
     const map = {};
     (gameHistory || []).forEach(h => {
@@ -78,8 +132,18 @@ export const SponsorshipsView = ({
           });
       map[h.round] = items;
     });
+
+    Object.entries(fallbackWinners).forEach(([round, names]) => {
+      const r = Number(round);
+      if (map[r]) return; // gameHistory에 이미 있으면 그게 우선
+      map[r] = (names || []).map(name => {
+        const cfg = ITEM_CONFIG.find(c => c.name === name);
+        return cfg ? `${cfg.icon} ${cfg.name}` : name;
+      });
+    });
+
     return map;
-  }, [gameHistory]);
+  }, [gameHistory, fallbackWinners]);
 
   // ─────────────── 50개 초과 데이터 자동 삭제 ───────────────
   useEffect(() => {
@@ -205,14 +269,18 @@ export const SponsorshipsView = ({
       //       배팅도 2,000 더 나갔으니 순수 이득 차이는 +2,000
       // ═════════════════════════════════════════════════
       const pastGame = gameHistory.find(h => h.round === bet.round);
-      if (!pastGame) {
-        alert(`❌ ${bet.round}회차의 결과 정보를 찾을 수 없어 재정산할 수 없습니다.\n\n(gameHistory 컬렉션에 해당 회차 데이터 없음)`);
-        return;
-      }
-      const winners = pastGame.winner || [];
+      let winners = pastGame?.winner || [];
 
+      // ★ [수정] gameHistory에 해당 회차가 없으면(=아무도 그 순간 이벤트 화면을 안 켜놓고 있었던 경우)
+      //   즉석에서 결과를 계산해서 사용 + game_history에 자동 복구 저장
       if (winners.length === 0) {
-        alert(`❌ ${bet.round}회차의 우승 아이템 정보가 없어 재정산할 수 없습니다.`);
+        setIsSaving(true);
+        winners = await resolveWinners(bet.round);
+        setIsSaving(false);
+      }
+
+      if (!winners || winners.length === 0) {
+        alert(`❌ ${bet.round}회차의 결과 정보를 찾을 수 없어 재정산할 수 없습니다.\n\n(gameHistory에도 없고, 자동 계산도 실패했습니다. 잠시 후 다시 시도해주세요.)`);
         return;
       }
 
@@ -321,7 +389,16 @@ export const SponsorshipsView = ({
           return;
         }
         const pastGame = gameHistory.find(h => h.round === targetRound);
-        const oldWinners = pastGame ? pastGame.winItems : [];
+        let oldWinners = pastGame ? pastGame.winItems : [];
+
+        // ★ [수정] gameHistory에 해당 회차가 없으면(=결과 저장이 누락된 회차) 즉석 계산 fallback
+        if (!oldWinners || oldWinners.length === 0) {
+          const names = await resolveWinners(targetRound);
+          oldWinners = (names || []).map(name => {
+            const cfg = ITEM_CONFIG.find(c => c.name === name);
+            return cfg ? `${cfg.icon} ${cfg.name}` : name;
+          });
+        }
 
         if (window.confirm(`${targetRound}회차는 이미 종료된 과거입니다.\n선택하신 [${selectedItems.join(", ")}] 결과로 유저들의 다이아를 즉시 회수/재지급 하시겠습니까?`)) {
           try {
@@ -371,6 +448,34 @@ export const SponsorshipsView = ({
     });
 
   const controlLocked = (isLocked && !isPastRound && targetRound === currentRound) || isControlLoading;
+
+  // ═══════════════════════════════════════════════════════════════
+  // ★ [신규] 화면에 보이는 배팅들 중 gameHistory가 없는(=결과 미상) 회차를
+  //   자동으로 감지해서 백그라운드에서 미리 계산 + 캐시해둠.
+  //   → "종료됨 (결과 미상)" 배지가 뜨는 대신 바로 승/패(추정)가 표시되고,
+  //     이후 "수정" 클릭 시에도 alert 없이 바로 재정산 가능해짐.
+  // ═══════════════════════════════════════════════════════════════
+  useEffect(() => {
+    const roundsNeeded = new Set();
+
+    displayBets.forEach(s => {
+      const isCurrentRound = s.round === currentRound;
+      const isOngoing = isCurrentRound && (s.win === null || s.win === undefined);
+      if (isOngoing) return;                              // 진행중인 라운드는 대상 아님
+      if (s.win === true || s.win === false || s.win === "draw") return; // 이미 확정된 결과
+      if (gameHistory.some(h => h.round === s.round)) return; // 정상적으로 존재함
+      if (fallbackWinners[s.round]?.length) return;          // 이미 캐시됨
+      if (inFlightRoundsRef.current.has(s.round)) return;     // 이미 요청 중
+
+      roundsNeeded.add(s.round);
+    });
+
+    roundsNeeded.forEach(round => {
+      inFlightRoundsRef.current.add(round);
+      resolveWinners(round).finally(() => inFlightRoundsRef.current.delete(round));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayBets, gameHistory, fallbackWinners]);
 
   return (
     <div>
@@ -559,8 +664,9 @@ export const SponsorshipsView = ({
                   } else if (isOngoing) {
                     statusBadge = <span style={{ color: '#ffb347', fontSize: '12px', fontWeight: 'bold' }}>진행중 ⏳</span>;
                   } else {
-                    // 과거 회차 + win null → gameHistory로 추정
-                    const inferred = inferBetWinFromHistory(s, gameHistory);
+                    // 과거 회차 + win null → gameHistory(없으면 fallbackWinners 캐시)로 추정
+                    const roundWinnerNames = getRoundWinners(s.round, gameHistory, fallbackWinners);
+                    const inferred = inferBetWinFromWinners(s, roundWinnerNames);
                     if (inferred === true) {
                       statusBadge = (
                         <span style={{ color: '#00ff00', fontWeight: 'bold' }}>
