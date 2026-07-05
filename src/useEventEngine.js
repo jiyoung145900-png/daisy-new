@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { EventService, soundManager, ITEM_CONFIG } from "./EventService"; 
+import { EventService, soundManager, ITEM_CONFIG, syncServerClock } from "./EventService"; 
 import { db } from "./firebase";
 import { collection, onSnapshot, query, where, doc, setDoc, updateDoc, increment, addDoc, getDocs, orderBy, limit } from "firebase/firestore";
 
@@ -51,53 +51,74 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
   const [impactTick, setImpactTick] = useState(0);
 
   // ★ [신규] Firebase에서 내 후원기록 불러오기 (다기기 동기화 핵심)
+  // ★ [대공사] myHistory를 event_bets 실시간 구독 기반으로 전환
+  //   기존: user_bet_history 컬렉션에서 mount 시점 1회 로드 + 로컬 상태 관리
+  //   문제: 관리자가 event_bets를 편집해도 로컬 캐시가 안 바뀜 → 후원 기록에 반영 안 됨
+  //   신규: event_bets를 실시간 구독 → source of truth 삼아서 admin 편집 즉시 반영
+  //   ※ localStorage는 fast initial paint용 캐시로만 사용 (즉시 표시 후 구독으로 갱신)
   useEffect(() => {
     if (!user?.id) return;
-    const loadMyHistory = async () => {
-      try {
-        const q = query(
-          collection(db, "user_bet_history"),
-          where("userId", "==", user.id),
-          orderBy("savedAt", "desc"),
-          limit(100)
-        );
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-          const records = snapshot.docs.map(d => d.data());
-          setMyHistory(records);
-          // 로컬 캐시도 최신화
-          localStorage.setItem(`event_my_history_${user.id}`, JSON.stringify(records));
-        } else {
-          // Firebase에 없으면 로컬 캐시 fallback
-          const saved = localStorage.getItem(`event_my_history_${user.id}`);
-          if (saved) setMyHistory(JSON.parse(saved));
-        }
-      } catch (err) {
-        console.warn("후원기록 Firebase 불러오기 실패, 로컬 캐시 사용:", err);
-        const saved = localStorage.getItem(`event_my_history_${user.id}`);
-        if (saved) setMyHistory(JSON.parse(saved));
-      }
-    };
-    loadMyHistory();
+
+    // 빠른 초기 표시: 로컬 캐시로 우선 세팅
+    const cached = localStorage.getItem(`event_my_history_${user.id}`);
+    if (cached) {
+      try { setMyHistory(JSON.parse(cached)); } catch (e) {}
+    }
+
+    // 실시간 구독: event_bets에서 유저의 정산 완료된 배팅 가져오기
+    const q = query(
+      collection(db, "event_bets"),
+      where("userId", "==", user.id)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const records = snap.docs
+        .map(d => {
+          const b = d.data();
+          // 진행중 배팅(win null)은 히스토리에서 제외
+          if (b.win === null || b.win === undefined) return null;
+          const cost = b.betAmount || 0;
+          const items = b.items || [];
+          // 지급액: 승리면 배팅액 * 2, 패배/무승부면 0
+          const earn = b.win === true ? cost * 2 : 0;
+          // 날짜 표시
+          const ts = b.timestamp ? new Date(b.timestamp) : new Date();
+          const date = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+          return {
+            round: b.round,
+            selected: items,
+            cost,
+            earn,
+            date,
+            status: b.win === true ? "승리" : b.win === false ? "패배" : "무승부",
+            docId: d.id,
+            // ※ winItems(회차 우승 아이콘)는 EventSection에서 totalHistory 룩업으로 채움
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.round - a.round)
+        .slice(0, 100);
+
+      setMyHistory(records);
+      // 로컬 캐시 갱신 (다음 mount 때 fast paint용)
+      try { localStorage.setItem(`event_my_history_${user.id}`, JSON.stringify(records)); } catch (e) {}
+    }, (err) => {
+      console.error("event_bets 실시간 구독 실패:", err);
+    });
+
+    return () => unsub();
   }, [user?.id]);
 
-  // ★ [신규] 후원기록 1건을 Firebase + localStorage 동시에 저장하는 헬퍼
+  // ★ [유지] saveMyHistoryRecord - 하위 호환 목적으로 유지 (외부 호출자 있을 수 있음)
+  //   실제로는 event_bets updateDoc이 진짜 저장이고, 이건 fallback 정도로만 사용
   const saveMyHistoryRecord = useCallback(async (record) => {
     if (!user?.id) return;
-    // 1) Firebase에 저장 (다기기 동기화)
-    try {
-      await addDoc(collection(db, "user_bet_history"), {
-        ...record,
-        userId: user.id,
-        savedAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.error("후원기록 Firebase 저장 실패:", err);
-    }
-    // 2) 로컬 상태 + localStorage 동시 업데이트 (즉각 반영)
+    // event_bets 구독이 알아서 처리하므로 여기선 아무것도 안 해도 됨
+    // 다만 subscription 딜레이가 있을 수 있으니 로컬 상태만 즉시 반영
     setMyHistory(prev => {
+      const exists = prev.find(h => h.round === record.round && JSON.stringify(h.selected) === JSON.stringify(record.selected));
+      if (exists) return prev;
       const updated = [record, ...prev].slice(0, 100);
-      localStorage.setItem(`event_my_history_${user.id}`, JSON.stringify(updated));
+      try { localStorage.setItem(`event_my_history_${user.id}`, JSON.stringify(updated)); } catch (e) {}
       return updated;
     });
   }, [user?.id]);
@@ -197,11 +218,25 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
             const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
             for (const parsedBet of roundGroups[roundStr]) {
-              const { items, totalCost } = parsedBet;
+              const { items, totalCost, docId } = parsedBet;
               const matchedCount = items.filter(name => winNames.includes(name)).length;
               const winAmount = calcWinAmount(items, matchedCount, totalCost);
+              const isWin = winAmount > 0;
 
               totalMissedWin += winAmount;
+
+              // ★ [신규] event_bets 문서에도 win 확정 반영 (구독이 감지해서 myHistory 자동 갱신)
+              if (docId) {
+                try {
+                  await updateDoc(doc(db, "event_bets", docId), {
+                    win: isWin,
+                    balanceAtEnd: pointRef.current + totalMissedWin,
+                    balanceAtEndAt: new Date().toISOString(),
+                  });
+                } catch (e) {
+                  console.warn(`event_bets 부재중 정산 저장 실패 (${docId}):`, e);
+                }
+              }
 
               const newRecord = {
                 round: roundNum, selected: [...items], winNames, winIcons: winObjs.map(i => i.icon),
@@ -260,6 +295,18 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     window.addEventListener("event_history_update", handleHistoryUpdate);
     return () => window.removeEventListener("event_history_update", handleHistoryUpdate);
   }, []);
+
+  // ★ [신규] 서버 시간 동기화
+  //   기기(PC/폰) 시계 차이로 회차가 어긋나는 문제 해결
+  //   mount 시 1회 + 5분마다 재sync
+  useEffect(() => {
+    if (!user?.id) return;
+    syncServerClock(user.id, true); // 강제 sync
+    const interval = setInterval(() => {
+      syncServerClock(user.id);
+    }, 5 * 60 * 1000); // 5분마다
+    return () => clearInterval(interval);
+  }, [user?.id]);
 
   // ★ [신규] 유저 본인 다이아 실시간 구독
   //   관리자가 실시간 배팅 모니터링에서 배팅/잔액을 수정하면

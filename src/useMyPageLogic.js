@@ -23,6 +23,8 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
   // ★ State for transaction history
   const [myDeposits, setMyDeposits] = useState([]);
   const [myWithdraws, setMyWithdraws] = useState([]);
+  // ★ [신규] 게임 배팅 이용 내역 - event_bets 실시간 구독으로 관리
+  const [myBetHistory, setMyBetHistory] = useState([]);
 
   // Sync initial user info from props
   useEffect(() => {
@@ -159,6 +161,53 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
       unsub2();
       unsub3();
     };
+  }, [userInfo?.id]);
+
+  // ★ [신규] 게임 배팅 이용 내역 실시간 구독 (event_bets)
+  //   - 관리자가 실시간 모니터링에서 배팅 수정하면 여기서 감지해서 마이페이지 UI 즉시 갱신
+  //   - 진행중 배팅(win null)은 제외, 정산 완료된 것만 히스토리에 표시
+  useEffect(() => {
+    if (!userInfo?.id) return;
+    // fast paint를 위해 로컬 캐시로 우선 세팅
+    try {
+      const cached = localStorage.getItem(`event_my_history_${userInfo.id}`);
+      if (cached) setMyBetHistory(JSON.parse(cached));
+    } catch (e) {}
+
+    const q = query(
+      collection(db, "event_bets"),
+      where("userId", "==", userInfo.id)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      const records = snap.docs
+        .map(d => {
+          const b = d.data();
+          if (b.win === null || b.win === undefined) return null; // 진행중 제외
+          const cost = b.betAmount || 0;
+          const items = b.items || [];
+          const earn = b.win === true ? cost * 2 : 0;
+          const ts = b.timestamp ? new Date(b.timestamp) : new Date();
+          return {
+            round: b.round,
+            selected: items,
+            cost,
+            earn,
+            date: ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+            timestamp: b.timestamp,
+            status: b.win === true ? "승리" : b.win === false ? "패배" : "무승부",
+            docId: d.id,
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.round - a.round)
+        .slice(0, 100);
+      setMyBetHistory(records);
+      // 로컬 캐시 갱신
+      try { localStorage.setItem(`event_my_history_${userInfo.id}`, JSON.stringify(records)); } catch (e) {}
+    }, (err) => {
+      console.error("배팅 이용내역 구독 실패:", err);
+    });
+    return () => unsub();
   }, [userInfo?.id]);
 
   // Voice Alert (Fixed pitch/rate)
@@ -329,6 +378,8 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     userInfo: userInfo ? { ...globalSettings, ...userInfo } : globalSettings,
     myDeposits,
     myWithdraws,
+    // ★ [신규] 게임 배팅 이용 내역 (event_bets 실시간 구독)
+    myBetHistory,
     requestDeposit,
     requestWithdraw,
     updatePassword,

@@ -256,16 +256,21 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
 };
 
 // --- 6. 게임 이용 내역 화면 ---
+// ★ [수정] myBetHistory prop 우선 사용 (Firestore 실시간 구독 기반)
+//   - 관리자가 배팅 수정하면 즉시 반영
+//   - prop이 없으면 (구버전 호환) localStorage로 fallback
 // ★ [수정] 손익 표시를 순손익(net profit)으로 변경
 //   기존: 이기면 +h.earn (총지급액 40000), 지면 -h.cost (20000)
 //   신규: 이기면 +(h.earn - h.cost) 순수익 (20000), 지면 -h.cost (20000)
-//   → 딱 걸었던 돈만큼만 오르내리게 표시
-export const HistoryView = ({ onBack, isKo, userId }) => {
+export const HistoryView = ({ onBack, isKo, userId, myBetHistory }) => {
   const donationHistory = useMemo(() => {
+    // 1순위: prop (실시간 구독 데이터)
+    if (Array.isArray(myBetHistory)) return myBetHistory;
+    // 2순위: localStorage fallback (구버전 호환)
     if (!userId) return [];
     const saved = localStorage.getItem(`event_my_history_${userId}`);
     return saved ? JSON.parse(saved) : [];
-  }, [userId]);
+  }, [userId, myBetHistory]);
 
   return (
     <div style={myStyles.container}>
