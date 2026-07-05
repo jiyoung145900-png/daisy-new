@@ -140,6 +140,28 @@ export function getServerTimeOffset() {
   return serverTimeOffsetMs;
 }
 
+// ═══════════════════════════════════════════════════════════════
+// ★ [호환용] App.jsx 에서 mount 시점에 호출하는 함수
+//   실제 sync 는 useEventEngine.js 에서 user.id 가 확보되면 자동으로 시작됨
+//   여기서는 localStorage 에 저장된 currentUser 로 최대한 빠르게 첫 sync 시도
+// ═══════════════════════════════════════════════════════════════
+export function startTimeSyncLoop() {
+  try {
+    const raw = localStorage.getItem("currentUser");
+    if (!raw) {
+      console.log("⏰ startTimeSyncLoop: 로그인 전 상태, sync 스킵 (로그인 후 자동 시작)");
+      return;
+    }
+    const saved = JSON.parse(raw);
+    if (saved?.id) {
+      // 첫 sync 즉시 시도
+      syncServerClock(saved.id, true);
+    }
+  } catch (e) {
+    console.warn("⏰ startTimeSyncLoop 실패:", e.message);
+  }
+}
+
 class AudioController {
   constructor() { this.ctx = null; }
   init() {
