@@ -78,6 +78,8 @@ export default function App() {
   const [logoSize, setLogoSize] = useState(() => load("logoSize", 140));
   const [logoPos, setLogoPos] = useState(() => load("logoPos", { x: 0, y: 0 }));
   const [innerLogo, setInnerLogo] = useState(() => load("innerLogo", null));
+  const [topAdImage, setTopAdImage] = useState(() => load("topAdImage", null)); // ★ [신규] 로고 밑 광고 이미지
+  const [topAdImage2, setTopAdImage2] = useState(() => load("topAdImage2", null)); // ★ [신규] LIVE CONNECTED 위 두 번째 광고 이미지
 
   // ★ [추가] 홈 상단 공지 티커 문구
   const [noticeText, setNoticeText] = useState(() => load("noticeText", "📢 BANADA에 오신 것을 환영합니다!"));
@@ -105,6 +107,8 @@ export default function App() {
         if (data.slideImages) setSlideImages(data.slideImages);
         if (data.videos) setVideos(data.videos);
         if (data.innerLogo !== undefined) setInnerLogo(data.innerLogo);
+        if (data.topAdImage !== undefined) setTopAdImage(data.topAdImage); // ★ [신규]
+        if (data.topAdImage2 !== undefined) setTopAdImage2(data.topAdImage2); // ★ [신규]
         
         if (data.adminPassword) setAdminPw(data.adminPassword);
         else if (data.adminPw) setAdminPw(data.adminPw);
@@ -126,7 +130,7 @@ export default function App() {
     try {
       const finalData = {
         hero, videoURL, logo, logoSize, logoPos,
-        members, slideImages, videos, innerLogo,
+        members, slideImages, videos, innerLogo, topAdImage, topAdImage2,
         adminPw, gamePw, telegramLink, noticeText,
         // users는 너무 커질 수 있으므로 settings/global에 통째로 넣지 않는 게 좋지만, 
         // 기존 구조 호환을 위해 일단 유지하거나 생략 가능.
@@ -357,7 +361,7 @@ export default function App() {
           onUpdatePoint={(newVal) => syncUpdate(currentUser.id, newVal, currentUser.refCode, currentUser.referral)}
           appAvatarImage={appAvatarImage} appAvatarIdx={appAvatarIdx} onAvatarChange={refreshAvatar}
           t={t} lang={lang} isGuest={isGuest} members={members} regions={REGIONS} slideImages={slideImages}
-          videos={videos} videoCategories={VIDEO_CATS} innerLogo={innerLogo} telegramLink={telegramLink}
+          videos={videos} videoCategories={VIDEO_CATS} innerLogo={innerLogo} topAdImage={topAdImage} topAdImage2={topAdImage2} telegramLink={telegramLink}
           noticeText={noticeText}
           onLogout={handleLogout} dashStyles={dashStyles} 
         />
@@ -371,7 +375,7 @@ export default function App() {
           logoPos={logoPos} setLogoPos={setLogoPos} members={members} setMembers={setMembers} 
           regions={REGIONS} slideImages={slideImages} setSlideImages={setSlideImages}
           videos={videos} setVideos={setVideos} videoCategories={VIDEO_CATS} 
-          innerLogo={innerLogo} setInnerLogo={setInnerLogo} onExit={handleLogout} styles={styles}
+          innerLogo={innerLogo} setInnerLogo={setInnerLogo} topAdImage={topAdImage} setTopAdImage={setTopAdImage} topAdImage2={topAdImage2} setTopAdImage2={setTopAdImage2} onExit={handleLogout} styles={styles}
           adminPw={adminPw} setAdminPw={setAdminPw} telegramLink={telegramLink} setTelegramLink={setTelegramLink}
           noticeText={noticeText} setNoticeText={setNoticeText}
           openIndependent={() => setIsIndependentAdmin(true)} 

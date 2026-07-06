@@ -6,6 +6,8 @@ export default function HomeSection({
   members = [],
   slideImages = [],
   innerLogo,
+  topAdImage, // ★ [신규] 로고 밑 첫 번째 광고 이미지
+  topAdImage2, // ★ [신규] LIVE CONNECTED 배지 바로 위, 두 번째 광고 이미지
   handleTelegram,
   setActiveTab,
   openDetail,
@@ -86,6 +88,21 @@ export default function HomeSection({
             </h1>
           )}
         </div>
+
+        {/* ===== TOP AD IMAGE (로고 밑, 가로폭에 맞춰 자동 사이즈 조절) ===== */}
+        {topAdImage && (
+          <div style={h.topAdWrap}>
+            <img src={topAdImage} style={h.topAdImg} alt="ad" draggable="false" />
+          </div>
+        )}
+
+        {/* ===== TOP AD IMAGE 2 (LIVE CONNECTED 배지 바로 위) ===== */}
+        {topAdImage2 && (
+          <div style={h.topAdWrap}>
+            <img src={topAdImage2} style={h.topAdImg} alt="ad2" draggable="false" />
+          </div>
+        )}
+
         <div style={h.statusBadge}>
           <div className="dot-pulse-wrap">
             <span className="dot-pulse" />
@@ -94,16 +111,6 @@ export default function HomeSection({
           <b style={h.countText}>{matchingCount} MEMBERS</b>
         </div>
       </header>
-
-      {/* ===== NOTICE TICKER (관리자 설정 공지 문구) ===== */}
-      {noticeText && (
-        <div style={h.noticeTicker}>
-          <div className="notice-track">
-            <span style={h.noticeText}>{noticeText}</span>
-            <span style={h.noticeText}>{noticeText}</span>
-          </div>
-        </div>
-      )}
 
       {/* ===== INTRO TEXT (번역 적용) ===== */}
       <div style={h.introTextArea}>
@@ -275,9 +282,11 @@ export default function HomeSection({
 
 const h = {
   container: { position: 'relative', overflow: 'hidden', backgroundColor: '#0a0a0a', paddingBottom: 20, minHeight: '100vh', color: '#fff' },
-  header: { padding: '25px 0 10px', textAlign: 'center' },
-  logoArea: { marginBottom: 8 },
+  header: { padding: '4px 0 10px', textAlign: 'center' },
+  logoArea: { marginBottom: 10 },
   logoImg: { maxWidth: '350px', filter: 'drop-shadow(0 0 10px rgba(255,215,0,0.3))' },
+  topAdWrap: { padding: '0 12px', marginBottom: 22, display: 'flex', justifyContent: 'center' },
+  topAdImg: { width: '100%', height: 'auto', display: 'block', borderRadius: '14px', border: '1px solid rgba(255,215,0,0.35)', boxShadow: '0 8px 30px rgba(0,0,0,0.6)' },
   defaultLogo: { fontSize: 36, color: '#fff', fontWeight: 900, letterSpacing: -1, lineHeight: 0.8 },
   statusBadge: { fontSize: 10, color: '#eee', background: 'rgba(255,255,255,0.07)', padding: '8px 16px', borderRadius: '30px', display: 'inline-flex', alignItems: 'center', gap: 5, border: '1px solid rgba(255,255,255,0.1)' },
   countText: { color: '#FFD700', letterSpacing: 1 },

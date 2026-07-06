@@ -25,6 +25,8 @@ export default function Dashboard({
   videos = [], 
   videoCategories = [], 
   innerLogo, 
+  topAdImage, // ★ [신규] 로고 밑 첫 번째 광고 이미지 URL
+  topAdImage2, // ★ [신규] LIVE CONNECTED 위, 두 번째 광고 이미지 URL
   telegramLink = "https://t.me/your_address",
   noticeText = "" // ★ [추가] 홈 상단 공지 티커 문구
 }) {
@@ -77,25 +79,27 @@ export default function Dashboard({
     return m.region === selectedRegion;
   });
 
-  // 실시간 접속자 카운트 (기존 유지)
+  // ★ [수정] 실시간 접속자 카운트 - 매번 같은 값이 아니라 로드할 때마다 다르게 보이도록
+  //   1) localStorage 캐시를 없애서 새로고침/재방문 시 항상 새로운 시작값
+  //   2) 등락 폭도 좀 더 다양하게(가끔 큰 폭 변동 포함) + 범위도 넓힘
   const [matchingCount, setMatchingCount] = useState(() => {
-    const saved = localStorage.getItem('live_count');
-    const initial = saved ? parseInt(saved) : 142;
-    return (initial >= 123 && initial <= 179) ? initial : 145;
+    return Math.floor(Math.random() * (198 - 131 + 1)) + 131; // 131 ~ 198 사이 랜덤 시작
   });
 
   useEffect(() => {
     const timer = setInterval(() => {
       setMatchingCount(prev => {
         const rand = Math.random();
-        let change = rand < 0.45 ? 1 : rand < 0.90 ? -1 : rand < 0.95 ? 2 : -2;
+        // 대부분은 작은 변동(±1~2), 가끔 큰 변동(±3~6)까지 섞어서 더 자연스럽고 다양하게
+        let change = rand < 0.35 ? 1 : rand < 0.70 ? -1
+          : rand < 0.82 ? 2 : rand < 0.90 ? -2
+          : rand < 0.95 ? 4 : -4;
         let nextCount = prev + change;
-        if (nextCount <= 123) nextCount = 125;
-        if (nextCount >= 179) nextCount = 177;
-        localStorage.setItem('live_count', nextCount); 
+        if (nextCount <= 110) nextCount = 118;
+        if (nextCount >= 215) nextCount = 205;
         return nextCount;
       });
-    }, 5000); 
+    }, 4000); 
     return () => clearInterval(timer);
   }, []);
 
@@ -143,7 +147,7 @@ export default function Dashboard({
       case 'home':
         return (
           <HomeSection 
-            t={t} innerLogo={innerLogo} slideImages={slideImages} members={members} 
+            t={t} innerLogo={innerLogo} topAdImage={topAdImage} topAdImage2={topAdImage2} slideImages={slideImages} members={members} 
             setActiveTab={setActiveTab} openDetail={openDetail} 
             handleTelegram={handleTelegram} matchingCount={matchingCount}
             onClaimBonus={handleClaimBonus} // ★ 보너스 함수 전달

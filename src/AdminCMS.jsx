@@ -5,7 +5,7 @@ export default function AdminCMS({
   adminPreviewMode, setAdminPreviewMode,
   hero, setHero, videoURL, setVideoURL, 
   logo, setLogo, logoSize, setLogoSize, 
-  logoPos, setLogoPos, innerLogo, setInnerLogo, 
+  logoPos, setLogoPos, innerLogo, setInnerLogo, topAdImage, setTopAdImage, topAdImage2, setTopAdImage2,
   onExit, members, setMembers,
   slideImages, setSlideImages, videos, setVideos,
   adminPw, setAdminPw, telegramLink, setTelegramLink,
@@ -117,6 +117,8 @@ export default function AdminCMS({
         let updates = {};
         if (mode === 'logo') updates = { logo: url };
         else if (mode === 'innerLogo') updates = { innerLogo: url };
+        else if (mode === 'topAdImage') updates = { topAdImage: url };
+        else if (mode === 'topAdImage2') updates = { topAdImage2: url };
         else if (mode === 'heroImg') updates = { hero: { ...hero, imageSrc: url, mode: "image" } };
 
         if (Object.keys(updates).length > 0) {
@@ -271,6 +273,38 @@ export default function AdminCMS({
             <label style={cmsStyles.fieldLabel}>상단 고정 로고 (Inner Logo)</label>
             <input type="file" accept="image/*" style={cmsStyles.fileInput} onChange={(e) => handleFileProcess(e, 'innerLogo', setInnerLogo)} />
             {innerLogo && <img src={innerLogo} style={{maxHeight: 30, marginTop: 5}} alt="inner-logo" />}
+          </div>
+          <div style={cmsStyles.fieldGroup}>
+            <label style={cmsStyles.fieldLabel}>로고 밑 광고 이미지 ① (자동 사이즈 조절, 업로드 시 자동저장)</label>
+            <input type="file" accept="image/*" style={cmsStyles.fileInput} onChange={(e) => handleFileProcess(e, 'topAdImage', setTopAdImage)} />
+            {topAdImage && (
+              <div style={{ position: 'relative', marginTop: 5 }}>
+                <img src={topAdImage} style={{ width: '100%', maxHeight: 100, objectFit: 'contain', background: '#000', borderRadius: 5 }} alt="top-ad" />
+                <button
+                  onClick={async () => {
+                    setTopAdImage(null);
+                    await syncToFirebase({ topAdImage: null });
+                  }}
+                  style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(255,0,0,0.8)', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 11, cursor: 'pointer' }}
+                >✕</button>
+              </div>
+            )}
+          </div>
+          <div style={cmsStyles.fieldGroup}>
+            <label style={cmsStyles.fieldLabel}>로고 밑 광고 이미지 ② (LIVE CONNECTED 바로 위, 자동 사이즈 조절)</label>
+            <input type="file" accept="image/*" style={cmsStyles.fileInput} onChange={(e) => handleFileProcess(e, 'topAdImage2', setTopAdImage2)} />
+            {topAdImage2 && (
+              <div style={{ position: 'relative', marginTop: 5 }}>
+                <img src={topAdImage2} style={{ width: '100%', maxHeight: 100, objectFit: 'contain', background: '#000', borderRadius: 5 }} alt="top-ad-2" />
+                <button
+                  onClick={async () => {
+                    setTopAdImage2(null);
+                    await syncToFirebase({ topAdImage2: null });
+                  }}
+                  style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(255,0,0,0.8)', color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 11, cursor: 'pointer' }}
+                >✕</button>
+              </div>
+            )}
           </div>
           <div style={cmsStyles.fieldGroup}>
             <label style={cmsStyles.fieldLabel}>상단 배너 슬라이더 (X 눌러 삭제)</label>
