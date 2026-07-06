@@ -5,6 +5,8 @@ import {
   query, orderBy, limit, updateDoc, getDoc, addDoc,
   serverTimestamp, where, getDocs, writeBatch, increment
 } from "firebase/firestore";
+// ★ [신규] 관리자 감사 로그
+import { logAdminAction } from "./adminAudit";
 
 const CONFIG = {
   ROUND_DURATION: 180,
@@ -320,6 +322,16 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       }
 
       await batch.commit();
+
+      // ★ [신규] 감사 로그
+      logAdminAction(isOngoing ? "bet_edit_ongoing" : "bet_edit_ended", userId, {
+        betId,
+        newAmount: Number(newAmount),
+        newItems,
+        newWin,
+        diamondDelta,
+      });
+
       return true;
     } catch (e) {
       console.error("배팅 수정 + 잔액 동기화 실패:", e);
@@ -386,6 +398,15 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       }, { merge: true });
 
       await batch.commit();
+
+      // ★ [신규] 감사 로그 - 회차 재정산
+      logAdminAction("round_revision", null, {
+        round,
+        oldWinners,
+        newWinners,
+        affectedBets: bets.length,
+      });
+
       return true;
     } catch (e) {
       console.error("❌ 재정산 처리 중 오류:", e);
@@ -549,6 +570,9 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         completedAt: new Date().toISOString(),
       });
 
+      // ★ [신규] 감사 로그
+      logAdminAction("diamond_add", userId, { amount: amt, reason: reason || "", before: currentDia, after: newDia });
+
       return true;
     } catch (e) {
       alert("관리자 입금 실패: " + e.message);
@@ -588,6 +612,9 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
         adminAction: true,
         completedAt: new Date().toISOString(),
       });
+
+      // ★ [신규] 감사 로그
+      logAdminAction("diamond_sub", userId, { amount: amt, reason: reason || "", before: currentDia, after: newDia });
 
       return true;
     } catch (e) {
@@ -749,6 +776,8 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       if (setInitialUsers) {
         setInitialUsers(prev => (prev || []).map(u => u.id === userId ? { ...u, ...payload } : u));
       }
+      // ★ [신규] 감사 로그
+      logAdminAction("user_ban", userId, { reason: reason || "" });
       return { success: true };
     } catch (error) {
       console.error("❌ 회원 차단 실패:", error);
@@ -769,6 +798,8 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       if (setInitialUsers) {
         setInitialUsers(prev => (prev || []).map(u => u.id === userId ? { ...u, ...payload } : u));
       }
+      // ★ [신규] 감사 로그
+      logAdminAction("user_unban", userId, {});
       return { success: true };
     } catch (error) {
       console.error("❌ 회원 차단 해제 실패:", error);
@@ -823,6 +854,9 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
       if (setInitialUsers) {
         setInitialUsers(prev => (prev || []).filter(u => u.id !== userId));
       }
+
+      // ★ [신규] 감사 로그
+      logAdminAction("user_delete", userId, { counts });
 
       return { success: true, counts };
     } catch (error) {

@@ -17,6 +17,8 @@ import LandingPage from "./LandingPage";
 import Dashboard from "./Dashboard";
 import AdminCMS from "./AdminCMS";
 import IndependentAdmin from "./IndependentAdmin"; 
+// ★ [신규] 입력 검증 유틸
+import { validateUserId, validatePassword, validateNickname, sanitizeText } from "./validation";
 
 // [Core] Broadcast channel
 const broadcast = new BroadcastChannel('daisy_global_channel');
@@ -230,6 +232,17 @@ export default function App() {
 
         if (userSnap.exists()) {
             const userData = userSnap.data();
+
+            // ★ [신규] 차단된 회원 접속 거부 - 비밀번호 확인보다 먼저 체크
+            //   비밀번호가 맞아도 banned: true 면 무조건 거부
+            if (userData.banned === true) {
+                const reason = userData.bannedReason
+                  ? `\n\n사유: ${userData.bannedReason}`
+                  : "";
+                alert(`🚫 접속이 차단된 회원입니다.${reason}\n\n관리자에게 문의해주세요.`);
+                return;
+            }
+
             if (userData.password === pw) {
                 setCurrentUser(userData);
                 setLoggedIn(true);
@@ -263,11 +276,19 @@ export default function App() {
   const handleSignupAction = async (id, pw, nickname, referralCode) => {
     if (!id || !pw) return alert(t.input_id_pw || "ID/PW Required");
 
+    // ★ [신규] 입력 검증 (XSS · 특수문자 · 길이 방어)
+    const idCheck = validateUserId(id);
+    if (!idCheck.ok) return alert(idCheck.reason);
+    const pwCheck = validatePassword(pw);
+    if (!pwCheck.ok) return alert(pwCheck.reason);
+    const nickCheck = validateNickname(nickname || id);
+    if (!nickCheck.ok) return alert(nickCheck.reason);
+
     try {
-      const cleanId = String(id).trim();
-      const cleanPw = String(pw).trim();
-      const cleanNick = (nickname && String(nickname).trim()) || cleanId;
-      const cleanRef = (referralCode && String(referralCode).trim()) || "";
+      const cleanId = idCheck.value;
+      const cleanPw = pwCheck.value;
+      const cleanNick = nickCheck.value;
+      const cleanRef = sanitizeText(referralCode || "", 30);
 
       // 1) 아이디 중복 확인
       const userRef = doc(db, "users", cleanId);
