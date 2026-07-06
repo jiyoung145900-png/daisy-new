@@ -12,7 +12,7 @@ import { useRecentUsers } from "./useRecentUsers";
 //   - 아이디 클릭 시 onSelectUser(userId) 호출 → 상세 페이지로 이동
 //   - 각 행은 클릭 가능한 카드 스타일 (호버 시 강조)
 // =========================================================================
-export const UsersView = ({ users = [], onSelectUser, deleteUserCompletely }) => {
+export const UsersView = ({ users = [], onSelectUser, deleteUserCompletely, banUser, unbanUser }) => {
   const [term, setTerm] = useState("");
   const [localHidden, setLocalHidden] = useState(new Set());
   const { recentIds, addRecentIds, removeRecentId } = useRecentUsers('admin_recent_users', 20);
@@ -21,6 +21,8 @@ export const UsersView = ({ users = [], onSelectUser, deleteUserCompletely }) =>
   const [hoveredId, setHoveredId] = useState(null);
   // ★ [신규] 삭제 진행 중 상태 (중복 클릭 방지)
   const [deletingId, setDeletingId] = useState(null);
+  // ★ [신규] 차단 토글 진행 중 상태
+  const [banningId, setBanningId] = useState(null);
 
   useEffect(() => {
     setLocalHidden(new Set());
@@ -124,6 +126,57 @@ export const UsersView = ({ users = [], onSelectUser, deleteUserCompletely }) =>
     }
   };
 
+  // ★ [신규] 회원 차단 / 차단 해제 토글
+  const handleToggleBan = async (e, user) => {
+    e.stopPropagation();
+    if (banningId) return;
+
+    const isCurrentlyBanned = !!user.banned;
+
+    if (!isCurrentlyBanned) {
+      // ─── 차단 ───
+      if (!banUser) {
+        alert("차단 기능이 연결되지 않았습니다. (banUser 없음)");
+        return;
+      }
+      const reason = window.prompt(
+        `🚫 [${user.id}] 회원을 차단합니다.\n\n` +
+        `차단 사유를 입력하세요 (선택, 비워도 됨):`,
+        ""
+      );
+      if (reason === null) return; // 취소
+      try {
+        setBanningId(user.id);
+        await banUser(user.id, (reason || "").trim());
+        alert(`✅ [${user.id}] 회원이 차단되었습니다.\n\n이제 로그인 시 접속이 거부됩니다.`);
+      } catch (err) {
+        alert(`❌ 차단 실패: ${err.message}`);
+      } finally {
+        setBanningId(null);
+      }
+    } else {
+      // ─── 차단 해제 ───
+      if (!unbanUser) {
+        alert("차단 해제 기능이 연결되지 않았습니다. (unbanUser 없음)");
+        return;
+      }
+      const ok = window.confirm(
+        `♻️ [${user.id}] 회원의 차단을 해제하시겠습니까?\n\n` +
+        `차단 해제 시 즉시 다시 로그인 가능해집니다.`
+      );
+      if (!ok) return;
+      try {
+        setBanningId(user.id);
+        await unbanUser(user.id);
+        alert(`✅ [${user.id}] 회원의 차단이 해제되었습니다.`);
+      } catch (err) {
+        alert(`❌ 차단 해제 실패: ${err.message}`);
+      } finally {
+        setBanningId(null);
+      }
+    }
+  };
+
   return (
     <div style={iaStyles.card}>
       <h1 style={iaStyles.bigTabTitle}>
@@ -162,12 +215,12 @@ export const UsersView = ({ users = [], onSelectUser, deleteUserCompletely }) =>
           <thead>
             <tr>
               <th style={{ width: "6%" }}>상태</th>
-              <th style={{ width: "20%" }}>아이디</th>
-              <th style={{ width: "18%" }}>다이아</th>
-              <th style={{ width: "14%" }}>등급</th>
-              <th style={{ width: "14%" }}>신용점수</th>
-              <th style={{ width: "13%" }}>계좌</th>
-              <th style={{ width: "15%" }}>관리</th>
+              <th style={{ width: "18%" }}>아이디</th>
+              <th style={{ width: "16%" }}>다이아</th>
+              <th style={{ width: "12%" }}>등급</th>
+              <th style={{ width: "13%" }}>신용점수</th>
+              <th style={{ width: "12%" }}>계좌</th>
+              <th style={{ width: "23%" }}>관리</th>
             </tr>
           </thead>
           <tbody>
@@ -187,24 +240,44 @@ export const UsersView = ({ users = [], onSelectUser, deleteUserCompletely }) =>
                   style={{
                     borderBottom: "1px solid #222",
                     cursor: 'pointer',
-                    background: isHovered ? 'rgba(255,179,71,0.05)' : 'transparent',
-                    transition: 'background 0.15s ease'
+                    background: isHovered
+                      ? 'rgba(255,179,71,0.05)'
+                      : (u.banned ? 'rgba(239,68,68,0.06)' : 'transparent'),
+                    transition: 'background 0.15s ease',
+                    opacity: u.banned ? 0.75 : 1,
                   }}
                 >
                   <td style={{ textAlign: "center" }}>
-                    {isOnline
-                      ? <span style={{ color: "#0f0" }}>●</span>
-                      : <span style={{ color: "#444" }}>●</span>}
+                    {u.banned
+                      ? <span style={{ color: "#ef4444", fontSize: 16 }} title="차단됨">🚫</span>
+                      : isOnline
+                        ? <span style={{ color: "#0f0" }}>●</span>
+                        : <span style={{ color: "#444" }}>●</span>}
                   </td>
                   <td>
                     <span style={{
                       fontWeight: "bold",
                       fontSize: 15,
                       color: isHovered ? '#ffb347' : '#fff',
+                      textDecoration: u.banned ? 'line-through' : 'none',
                       transition: 'color 0.15s'
                     }}>
                       {u.id}
                     </span>
+                    {u.banned && (
+                      <span style={{
+                        marginLeft: 6,
+                        fontSize: 9,
+                        fontWeight: 900,
+                        padding: '2px 5px',
+                        borderRadius: 3,
+                        background: 'rgba(239,68,68,0.15)',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239,68,68,0.4)',
+                      }}>
+                        차단됨
+                      </span>
+                    )}
                     <span style={{ marginLeft: 8, fontSize: 11, color: '#666' }}>
                       {isHovered && '→ 상세보기'}
                     </span>
@@ -259,15 +332,15 @@ export const UsersView = ({ users = [], onSelectUser, deleteUserCompletely }) =>
                     )}
                   </td>
                   <td style={{ textAlign: 'center' }}>
-                    {/* ★ [수정] 숨김 + 삭제 두 버튼을 나란히 배치 */}
-                    <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                    {/* ★ [수정] 숨김 + 차단/해제 + 삭제 세 버튼 나란히 */}
+                    <div style={{ display: 'flex', gap: 3, justifyContent: 'center', flexWrap: 'wrap' }}>
                       <button
                         onClick={(e) => handleDeleteUI(e, u.id)}
                         style={{
                           background: 'transparent',
                           border: '1px solid #444',
                           color: '#ef4444',
-                          padding: '5px 8px',
+                          padding: '5px 7px',
                           borderRadius: 6,
                           fontSize: 11,
                           cursor: 'pointer',
@@ -275,6 +348,27 @@ export const UsersView = ({ users = [], onSelectUser, deleteUserCompletely }) =>
                         }}
                       >
                         숨김
+                      </button>
+                      {/* ★ [신규] 차단/차단해제 토글 버튼 */}
+                      <button
+                        onClick={(e) => handleToggleBan(e, u)}
+                        disabled={banningId === u.id}
+                        style={{
+                          background: u.banned ? '#16a34a' : '#f59e0b',
+                          border: u.banned ? '1px solid #16a34a' : '1px solid #f59e0b',
+                          color: '#fff',
+                          padding: '5px 7px',
+                          borderRadius: 6,
+                          fontSize: 11,
+                          cursor: banningId === u.id ? 'not-allowed' : 'pointer',
+                          fontWeight: 900,
+                          opacity: banningId === u.id ? 0.7 : 1,
+                        }}
+                        title={u.banned ? "차단 해제 (로그인 재개)" : "회원 차단 (로그인 봉쇄)"}
+                      >
+                        {banningId === u.id
+                          ? "..."
+                          : u.banned ? "해제" : "차단"}
                       </button>
                       {/* ★ [신규] 삭제 버튼 - 실제 Firestore 데이터 완전 삭제 */}
                       <button
@@ -284,7 +378,7 @@ export const UsersView = ({ users = [], onSelectUser, deleteUserCompletely }) =>
                           background: deletingId === u.id ? '#7f1d1d' : '#ef4444',
                           border: '1px solid #ef4444',
                           color: '#fff',
-                          padding: '5px 8px',
+                          padding: '5px 7px',
                           borderRadius: 6,
                           fontSize: 11,
                           cursor: deletingId === u.id ? 'not-allowed' : 'pointer',
@@ -293,7 +387,7 @@ export const UsersView = ({ users = [], onSelectUser, deleteUserCompletely }) =>
                         }}
                         title="회원 관련 데이터 완전 삭제 (되돌릴 수 없음)"
                       >
-                        {deletingId === u.id ? "삭제중..." : "삭제"}
+                        {deletingId === u.id ? "..." : "삭제"}
                       </button>
                     </div>
                   </td>

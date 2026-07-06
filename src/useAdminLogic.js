@@ -730,6 +730,53 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
   };
 
   // ═════════════════════════════════════════════════════════════════
+  // ★ [신규] 회원 차단 / 차단 해제
+  //   - 차단: users/{userId}.banned = true, bannedAt, bannedReason 저장
+  //   - 해제: banned = false 로 되돌리고 관련 필드 정리
+  //   - 로그인 시 App.jsx 가 이 필드를 체크해서 접속 거부함
+  // ═════════════════════════════════════════════════════════════════
+  const banUser = async (userId, reason = "") => {
+    if (!userId) throw new Error("차단할 회원 ID가 없습니다.");
+    try {
+      const payload = {
+        banned: true,
+        bannedAt: new Date().toISOString(),
+        bannedReason: reason || "",
+      };
+      await updateDoc(doc(db, "users", userId), payload);
+      // 로컬 상태 즉시 반영
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...payload } : u));
+      if (setInitialUsers) {
+        setInitialUsers(prev => (prev || []).map(u => u.id === userId ? { ...u, ...payload } : u));
+      }
+      return { success: true };
+    } catch (error) {
+      console.error("❌ 회원 차단 실패:", error);
+      throw error;
+    }
+  };
+
+  const unbanUser = async (userId) => {
+    if (!userId) throw new Error("차단 해제할 회원 ID가 없습니다.");
+    try {
+      const payload = {
+        banned: false,
+        bannedAt: null,
+        bannedReason: "",
+      };
+      await updateDoc(doc(db, "users", userId), payload);
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...payload } : u));
+      if (setInitialUsers) {
+        setInitialUsers(prev => (prev || []).map(u => u.id === userId ? { ...u, ...payload } : u));
+      }
+      return { success: true };
+    } catch (error) {
+      console.error("❌ 회원 차단 해제 실패:", error);
+      throw error;
+    }
+  };
+
+  // ═════════════════════════════════════════════════════════════════
   // ★ [신규] 회원 완전 삭제
   //   해당 회원과 관련된 모든 Firestore 데이터를 지웁니다.
   //   - users/{userId}
@@ -811,5 +858,8 @@ export const useAdminLogic = (initialUsers, setInitialUsers) => {
     cleanupOldData,
     // ★ [신규] 회원 완전 삭제 (관련 데이터 전부 정리)
     deleteUserCompletely,
+    // ★ [신규] 회원 차단 / 차단 해제
+    banUser,
+    unbanUser,
   };
 };

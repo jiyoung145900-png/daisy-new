@@ -46,7 +46,10 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
     editBetWithSync,
     handleSecretRevisions,
     // ★ [신규] 회원 완전 삭제 (관련 데이터 전부 정리)
-    deleteUserCompletely 
+    deleteUserCompletely,
+    // ★ [신규] 회원 차단 / 차단 해제
+    banUser,
+    unbanUser 
   } = useAdminLogic(users, setUsers);
 
   const handleAdminPasswordClick = () => {
@@ -156,12 +159,16 @@ export default function IndependentAdmin({ users, setUsers, onExit }) {
                 adminAddDiamond={adminAddDiamond}
                 adminSubDiamond={adminSubDiamond}
                 updateFinanceHistoryReason={updateFinanceHistoryReason}
+                banUser={banUser}
+                unbanUser={unbanUser}
               />
             ) : (
               <UsersView 
                 users={users} 
                 onSelectUser={(userId) => setSelectedUserId(userId)}
                 deleteUserCompletely={deleteUserCompletely}
+                banUser={banUser}
+                unbanUser={unbanUser}
               />
             )
           )}

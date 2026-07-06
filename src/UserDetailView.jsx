@@ -29,6 +29,9 @@ export const UserDetailView = ({
   adminAddDiamond,
   adminSubDiamond,
   updateFinanceHistoryReason,
+  // ★ [신규] 차단 / 차단 해제 함수
+  banUser,
+  unbanUser,
 }) => {
   // 계좌 편집 상태
   const [bankEdit, setBankEdit] = useState({
@@ -120,6 +123,46 @@ export const UserDetailView = ({
   const closeAdminModal = () => {
     if (modalSaving) return;
     setShowAdminModal(false);
+  };
+
+  // ★ [신규] 차단 토글 상태
+  const [banBusy, setBanBusy] = useState(false);
+
+  const handleToggleBan = async () => {
+    if (banBusy || !user) return;
+    if (user.banned) {
+      if (!unbanUser) return alert("차단 해제 기능이 연결되지 않았습니다.");
+      const ok = window.confirm(
+        `♻️ [${user.id}] 회원의 차단을 해제하시겠습니까?\n\n` +
+        `해제 시 즉시 다시 로그인 가능해집니다.`
+      );
+      if (!ok) return;
+      try {
+        setBanBusy(true);
+        await unbanUser(user.id);
+        alert(`✅ [${user.id}] 차단 해제 완료`);
+      } catch (e) {
+        alert("❌ 차단 해제 실패: " + e.message);
+      } finally {
+        setBanBusy(false);
+      }
+    } else {
+      if (!banUser) return alert("차단 기능이 연결되지 않았습니다.");
+      const reason = window.prompt(
+        `🚫 [${user.id}] 회원을 차단합니다.\n\n차단 사유를 입력하세요 (선택):`,
+        ""
+      );
+      if (reason === null) return;
+      try {
+        setBanBusy(true);
+        await banUser(user.id, (reason || "").trim());
+        alert(`✅ [${user.id}] 차단 완료\n\n로그인 시 접속이 거부됩니다.`);
+      } catch (e) {
+        alert("❌ 차단 실패: " + e.message);
+      } finally {
+        setBanBusy(false);
+      }
+    }
   };
 
   const handleAdminSubmit = async () => {
@@ -245,6 +288,21 @@ export const UserDetailView = ({
           <span style={ds.pageTitleIcon}>👤</span>
           회원 상세: <span style={ds.pageTitleId}>{user.id}</span>
           <span style={{ ...ds.headerTierBadge, background: tier.color }}>{tier.name}</span>
+          {/* ★ [신규] 차단 상태 뱃지 */}
+          {user.banned && (
+            <span style={{
+              padding: '4px 10px',
+              borderRadius: 4,
+              fontSize: 12,
+              fontWeight: 900,
+              background: '#ef4444',
+              color: '#fff',
+              marginLeft: 4,
+              letterSpacing: 0.5,
+            }} title={user.bannedReason || "사유 미기재"}>
+              🚫 차단됨
+            </span>
+          )}
         </div>
         <div style={ds.headerRight}>
           {user.lastActive && Date.now() - user.lastActive < 60000 ? (
@@ -340,6 +398,21 @@ export const UserDetailView = ({
               style={{ ...ds.primaryBtn, background: "#5856d6", color: "#fff" }}
             >
               🔑 비밀번호
+            </button>
+            {/* ★ [신규] 차단 / 차단 해제 버튼 */}
+            <button
+              onClick={handleToggleBan}
+              disabled={banBusy}
+              style={{
+                ...ds.primaryBtn,
+                background: user.banned ? "#16a34a" : "#f59e0b",
+                color: "#fff",
+                cursor: banBusy ? "not-allowed" : "pointer",
+                opacity: banBusy ? 0.7 : 1,
+              }}
+              title={user.banned ? "차단 해제 - 로그인 재개" : "회원 차단 - 로그인 봉쇄"}
+            >
+              {banBusy ? "..." : user.banned ? "♻️ 차단 해제" : "🚫 차단"}
             </button>
           </div>
         </div>
