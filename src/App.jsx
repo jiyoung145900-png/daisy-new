@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { db } from "./firebase"; 
-import { startTimeSyncLoop } from "./EventService"; // ★ 서버 시간 동기화
-// ★ [핵심] Firestore 함수들 import
+import { db } from "./firebase";
+import { startTimeSyncLoop } from "./EventService";
 import {
   doc,
   onSnapshot,
@@ -15,35 +14,31 @@ import {
 } from "firebase/firestore";
 import LandingPage from "./LandingPage";
 import Dashboard from "./Dashboard";
-import AdminCMS from "./AdminCMS";
-import IndependentAdmin from "./IndependentAdmin"; 
-// ★ [신규] 입력 검증 유틸
 import { validateUserId, validatePassword, validateNickname, sanitizeText } from "./validation";
 
 // [Core] Broadcast channel
 const broadcast = new BroadcastChannel('daisy_global_channel');
 
-const ADMIN_ID = "admin";
 const REGIONS = ["서울", "경기 북부", "경기 남부", "인천", "충청", "강원", "전라", "경북·대구", "부산·울산·경남", "제주"];
 const VIDEO_CATS = ["한국", "일본", "중국", "동남아", "서양"];
 
 // --- [Utility] ---
-const load = (k, d) => { 
-  try { 
-    const v = localStorage.getItem(k); 
+const load = (k, d) => {
+  try {
+    const v = localStorage.getItem(k);
     if (!v) return d;
     const parsed = JSON.parse(v);
     return parsed === null ? d : parsed;
-  } catch { return d; } 
+  } catch { return d; }
 };
 
-const save = (k, v) => { 
-  try { 
+const save = (k, v) => {
+  try {
     if (v === undefined) return;
-    localStorage.setItem(k, JSON.stringify(v)); 
+    localStorage.setItem(k, JSON.stringify(v));
   } catch (e) {
     if (e.name === 'QuotaExceededError') alert("Storage quota exceeded!");
-  } 
+  }
 };
 
 // ★ Translations
@@ -53,21 +48,14 @@ const translations = {
 };
 
 export default function App() {
-  // --- [State Management] ---
   const [lang, setLang] = useState(() => load("lang", "ko"));
   const [loggedIn, setLoggedIn] = useState(() => load("loggedIn", false));
-  const [isAdmin, setIsAdmin] = useState(() => load("isAdmin", false));
   const [isGuest, setIsGuest] = useState(() => load("isGuest", false));
   const [users, setUsers] = useState(() => load("users", []));
   const [currentUser, setCurrentUser] = useState(() => load("currentUser", null));
-  
+
   const [appAvatarImage, setAppAvatarImage] = useState(null);
   const [appAvatarIdx, setAppAvatarIdx] = useState(0);
-  const [isIndependentAdmin, setIsIndependentAdmin] = useState(false); 
-  
-  // Password Management
-  const [adminPw, setAdminPw] = useState(() => load("adminPw", "123456"));
-  const [gamePw, setGamePw] = useState(() => load("gamePw", "1234")); 
 
   const [telegramLink, setTelegramLink] = useState(() => load("telegramLink", "https://t.me/BANADA_OFFICIAL"));
   const [showPopup, setShowPopup] = useState(true);
@@ -80,17 +68,14 @@ export default function App() {
   const [logoSize, setLogoSize] = useState(() => load("logoSize", 140));
   const [logoPos, setLogoPos] = useState(() => load("logoPos", { x: 0, y: 0 }));
   const [innerLogo, setInnerLogo] = useState(() => load("innerLogo", null));
-  const [topAdImage, setTopAdImage] = useState(() => load("topAdImage", null)); // ★ [신규] 로고 밑 광고 이미지
-  const [topAdImage2, setTopAdImage2] = useState(() => load("topAdImage2", null)); // ★ [신규] LIVE CONNECTED 위 두 번째 광고 이미지
+  const [topAdImage, setTopAdImage] = useState(() => load("topAdImage", null));
+  const [topAdImage2, setTopAdImage2] = useState(() => load("topAdImage2", null));
 
-  // ★ [추가] 홈 상단 공지 티커 문구
   const [noticeText, setNoticeText] = useState(() => load("noticeText", "📢 BANADA에 오신 것을 환영합니다!"));
 
-  const [adminPreviewMode, setAdminPreviewMode] = useState("dashboard");
   const t = useMemo(() => translations[lang] || translations.ko, [lang]);
 
-  // ★ 서버 시간 동기화 - 앱 최초 로드 시 1회 실행, 이후 30분마다 자동 재동기화
-  // 모든 기기(PC/갤럭시/아이폰)가 동일한 라운드 타이머를 보도록 보정
+  // ★ 서버 시간 동기화
   useEffect(() => {
     startTimeSyncLoop();
   }, []);
@@ -109,46 +94,30 @@ export default function App() {
         if (data.slideImages) setSlideImages(data.slideImages);
         if (data.videos) setVideos(data.videos);
         if (data.innerLogo !== undefined) setInnerLogo(data.innerLogo);
-        if (data.topAdImage !== undefined) setTopAdImage(data.topAdImage); // ★ [신규]
-        if (data.topAdImage2 !== undefined) setTopAdImage2(data.topAdImage2); // ★ [신규]
-        
-        if (data.adminPassword) setAdminPw(data.adminPassword);
-        else if (data.adminPw) setAdminPw(data.adminPw);
-
-        if (data.gamePw) setGamePw(data.gamePw);
+        if (data.topAdImage !== undefined) setTopAdImage(data.topAdImage);
+        if (data.topAdImage2 !== undefined) setTopAdImage2(data.topAdImage2);
         if (data.telegramLink) setTelegramLink(data.telegramLink);
-        // ★ [추가] 공지 티커 실시간 반영
         if (data.noticeText !== undefined) setNoticeText(data.noticeText);
-        
-        // users는 별도 onSnapshot으로 관리하거나 필요시 로드
-        // (여기서는 users state가 로컬 캐시 역할도 함)
       }
     });
     return () => unsub();
   }, []);
 
-  // ★ Sync Function
+  // ★ Sync Function (LandingPage 회원가입 등에서 사용)
   const syncToFirebase = async (updates) => {
     try {
       const finalData = {
         hero, videoURL, logo, logoSize, logoPos,
         members, slideImages, videos, innerLogo, topAdImage, topAdImage2,
-        adminPw, gamePw, telegramLink, noticeText,
-        // users는 너무 커질 수 있으므로 settings/global에 통째로 넣지 않는 게 좋지만, 
-        // 기존 구조 호환을 위해 일단 유지하거나 생략 가능.
-        ...updates 
+        telegramLink, noticeText,
+        ...updates
       };
       await setDoc(doc(db, "settings", "global"), finalData, { merge: true });
-      console.log("▶ Server Sync Complete");
       return true;
     } catch (e) {
       console.error("▶ Sync Failed:", e);
       return false;
     }
-  };
-
-  const saveToFirebase = async () => {
-    return await syncToFirebase({});
   };
 
   const syncUpdate = useCallback((targetId, newPoint, newRefCode, newReferral) => {
@@ -173,110 +142,66 @@ export default function App() {
   }, [syncUpdate]);
 
   // Local Storage Auto-Save
-  // ★ [개선 3] 비밀번호 관련 로컬 스토리지 자동 저장 제거
   useEffect(() => {
-    save("lang", lang); save("loggedIn", loggedIn); save("isAdmin", isAdmin);
+    save("lang", lang); save("loggedIn", loggedIn);
     save("isGuest", isGuest); save("users", users); save("currentUser", currentUser);
-    save("members", members); save("hero", hero); save("logo", logo); 
-    save("logoSize", logoSize); save("logoPos", logoPos); save("slideImages", slideImages); 
-    save("videoURL", videoURL); save("videos", videos); save("innerLogo", innerLogo); 
+    save("members", members); save("hero", hero); save("logo", logo);
+    save("logoSize", logoSize); save("logoPos", logoPos); save("slideImages", slideImages);
+    save("videoURL", videoURL); save("videos", videos); save("innerLogo", innerLogo);
     save("telegramLink", telegramLink); save("noticeText", noticeText);
-    // adminPw, gamePw 저장 코드 제거함
-  }, [lang, loggedIn, isAdmin, isGuest, users, currentUser, hero, logo, logoSize, logoPos, members, slideImages, videoURL, videos, innerLogo, telegramLink, noticeText]);
+  }, [lang, loggedIn, isGuest, users, currentUser, hero, logo, logoSize, logoPos, members, slideImages, videoURL, videos, innerLogo, telegramLink, noticeText]);
 
-  // ★ [수정됨] 로그인 액션 (DB 연동)
+  // ★ 로그인 액션 (일반 유저 전용, admin/game 분기 제거)
   const handleLoginAction = async (id, pw) => {
-    let serverAdminPw = adminPw; 
-    let serverGamePw = gamePw;
-
-    // 1. 서버 설정값 최신화 (비번 확인용)
-    try {
-      const snap = await getDoc(doc(db, "settings", "global"));
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.adminPw) serverAdminPw = data.adminPw;
-        if (data.gamePw) serverGamePw = data.gamePw;
-        setAdminPw(serverAdminPw);
-        setGamePw(serverGamePw);
-      }
-    } catch (e) { console.error("Setting Load Fail"); }
-
-    // [A] 게임 관리자 (ID: game)
-    if (id === "game") {
-      if (pw === serverGamePw) {
-        setIsIndependentAdmin(true); 
-        setLoggedIn(true); 
-        return;
-      } else {
-        return alert("게임 관리자 비밀번호가 틀립니다.");
-      }
+    // 관리자 아이디 완전 차단
+    if (id === "admin" || id === "game") {
+      return alert(t.login_fail || "존재하지 않는 아이디입니다.");
     }
-    
-    // [B] 디자인 관리자 (ID: admin)
-    if (id === "admin") {
-      if (pw === serverAdminPw) { 
-        setIsAdmin(true); 
-        setLoggedIn(true); 
-        setCurrentUser({ id: "admin", no: "000001", diamond: 999999, rewards: 0, refCode: "MASTER" }); 
-        setAdminPreviewMode("dashboard"); 
-        return;
-      } else {
-        return alert("디자인 관리자 비밀번호가 틀립니다.");
-      }
-    }
-    
-    // [C] 일반 유저 로그인 (DB 체크)
+
     try {
-        const userRef = doc(db, "users", id);
-        const userSnap = await getDoc(userRef);
+      const userRef = doc(db, "users", id);
+      const userSnap = await getDoc(userRef);
 
-        if (userSnap.exists()) {
-            const userData = userSnap.data();
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
 
-            // ★ [신규] 차단된 회원 접속 거부 - 비밀번호 확인보다 먼저 체크
-            //   비밀번호가 맞아도 banned: true 면 무조건 거부
-            if (userData.banned === true) {
-                const reason = userData.bannedReason
-                  ? `\n\n사유: ${userData.bannedReason}`
-                  : "";
-                alert(`🚫 접속이 차단된 회원입니다.${reason}\n\n관리자에게 문의해주세요.`);
-                return;
-            }
-
-            if (userData.password === pw) {
-                setCurrentUser(userData);
-                setLoggedIn(true);
-                setIsGuest(false);
-                // 접속 시간 업데이트
-                updateDoc(userRef, { lastActive: Date.now() });
-            } else {
-                alert(t.login_fail || "비밀번호가 일치하지 않습니다.");
-            }
-        } else {
-            // 로컬 스토리지 백업 데이터에서도 한번 더 찾아봄 (DB 마이그레이션 전 유저 대응)
-            const localUser = users.find(u => u.id === id && u.pw === pw);
-            if (localUser) {
-                // 로컬에만 있는 유저라면 DB로 자동 업로드 후 로그인
-                await setDoc(doc(db, "users", id), localUser, { merge: true });
-                setCurrentUser(localUser);
-                setLoggedIn(true);
-                setIsGuest(false);
-            } else {
-                alert(t.login_fail || "존재하지 않는 아이디입니다.");
-            }
+        if (userData.banned === true) {
+          const reason = userData.bannedReason
+            ? `\n\n사유: ${userData.bannedReason}`
+            : "";
+          alert(`🚫 접속이 차단된 회원입니다.${reason}\n\n관리자에게 문의해주세요.`);
+          return;
         }
-    } catch(e) {
-        console.error(e);
-        alert("Login Error");
+
+        if (userData.password === pw) {
+          setCurrentUser(userData);
+          setLoggedIn(true);
+          setIsGuest(false);
+          updateDoc(userRef, { lastActive: Date.now() });
+        } else {
+          alert(t.login_fail || "비밀번호가 일치하지 않습니다.");
+        }
+      } else {
+        const localUser = users.find(u => u.id === id && u.pw === pw);
+        if (localUser) {
+          await setDoc(doc(db, "users", id), localUser, { merge: true });
+          setCurrentUser(localUser);
+          setLoggedIn(true);
+          setIsGuest(false);
+        } else {
+          alert(t.login_fail || "존재하지 않는 아이디입니다.");
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Login Error");
     }
   };
 
-  // ★ [추가됨] 회원가입 액션 (LandingPage로 전달됨)
- // ★ [수정됨] 회원가입 액션
+  // ★ 회원가입 액션
   const handleSignupAction = async (id, pw, nickname, referralCode) => {
     if (!id || !pw) return alert(t.input_id_pw || "ID/PW Required");
 
-    // ★ [신규] 입력 검증 (XSS · 특수문자 · 길이 방어)
     const idCheck = validateUserId(id);
     if (!idCheck.ok) return alert(idCheck.reason);
     const pwCheck = validatePassword(pw);
@@ -290,7 +215,6 @@ export default function App() {
       const cleanNick = nickCheck.value;
       const cleanRef = sanitizeText(referralCode || "", 30);
 
-      // 1) 아이디 중복 확인
       const userRef = doc(db, "users", cleanId);
       const userSnap = await getDoc(userRef);
       if (userSnap.exists()) {
@@ -298,7 +222,6 @@ export default function App() {
         return;
       }
 
-      // 2) 추천인 검증 로직 생략 (기존과 동일)
       let referralOwnerId = "";
       if (cleanRef) {
         const q = query(collection(db, "users"), where("refCode", "==", cleanRef));
@@ -306,12 +229,11 @@ export default function App() {
         if (!snap.empty) referralOwnerId = snap.docs[0].id;
       }
 
-      // 3) 유저 생성 (refCode 자동 생성 추가)
       const newUser = {
         id: cleanId,
         password: cleanPw,
         nickname: cleanNick,
-        refCode: cleanId.toUpperCase(), // ★ [개선 2] 추천인 코드 자동 생성
+        refCode: cleanId.toUpperCase(),
         referral: referralOwnerId,
         referralCode: cleanRef,
         diamond: 0,
@@ -329,9 +251,8 @@ export default function App() {
     }
   };
 
-
   const handleLogout = () => {
-    setLoggedIn(false); setIsAdmin(false); setIsGuest(false); setIsIndependentAdmin(false);
+    setLoggedIn(false); setIsGuest(false);
     setCurrentUser(null);
   };
 
@@ -339,17 +260,13 @@ export default function App() {
     setAppAvatarImage(newImg); setAppAvatarIdx(newIdx);
   };
 
-  if (isIndependentAdmin) {
-    return <IndependentAdmin users={users} setUsers={setUsers} onExit={handleLogout} />;
-  }
-
   const actualLoggedIn = loggedIn && currentUser;
-  const showLanding = !actualLoggedIn || (isAdmin && adminPreviewMode === "landing");
+  const showLanding = !actualLoggedIn;
 
   return (
     <div style={{ ...styles.app, height: '100vh', overflow: 'hidden' }}>
-      
-      {showPopup && !isAdmin && actualLoggedIn && !showLanding && (
+
+      {showPopup && actualLoggedIn && !showLanding && (
         <div style={styles.popupOverlay}>
           <div style={styles.popupContent}>
             <h2 style={{ color: '#ffb347', marginBottom: '15px' }}>NOTICE</h2>
@@ -361,52 +278,34 @@ export default function App() {
 
       {showLanding ? (
         <div style={{ height: '100%', overflowY: 'auto' }}>
-          <LandingPage 
+          <LandingPage
             t={t} lang={lang} users={users} setUsers={setUsers} hero={hero} videoURL={videoURL}
-            logo={logo} logoSize={logoSize} logoPos={logoPos} styles={styles} isAdmin={isAdmin}
-            setLang={setLang} 
+            logo={logo} logoSize={logoSize} logoPos={logoPos} styles={styles} isAdmin={false}
+            setLang={setLang}
             onLogin={handleLoginAction}
-            // ★ LandingPage에서 회원가입 시 이 함수가 호출됨
-            onSignup={handleSignupAction} 
-            onGuestLogin={() => { 
-              const guestUser = {id:"GUEST", no:"G-1", diamond:0, rewards:0, refCode: ""};
+            onSignup={handleSignupAction}
+            onGuestLogin={() => {
+              const guestUser = { id: "GUEST", no: "G-1", diamond: 0, rewards: 0, refCode: "" };
               setCurrentUser(guestUser);
-              setLoggedIn(true); setIsAdmin(false); setIsGuest(true); 
+              setLoggedIn(true); setIsGuest(true);
             }}
-            syncToFirebase={syncToFirebase} 
+            syncToFirebase={syncToFirebase}
           />
         </div>
       ) : (
-        <Dashboard 
-          user={currentUser} 
+        <Dashboard
+          user={currentUser}
           onUpdatePoint={(newVal) => syncUpdate(currentUser.id, newVal, currentUser.refCode, currentUser.referral)}
           appAvatarImage={appAvatarImage} appAvatarIdx={appAvatarIdx} onAvatarChange={refreshAvatar}
           t={t} lang={lang} isGuest={isGuest} members={members} regions={REGIONS} slideImages={slideImages}
           videos={videos} videoCategories={VIDEO_CATS} innerLogo={innerLogo} topAdImage={topAdImage} topAdImage2={topAdImage2} telegramLink={telegramLink}
           noticeText={noticeText}
-          onLogout={handleLogout} dashStyles={dashStyles} 
+          onLogout={handleLogout} dashStyles={dashStyles}
         />
       )}
 
-      {isAdmin && (
-        <AdminCMS 
-          adminPreviewMode={adminPreviewMode} setAdminPreviewMode={setAdminPreviewMode}
-          hero={hero} setHero={setHero} setVideoURL={setVideoURL} videoURL={videoURL}
-          logo={logo} setLogo={setLogo} logoSize={logoSize} setLogoSize={setLogoSize} 
-          logoPos={logoPos} setLogoPos={setLogoPos} members={members} setMembers={setMembers} 
-          regions={REGIONS} slideImages={slideImages} setSlideImages={setSlideImages}
-          videos={videos} setVideos={setVideos} videoCategories={VIDEO_CATS} 
-          innerLogo={innerLogo} setInnerLogo={setInnerLogo} topAdImage={topAdImage} setTopAdImage={setTopAdImage} topAdImage2={topAdImage2} setTopAdImage2={setTopAdImage2} onExit={handleLogout} styles={styles}
-          adminPw={adminPw} setAdminPw={setAdminPw} telegramLink={telegramLink} setTelegramLink={setTelegramLink}
-          noticeText={noticeText} setNoticeText={setNoticeText}
-          openIndependent={() => setIsIndependentAdmin(true)} 
-          saveToFirebase={saveToFirebase}
-          syncToFirebase={syncToFirebase} 
-        />
-      )}
-
-      {!isAdmin && showLanding && (
-        <header style={{position:'fixed', top:20, right:20, zIndex:10002}}>
+      {showLanding && (
+        <header style={{ position: 'fixed', top: 20, right: 20, zIndex: 10002 }}>
           <button style={styles.langBtn} onClick={() => setLang(lang === "ko" ? "en" : "ko")}>
             {lang === "ko" ? "ENGLISH" : "한국어"}
           </button>
@@ -443,16 +342,16 @@ const styles = {
 };
 
 const dashStyles = {
-  container: { 
-    position: 'relative', zIndex: 10, width: '100%', maxWidth: 500, margin: '0 auto', background: '#000', 
-    height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' 
+  container: {
+    position: 'relative', zIndex: 10, width: '100%', maxWidth: 500, margin: '0 auto', background: '#000',
+    height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden'
   },
-  contentArea: { 
-    flex: 1, overflowY: 'auto', paddingBottom: 20, WebkitOverflowScrolling: 'touch' 
+  contentArea: {
+    flex: 1, overflowY: 'auto', paddingBottom: 20, WebkitOverflowScrolling: 'touch'
   },
-  bottomNav: { 
-    position: 'relative', width: '100%', maxWidth: 500, height: 80, background: 'rgba(20,20,20,0.95)', 
-    display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderTop: '1px solid #222', 
+  bottomNav: {
+    position: 'relative', width: '100%', maxWidth: 500, height: 80, background: 'rgba(20,20,20,0.95)',
+    display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderTop: '1px solid #222',
     backdropFilter: 'blur(10px)', flexShrink: 0
   },
   navItem: { display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', transition: 'all 0.2s' },
