@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { optimizeImage, optimizeVideo, videoThumbnail } from "./CloudinaryUrl";
 
 export default function ManagerSection({ 
   filteredMembers, 
@@ -70,7 +71,7 @@ export default function ManagerSection({
   // 지역 이름을 현재 언어에 맞춰 반환하는 함수
   const getRegionName = (name) => {
     if (isKo) return name;
-    return regionTranslation[name] || name; // 매핑값이 없으면 원래 이름 출력
+    return regionTranslation[name] || name;
   };
 
   const generateIntro = (name) => {
@@ -89,7 +90,7 @@ export default function ManagerSection({
 
   return (
     <div style={m.container}>
-      {/* ===== 1. 지역 필터 (번역 함수 적용) ===== */}
+      {/* ===== 1. 지역 필터 ===== */}
       <div style={m.filterWrapper}>
         <div style={m.filterScroll}>
           {regions.map(r => (
@@ -106,7 +107,7 @@ export default function ManagerSection({
         </div>
       </div>
 
-      {/* ===== 2. 매니저 그리드 (지역 번역 적용) ===== */}
+      {/* ===== 2. 매니저 그리드 (썸네일 사이즈 최적화) ===== */}
       <div style={m.grid}>
         {filteredMembers.map((member, idx) => (
           <div key={idx} style={m.card} onClick={() => {
@@ -114,7 +115,13 @@ export default function ManagerSection({
             window.history.pushState({ isDetail: true }, ''); 
           }}>
             <div style={m.cardImgWrap}>
-              <img src={member.img} style={m.cardImg} alt={member.name} />
+              {/* ★ 카드 썸네일 - 최적화 파라미터 자동 추가 */}
+              <img 
+                src={optimizeImage(member.img, { width: 400, crop: "fill" })} 
+                style={m.cardImg} 
+                alt={member.name}
+                loading="lazy"
+              />
               <div style={m.cardOverlay} />
               <div style={m.cardBadge}>PREMIUM</div>
             </div>
@@ -131,12 +138,17 @@ export default function ManagerSection({
         ))}
       </div>
 
-      {/* ===== 3. 상세 프로필 팝업 (완벽 번역) ===== */}
+      {/* ===== 3. 상세 프로필 팝업 ===== */}
       {selectedMember && (
         <div style={m.modalOverlay} onClick={handleClose}>
           <div style={m.modalContent} onClick={e => e.stopPropagation()}>
             <div style={m.modalImageWrap} onClick={() => openFull('img', selectedMember.img)}>
-              <img src={selectedMember.img} style={m.modalActualImg} alt="" />
+              {/* ★ 상세 이미지 - 좀 더 큰 사이즈로 최적화 */}
+              <img 
+                src={optimizeImage(selectedMember.img, { width: 600 })} 
+                style={m.modalActualImg} 
+                alt="" 
+              />
               <div style={m.luxTag}>✦ {isKo ? "클릭하여 확대" : "CLICK TO ZOOM"}</div>
             </div>
 
@@ -156,12 +168,22 @@ export default function ManagerSection({
                 <p style={m.introText}>{selectedMember.desc || generateIntro(selectedMember.name)}</p>
               </div>
 
+              {/* ★ 매니저 소개 영상 - 비디오 자동재생 대신 썸네일 이미지로 대체 */}
               {(selectedMember.video || isVideo(selectedMember.img)) && (
                 <div style={m.videoArea} onClick={() => openFull('video', selectedMember.video || selectedMember.img)}>
                   <div style={m.introTitle}>PRIVATE MOVIE ({isKo ? "클릭하여 확대" : "CLICK TO ENLARGE"})</div>
                   <div style={{ position: 'relative' }}>
-                    <video src={selectedMember.video || selectedMember.img} style={m.videoTag} muted loop autoPlay playsInline />
-                    <div style={m.videoOverlay}>🔍 {isKo ? "전체화면 보기" : "TAP TO FULL VIEW"}</div>
+                    {/* 비디오 → 첫 프레임 썸네일 이미지 */}
+                    <img 
+                      src={videoThumbnail(selectedMember.video || selectedMember.img, { width: 500, crop: "fill" })} 
+                      style={m.videoTag} 
+                      alt="preview"
+                      loading="lazy"
+                    />
+                    <div style={m.videoOverlay}>
+                      <div style={m.videoPlayIcon}>▶</div>
+                      <div>{isKo ? "전체화면 재생" : "TAP TO PLAY"}</div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -171,15 +193,26 @@ export default function ManagerSection({
         </div>
       )}
 
-      {/* ===== 4. 풀스크린 뷰어 ===== */}
+      {/* ===== 4. 풀스크린 뷰어 (URL 최적화 적용) ===== */}
       {fullScreenMedia && (
         <div id="full-screen-view" style={m.fullScreenOverlay} onClick={() => setFullScreenMedia(null)}>
           <button style={m.fullScreenClose} onClick={() => setFullScreenMedia(null)}>✕ {isKo ? "닫기" : "CLOSE"}</button>
           <div style={m.fullScreenContent} onClick={e => e.stopPropagation()}>
             {fullScreenMedia.type === 'video' ? (
-              <video src={fullScreenMedia.url} style={m.fullMedia} controls autoPlay loop playsInline />
+              <video 
+                src={optimizeVideo(fullScreenMedia.url, { width: 720 })} 
+                style={m.fullMedia} 
+                controls 
+                autoPlay 
+                loop 
+                playsInline 
+              />
             ) : (
-              <img src={fullScreenMedia.url} style={m.fullMedia} alt="" />
+              <img 
+                src={optimizeImage(fullScreenMedia.url, { width: 1080 })} 
+                style={m.fullMedia} 
+                alt="" 
+              />
             )}
           </div>
         </div>
@@ -218,7 +251,8 @@ const m = {
   introText: { color: '#eee', fontSize: 16, lineHeight: 1.8, margin: 0 },
   videoArea: { marginBottom: 30, cursor: 'zoom-in' },
   videoTag: { width: '100%', borderRadius: 20, border: '1px solid #333', display: 'block' },
-  videoOverlay: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 15, fontWeight: 900, borderRadius: 20 },
+  videoOverlay: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 900, borderRadius: 20 },
+  videoPlayIcon: { fontSize: 40, marginBottom: 8, textShadow: '0 2px 8px rgba(0,0,0,0.7)' },
   closeBtn: { width: '100%', padding: 20, background: '#222', color: '#fff', border: 'none', borderRadius: 20, fontSize: 18, fontWeight: 900, cursor: 'pointer' },
   fullScreenOverlay: { position: 'fixed', inset: 0, background: '#000', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   fullScreenContent: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },

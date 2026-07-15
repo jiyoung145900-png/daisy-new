@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "./firebase";
+import { optimizeImage, optimizeVideo } from "./CloudinaryUrl";
 
 /*
   LandingPage (UTF-8 safe)
@@ -202,9 +203,10 @@ export default function LandingPage({
       >
         <div style={styles.bgOverlay} />
 
+        {/* ★ 배경 이미지 - 1280px 로 최적화 */}
         {hero?.mode === "image" && hero?.imageSrc && (
           <img
-            src={hero.imageSrc}
+            src={optimizeImage(hero.imageSrc, { width: 1280 })}
             alt=""
             draggable={false}
             style={{
@@ -218,14 +220,16 @@ export default function LandingPage({
           />
         )}
 
+        {/* ★ 배경 비디오 - URL 최적화 (f_auto,q_auto + 720p) */}
         {hero?.mode === "video" && videoURL && (
           <video
             key={videoURL}
-            src={videoURL}
+            src={optimizeVideo(videoURL, { width: 720 })}
             autoPlay
             muted
             loop
             playsInline
+            preload="metadata"
             style={{ ...styles.bgVideo, height: "100dvh", objectFit: "cover" }}
           />
         )}
@@ -241,7 +245,7 @@ export default function LandingPage({
       >
         {logo ? (
           <img
-            src={logo}
+            src={optimizeImage(logo, { width: 500 })}
             alt="logo"
             style={{
               height: `${logoSize}px`,

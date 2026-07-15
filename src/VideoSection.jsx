@@ -1,19 +1,23 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { videoThumbnail, optimizeVideo } from "./CloudinaryUrl";
 
 export default function VideoSection({ 
   videoCategories = [], 
   selectedCategory, 
   setSelectedCategory, 
   filteredVideos = [], 
-  t // ★ Dashboard에서 전달받은 번역 객체
+  t,
+  telegramLink // ★ 관리자 문의용 텔레그램 링크 (선택적)
 }) {
   const [fullScreenVideo, setFullScreenVideo] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showContactMsg, setShowContactMsg] = useState(false);
   const itemsPerPage = 10;
+  const videoRef = useRef(null);
+  const timerRef = useRef(null);
 
   const isKo = t.home === "홈페이지";
 
-  // ★ [핵심 추가] 카테고리명 번역 매핑
   const catTranslation = {
     "ALL": "ALL",
     "한국": "KOREA",
@@ -28,12 +32,10 @@ export default function VideoSection({
     return catTranslation[name] || name;
   };
 
-  // 카테고리 변경 시 1페이지로 리셋
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedCategory]);
 
-  // 페이지네이션 로직
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentVideos = filteredVideos.slice(indexOfFirstItem, indexOfLastItem);
@@ -41,31 +43,71 @@ export default function VideoSection({
 
   const isAllActive = selectedCategory === 'ALL';
 
-  // 뒤로가기 이벤트 감지 (기존 유지)
+  // 뒤로가기 이벤트 감지
   useEffect(() => {
     const handlePop = () => {
       if (fullScreenVideo) {
-        setFullScreenVideo(null);
+        closeFull();
       }
     };
     window.addEventListener('popstate', handlePop);
     return () => window.removeEventListener('popstate', handlePop);
   }, [fullScreenVideo]);
 
+  // ★ 10초 재생 후 자동 정지 + 관리자 문의 메시지 표시
+  useEffect(() => {
+    if (fullScreenVideo && videoRef.current) {
+      const video = videoRef.current;
+      
+      // 10초 후 정지 + 메시지
+      timerRef.current = setTimeout(() => {
+        if (video) {
+          video.pause();
+          setShowContactMsg(true);
+        }
+      }, 10000);
+    }
+    
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [fullScreenVideo]);
+
   const openFull = (url) => {
     setFullScreenVideo(url);
+    setShowContactMsg(false);
     window.history.pushState({ isFullVideo: true }, ''); 
   };
 
   const closeFull = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     setFullScreenVideo(null);
+    setShowContactMsg(false);
+  };
+
+  const handleContactClick = () => {
+    if (telegramLink) {
+      // @ID 형태면 t.me 링크로, 이미 https 면 그대로
+      const url = telegramLink.startsWith("http")
+        ? telegramLink
+        : `https://t.me/${telegramLink.replace(/^@/, "")}`;
+      window.open(url, "_blank");
+    } else {
+      alert(isKo ? "관리자에게 문의해주세요." : "Please contact the administrator.");
+    }
   };
 
   return (
     <div style={s.pagePadding}>
       <h2 style={s.tabDisplayTitle}>{isKo ? "프리미엄 갤러리" : "PREMIUM GALLERY"}</h2>
 
-      {/* 카테고리 바 (번역 적용) */}
+      {/* 카테고리 바 */}
       <div style={s.videoCategoryBar}>
         <span onClick={() => setSelectedCategory('ALL')}
           style={{...s.videoCatItem, color: isAllActive ? '#ffb347' : '#555', borderBottom: isAllActive ? '2px solid #ffb347' : '2px solid transparent'}}
@@ -77,14 +119,23 @@ export default function VideoSection({
         ))}
       </div>
 
-      {/* 비디오 그리드 (번역 적용) */}
+      {/* ★ 비디오 그리드 - 자동재생 대신 썸네일 이미지 표시 */}
       <div style={s.videoGrid}>
         {currentVideos.length > 0 ? (
           currentVideos.map((vid) => (
             <div key={vid.id} style={s.videoCard} onClick={() => openFull(vid.url)}>
               <div style={s.videoWrapper}>
-                <video src={vid.url} playsInline muted loop autoPlay style={s.videoEl} poster={vid.poster || ""} />
-                <div style={s.playOverlay}>🔍 {isKo ? "전체화면" : "FULL VIEW"}</div>
+                {/* 비디오 대신 첫 프레임 썸네일 이미지 표시 → Transformation 절약 */}
+                <img 
+                  src={videoThumbnail(vid.url, { width: 400, crop: "fill" })}
+                  style={s.videoEl}
+                  alt="video thumbnail"
+                  loading="lazy"
+                />
+                <div style={s.playOverlay}>
+                  <div style={s.playIcon}>▶</div>
+                  <div style={s.playText}>{isKo ? "재생" : "PLAY"}</div>
+                </div>
               </div>
               <div style={s.videoDesc}>
                 <span style={s.descBadge}>EXCLUSIVE</span>
@@ -99,7 +150,7 @@ export default function VideoSection({
         )}
       </div>
 
-      {/* 페이지네이션 버튼 (기존 유지) */}
+      {/* 페이지네이션 */}
       {totalPages > 1 && (
         <div style={s.pagination}>
           {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
@@ -110,7 +161,7 @@ export default function VideoSection({
         </div>
       )}
 
-      {/* 풀스크린 비디오 뷰어 (기존 유지) */}
+      {/* ★ 풀스크린 비디오 뷰어 (10초 후 정지 + 문의 안내) */}
       {fullScreenVideo && (
         <div 
           id="full-screen-view" 
@@ -119,7 +170,37 @@ export default function VideoSection({
         >
           <button style={s.closeFull} onClick={closeFull}>✕ {isKo ? "닫기" : "CLOSE"}</button>
           <div style={s.fullContent} onClick={e => e.stopPropagation()}>
-            <video src={fullScreenVideo} style={s.fullVideoEl} controls autoPlay loop playsInline />
+            <video 
+              ref={videoRef}
+              src={optimizeVideo(fullScreenVideo, { width: 720 })} 
+              style={s.fullVideoEl} 
+              controls 
+              autoPlay 
+              playsInline 
+            />
+            
+            {/* ★ 10초 후 노출되는 관리자 문의 안내 */}
+            {showContactMsg && (
+              <div style={s.contactOverlay}>
+                <div style={s.contactBox}>
+                  <div style={s.contactIcon}>🔒</div>
+                  <h3 style={s.contactTitle}>
+                    {isKo ? "미리보기 종료" : "PREVIEW ENDED"}
+                  </h3>
+                  <p style={s.contactText}>
+                    {isKo 
+                      ? "전체 영상은 관리자에게 문의해주세요." 
+                      : "For full video access, please contact the administrator."}
+                  </p>
+                  <button style={s.contactBtn} onClick={handleContactClick}>
+                    {isKo ? "관리자 문의" : "CONTACT ADMIN"}
+                  </button>
+                  <button style={s.contactCloseBtn} onClick={closeFull}>
+                    {isKo ? "닫기" : "CLOSE"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -136,7 +217,9 @@ const s = {
   videoCard: { background: '#0f0f0f', borderRadius: 12, overflow: 'hidden', border: '1px solid #1a1a1a', cursor: 'pointer' },
   videoWrapper: { width: '100%', aspectRatio: '9/16', background: '#000', position: 'relative' },
   videoEl: { width: '100%', height: '100%', objectFit: 'cover' },
-  playOverlay: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 900, opacity: 0.8 },
+  playOverlay: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', opacity: 0.9 },
+  playIcon: { fontSize: 36, marginBottom: 6, textShadow: '0 2px 8px rgba(0,0,0,0.6)' },
+  playText: { fontSize: 10, fontWeight: 900, letterSpacing: 2 },
   videoDesc: { padding: '12px 10px', textAlign: 'center' },
   descBadge: { fontSize: 8, color: '#000', background: '#ffb347', padding: '2px 5px', borderRadius: 3, fontWeight: 900, display: 'inline-block', marginBottom: 6 },
   descText: { margin: 0, fontSize: 11, color: '#eee', fontWeight: 500, letterSpacing: -0.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
@@ -144,7 +227,16 @@ const s = {
   pagination: { display: 'flex', justifyContent: 'center', gap: 8, marginTop: 30 },
   pageBtn: { border: 'none', width: 35, height: 35, borderRadius: '50%', fontWeight: 800, fontSize: 12, cursor: 'pointer' },
   fullOverlay: { position: 'fixed', inset: 0, background: '#000', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  fullContent: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  fullContent: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' },
   fullVideoEl: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' },
-  closeFull: { position: 'absolute', top: 30, right: 20, zIndex: 100001, background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '30px', fontWeight: 800 }
+  closeFull: { position: 'absolute', top: 30, right: 20, zIndex: 100001, background: 'rgba(255,255,255,0.2)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '30px', fontWeight: 800 },
+
+  // ★ 관리자 문의 안내 팝업
+  contactOverlay: { position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(8px)', zIndex: 100000 },
+  contactBox: { background: 'linear-gradient(135deg, #1a1a1a, #0a0a0a)', border: '2px solid #ffb347', borderRadius: 20, padding: '35px 25px', maxWidth: 340, width: '100%', textAlign: 'center', boxShadow: '0 20px 60px rgba(255,179,71,0.3)' },
+  contactIcon: { fontSize: 48, marginBottom: 15 },
+  contactTitle: { color: '#ffb347', fontSize: 20, fontWeight: 900, margin: '0 0 12px 0', letterSpacing: 2 },
+  contactText: { color: '#ddd', fontSize: 13, lineHeight: 1.6, margin: '0 0 25px 0' },
+  contactBtn: { width: '100%', padding: '14px', background: '#ffb347', color: '#000', border: 'none', borderRadius: 10, fontWeight: 900, fontSize: 14, cursor: 'pointer', marginBottom: 10, letterSpacing: 1 },
+  contactCloseBtn: { width: '100%', padding: '12px', background: 'transparent', color: '#888', border: '1px solid #333', borderRadius: 10, fontWeight: 700, fontSize: 12, cursor: 'pointer' },
 };
