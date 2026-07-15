@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { db } from "./firebase";
+import { db, authReady } from "./firebase";
 import { startTimeSyncLoop } from "./EventService";
 import {
   doc,
@@ -81,8 +81,12 @@ export default function App() {
   }, []);
 
   // ★ Firebase Realtime Listener (Global Settings)
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
+ // ★ Firebase Realtime Listener (Global Settings)
+useEffect(() => {
+  let unsub = () => {};
+  
+  authReady.then(() => {
+    unsub = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data.hero) setHero(data.hero);
@@ -100,12 +104,15 @@ export default function App() {
         if (data.noticeText !== undefined) setNoticeText(data.noticeText);
       }
     });
-    return () => unsub();
-  }, []);
+  });
+  
+  return () => unsub();
+}, []);
 
   // ★ Sync Function (LandingPage 회원가입 등에서 사용)
   const syncToFirebase = async (updates) => {
     try {
+      await authReady; 
       const finalData = {
         hero, videoURL, logo, logoSize, logoPos,
         members, slideImages, videos, innerLogo, topAdImage, topAdImage2,
@@ -159,6 +166,7 @@ export default function App() {
     }
 
     try {
+      await authReady;
       const userRef = doc(db, "users", id);
       const userSnap = await getDoc(userRef);
 
@@ -210,6 +218,7 @@ export default function App() {
     if (!nickCheck.ok) return alert(nickCheck.reason);
 
     try {
+      await authReady;
       const cleanId = idCheck.value;
       const cleanPw = pwCheck.value;
       const cleanNick = nickCheck.value;
