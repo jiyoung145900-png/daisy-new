@@ -20,7 +20,6 @@ export async function uploadToCloudinary(file) {
     throw new Error("Failed to fetch (네트워크 차단/확장프로그램 가능)");
   }
 
-  // 🔥 여기
   const rawText = await res.text();
   console.log("Cloudinary RAW RESPONSE:", res.status, rawText);
 
