@@ -65,7 +65,7 @@ export default function VideoSection({
           video.pause();
           setShowContactMsg(true);
         }
-      }, 10000);
+      }, 30000);
     }
     
     return () => {
