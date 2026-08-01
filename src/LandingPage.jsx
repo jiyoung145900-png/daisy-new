@@ -2,14 +2,19 @@ import { useMemo, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { optimizeImage, optimizeVideo } from "./CloudinaryUrl";
+import { motion, AnimatePresence } from "framer-motion";
 
 /*
-  LandingPage (UTF-8 safe)
+  LandingPage (UTF-8 safe) - 리디자인
+  - 로고 위치 하드코딩 (상단 중앙, 화면 상단에서 8vh 여백)
+  - 로그인 카드 접기/펼치기 (초기 접힘 상태, 클릭 시 펼침)
+  - 문구 추가:
+      한글: 시간이 멈추는 곳 / BANADA에 오신 것을 환영합니다
+      영어: Where time slows / Welcome to BANADA
   - Signup: invite code check (local users -> Firestore invite_codes)
   - Login: local users first, then Firestore users
   - admin/game: bypass DB and delegate to onLogin (App.jsx에서 처리)
   - Enter key triggers login/signup
-  - English-only strings to avoid encoding corruption during build/deploy
 */
 
 const sanitizeText = (s) =>
@@ -34,12 +39,12 @@ export default function LandingPage({
   users,
   setUsers,
   onLogin,
-  onGuestLogin, // 기존 Props 구조 유지를 위해 남겨둠 (사용하지 않음)
-  hero,
+  onGuestLogin,
+  hero, // ★ [무시] title/desc 무시하고 배경 이미지/비디오 모드만 사용
   videoURL,
   logo,
   logoSize,
-  logoPos,
+  logoPos, // ★ [무시] 관리자 조절 안 함 - 하드코딩된 위치 사용
   styles,
   isAdmin,
   syncToFirebase,
@@ -48,6 +53,10 @@ export default function LandingPage({
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [ref, setRef] = useState("");
+  const [isExpanded, setIsExpanded] = useState(false); // ★ [신규] 로그인 카드 접힘/펼침 상태
+
+  // 언어 판별 (t.home이 "홈페이지"면 한국어)
+  const isKo = t && t.home === "홈페이지";
 
   const texts = useMemo(
     () => ({
@@ -74,12 +83,10 @@ export default function LandingPage({
 
     const cleanId = normalizeId(cleanIdRaw);
 
-    // local duplicate check
     if (users.find((u) => normalizeId(u?.id) === cleanId)) {
       return alert(texts.idExists);
     }
 
-    // Invite validation (keeps your behavior)
     let agentName = "";
     let isValidRef = false;
 
@@ -147,13 +154,11 @@ export default function LandingPage({
 
     const cleanId = normalizeId(cleanIdRaw);
 
-    // ✅ admin/game bypass (App.jsx에서 비번 확인)
     if (cleanId === "admin" || cleanId === "game") {
       onLogin(cleanId, cleanPw);
       return;
     }
 
-    // local first
     const localUser = users.find(
       (u) => normalizeId(u?.id) === cleanId && passOf(u) === cleanPw
     );
@@ -162,7 +167,6 @@ export default function LandingPage({
       return;
     }
 
-    // then Firestore users
     try {
       const userRef = doc(db, "users", cleanId);
       const userSnap = await getDoc(userRef);
@@ -192,6 +196,7 @@ export default function LandingPage({
 
   return (
     <div style={{ ...styles.landingWrapper, minHeight: "100dvh" }}>
+      {/* ===== 배경 (이미지/비디오) ===== */}
       <div
         style={{
           ...styles.bgWrap,
@@ -203,7 +208,6 @@ export default function LandingPage({
       >
         <div style={styles.bgOverlay} />
 
-        {/* ★ 배경 이미지 - 1280px 로 최적화 */}
         {hero?.mode === "image" && hero?.imageSrc && (
           <img
             src={optimizeImage(hero.imageSrc, { width: 1280 })}
@@ -220,7 +224,6 @@ export default function LandingPage({
           />
         )}
 
-        {/* ★ 배경 비디오 - URL 최적화 (f_auto,q_auto + 720p) */}
         {hero?.mode === "video" && videoURL && (
           <video
             key={videoURL}
@@ -235,12 +238,18 @@ export default function LandingPage({
         )}
       </div>
 
+      {/* ===== 로고 (상단 중앙 고정, 모든 기기 동일) ===== */}
       <div
         style={{
-          ...styles.logoContainer,
-          left: `${logoPos?.x ?? 0}px`,
-          top: `${logoPos?.y ?? 0}px`,
-          transition: "all 0.3s ease",
+          position: "absolute",
+          left: "50%",
+          top: "8vh", // ★ 화면 상단에서 8% 여백
+          transform: "translateX(-50%)",
+          zIndex: 10,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          pointerEvents: "none",
         }}
       >
         {logo ? (
@@ -248,7 +257,7 @@ export default function LandingPage({
             src={optimizeImage(logo, { width: 500 })}
             alt="logo"
             style={{
-              height: `${logoSize}px`,
+              height: `${logoSize || 140}px`,
               width: "auto",
               objectFit: "contain",
               filter: "drop-shadow(0 0 15px rgba(0,0,0,0.5))",
@@ -259,102 +268,231 @@ export default function LandingPage({
         )}
       </div>
 
-      <div style={styles.mainContent}>
-        {/* ★ heroSection(제목/설명) 완전 삭제됨 */}
+      {/* ===== 메인 콘텐츠 ===== */}
+      <div style={{ ...styles.mainContent, paddingTop: "28vh" }}>
+        {/* ★ [신규] 문구 섹션 - 서브(작은) 위, 웰컴(큰) 아래 */}
+        <div style={landingStyles.heroSection}>
+          <p style={landingStyles.subText}>
+            {isKo ? "시간이 멈추는 곳" : "Where time slows"}
+          </p>
+          <h1 style={landingStyles.mainText}>
+            {isKo ? "BANADA에 오신 것을 환영합니다" : "Welcome to BANADA"}
+          </h1>
+        </div>
 
         {!isAdmin && (
           <div style={styles.authWrap}>
-            <div style={{ ...styles.authCard, padding: "50px 40px" }}>
-              <h2
-                style={{
-                  ...styles.authTitle,
-                  fontSize: "28px",
-                  marginBottom: "35px",
-                }}
-              >
-                {mode === "login" ? t.login : t.signup}
-              </h2>
+            {/* ★ [신규] 로그인 카드 - 접기/펼치기 */}
+            <AnimatePresence mode="wait" initial={false}>
+              {!isExpanded ? (
+                // 접힌 상태: 얇은 버튼 형태
+                <motion.button
+                  key="collapsed"
+                  layout
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.25 }}
+                  onClick={() => setIsExpanded(true)}
+                  style={landingStyles.collapsedCard}
+                >
+                  <span style={landingStyles.collapsedIcon}>🔒</span>
+                  <span style={landingStyles.collapsedText}>
+                    {isKo ? "로그인 / 회원가입" : "LOGIN / SIGN UP"}
+                  </span>
+                  <span style={landingStyles.collapsedArrow}>▼</span>
+                </motion.button>
+              ) : (
+                // 펼친 상태: 전체 로그인 카드
+                <motion.div
+                  key="expanded"
+                  layout
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  style={{ ...styles.authCard, padding: "40px 30px", position: "relative" }}
+                >
+                  {/* 접기 버튼 (우상단) */}
+                  <button
+                    onClick={() => {
+                      setIsExpanded(false);
+                      setId("");
+                      setPw("");
+                      setRef("");
+                    }}
+                    style={landingStyles.closeBtn}
+                    aria-label="close"
+                  >
+                    ▲
+                  </button>
 
-              <input
-                style={{
-                  ...styles.authInput,
-                  height: "60px",
-                  fontSize: "18px",
-                  marginBottom: "20px",
-                }}
-                placeholder={t.id}
-                value={id}
-                onChange={(e) => setId(e.target.value)}
-                onKeyDown={handleKeyDown}
-                autoCapitalize="none"
-                autoCorrect="off"
-              />
+                  <h2
+                    style={{
+                      ...styles.authTitle,
+                      fontSize: "26px",
+                      marginBottom: "30px",
+                    }}
+                  >
+                    {mode === "login" ? t.login : t.signup}
+                  </h2>
 
-              <input
-                type="password"
-                style={{
-                  ...styles.authInput,
-                  height: "60px",
-                  fontSize: "18px",
-                  marginBottom: "20px",
-                }}
-                placeholder={t.pw}
-                value={pw}
-                onChange={(e) => setPw(e.target.value)}
-                onKeyDown={handleKeyDown}
-              />
+                  <input
+                    style={{
+                      ...styles.authInput,
+                      height: "55px",
+                      fontSize: "16px",
+                      marginBottom: "15px",
+                    }}
+                    placeholder={t.id}
+                    value={id}
+                    onChange={(e) => setId(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
 
-              {mode === "signup" && (
-                <input
-                  style={{
-                    ...styles.authInput,
-                    height: "60px",
-                    fontSize: "18px",
-                    marginBottom: "20px",
-                    border: "2px solid #ffb347",
-                    background: "rgba(255,179,71,0.05)",
-                  }}
-                  placeholder={texts.enterInvite}
-                  value={ref}
-                  onChange={(e) => setRef(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                />
+                  <input
+                    type="password"
+                    style={{
+                      ...styles.authInput,
+                      height: "55px",
+                      fontSize: "16px",
+                      marginBottom: "15px",
+                    }}
+                    placeholder={t.pw}
+                    value={pw}
+                    onChange={(e) => setPw(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                  />
+
+                  {mode === "signup" && (
+                    <input
+                      style={{
+                        ...styles.authInput,
+                        height: "55px",
+                        fontSize: "16px",
+                        marginBottom: "15px",
+                        border: "2px solid #ffb347",
+                        background: "rgba(255,179,71,0.05)",
+                      }}
+                      placeholder={texts.enterInvite}
+                      value={ref}
+                      onChange={(e) => setRef(e.target.value)}
+                      onKeyDown={handleKeyDown}
+                    />
+                  )}
+
+                  <button
+                    style={{
+                      ...styles.primaryBtn,
+                      height: "58px",
+                      fontSize: "18px",
+                      fontWeight: "900",
+                      marginTop: "10px",
+                    }}
+                    onClick={() => (mode === "login" ? handleLogin() : signup())}
+                  >
+                    {mode === "login" ? t.login : t.signup}
+                  </button>
+
+                  <button
+                    style={{
+                      ...styles.guestBtn,
+                      height: "48px",
+                      marginTop: "12px",
+                    }}
+                    onClick={() => {
+                      setMode(mode === "login" ? "signup" : "login");
+                      setId("");
+                      setPw("");
+                      setRef("");
+                    }}
+                  >
+                    {mode === "login" ? t.signup : t.login}
+                  </button>
+                </motion.div>
               )}
-
-              {/* 메인 액션 버튼 */}
-              <button
-                style={{
-                  ...styles.primaryBtn,
-                  height: "65px",
-                  fontSize: "20px",
-                  fontWeight: "900",
-                  marginTop: "10px",
-                }}
-                onClick={() => (mode === "login" ? handleLogin() : signup())}
-              >
-                {mode === "login" ? t.login : t.signup}
-              </button>
-
-              {/* 게스트 로그인을 대체한 회원가입/로그인 모드 전환 버튼 */}
-              <button
-                style={{
-                  ...styles.guestBtn,
-                  height: "55px",
-                  marginTop: "15px",
-                }}
-                onClick={() => {
-                  setMode(mode === "login" ? "signup" : "login");
-                  setId("");
-                  setPw("");
-                  setRef("");
-                }}
-              >
-                {mode === "login" ? t.signup : t.login}
-              </button>
-            </div>
+            </AnimatePresence>
           </div>
         )}
       </div>
     </div>
   );
 }
+
+// ★ [신규] 랜딩페이지 전용 스타일
+const landingStyles = {
+  heroSection: {
+    textAlign: "center",
+    marginBottom: 40,
+    padding: "0 20px",
+  },
+  subText: {
+    fontSize: "0.95rem",
+    color: "rgba(255,255,255,0.65)",
+    fontWeight: 300,
+    letterSpacing: "2px",
+    margin: 0,
+    marginBottom: 12,
+    textTransform: "uppercase",
+  },
+  mainText: {
+    fontSize: "1.5rem",
+    fontWeight: 700,
+    color: "#fff",
+    margin: 0,
+    letterSpacing: "-0.5px",
+    lineHeight: 1.4,
+    textShadow: "0 2px 20px rgba(0,0,0,0.5)",
+  },
+  // 접힌 로그인 카드
+  collapsedCard: {
+    width: "100%",
+    maxWidth: 340,
+    padding: "18px 24px",
+    borderRadius: 20,
+    background: "rgba(255,255,255,0.08)",
+    backdropFilter: "blur(20px)",
+    border: "1px solid rgba(255,255,255,0.15)",
+    boxShadow: "0 10px 40px rgba(0,0,0,0.4)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    cursor: "pointer",
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: 700,
+    letterSpacing: "0.5px",
+  },
+  collapsedIcon: {
+    fontSize: 18,
+  },
+  collapsedText: {
+    flex: 1,
+    textAlign: "left",
+  },
+  collapsedArrow: {
+    fontSize: 12,
+    opacity: 0.7,
+  },
+  // 펼친 카드의 접기 버튼 (우상단)
+  closeBtn: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    background: "rgba(255,255,255,0.1)",
+    border: "1px solid rgba(255,255,255,0.15)",
+    color: "#fff",
+    fontSize: 12,
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+  },
+};
