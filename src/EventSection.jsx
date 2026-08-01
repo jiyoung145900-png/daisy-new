@@ -76,6 +76,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
   const [selectedItems, setSelectedItems] = useState([]);
   const [betAmount, setBetAmount] = useState("");
   const [activeTab, setActiveTab] = useState("mine");
+  const [isDonating, setIsDonating] = useState(false); // ★ [신규] 중복 클릭 방지 (렉/빠른 재클릭 시 이중 베팅 방지)
 
   useEffect(() => { setDisplayPoint(userPoint); }, [userPoint]);
 
@@ -157,11 +158,15 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     });
   }, [myHistory, winItemsByRound, fallbackWinItems, resolveWinItems]);
 
-  // ★ [수정] handleDonate - 다중 베팅 지원
+  // ★ [수정] handleDonate - 다중 베팅 지원 + 중복 클릭 방지
+  //   - 렉이나 빠른 재클릭으로 인한 이중 베팅 방지 (isDonating 락)
   //   - 최대 횟수 체크 → 초과 시 알림
   //   - Firestore 잔액 즉시 차감 (기존 유지)
   //   - addPendingBet으로 배열에 추가 (기존 setMyPendingBet 방식 대체)
   const handleDonate = async () => {
+    // ★ [신규] 중복 클릭 방지 - 이미 처리 중이면 즉시 종료
+    if (isDonating) return;
+
     if (isMaxReached) {
       return alert(isKo 
         ? `한 회차 최대 ${maxBetsPerRound}회까지 베팅 가능합니다.` 
@@ -173,6 +178,9 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     if (selectedItems.length === 0) return alert(isKo ? "아이템을 선택해주세요." : "Please select items.");
     if (!perAmount || perAmount <= 0) return alert(isKo ? "금액을 입력해주세요." : "Please enter amount.");
     if (totalCost > displayPoint) return alert(isKo ? "보유 다이아를 확인해주세요." : "Check your diamond balance.");
+
+    // ★ [신규] 처리 시작 락 - 이후 클릭은 위 if (isDonating) return에서 차단됨
+    setIsDonating(true);
 
     const newPoint = displayPoint - totalCost;
     setDisplayPoint(newPoint); 
@@ -198,17 +206,20 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
         totalCost, 
         docId: docRef.id 
       });
+
+      // 입력 초기화 → 다음 베팅 위한 상태 리셋
+      setSelectedItems([]);
+      setBetAmount("");
     } catch (e) { 
       console.error("서버 기록 실패:", e); 
       alert(isKo ? "베팅 처리 중 오류가 발생했습니다." : "Error processing bet.");
       // 실패 시 UI 롤백
       setDisplayPoint(displayPoint);
       updatePointWithAnim(displayPoint);
+    } finally {
+      // ★ [신규] 처리 완료 락 해제 - 성공/실패 상관없이 다음 베팅 가능
+      setIsDonating(false);
     }
-
-    // 입력 초기화 → 다음 베팅 위한 상태 리셋
-    setSelectedItems([]);
-    setBetAmount("");
   };
 
   const currentTotalCost = (parseInt(betAmount) || 0) * (selectedItems.length || 0);
@@ -482,14 +493,17 @@ return (
                       <button
                         style={{
                           ...localDs.finalBtn, 
-                          opacity: (!betAmount || selectedItems.length === 0) ? 0.5 : 1
+                          opacity: (isDonating || !betAmount || selectedItems.length === 0) ? 0.5 : 1,
+                          cursor: (isDonating || !betAmount || selectedItems.length === 0) ? 'not-allowed' : 'pointer'
                         }}
                         onClick={handleDonate}
-                        disabled={!betAmount || selectedItems.length === 0}
+                        disabled={isDonating || !betAmount || selectedItems.length === 0}
                       >
-                        {isKo 
-                          ? (pendingCount === 0 ? "베팅" : "추가베팅") 
-                          : (pendingCount === 0 ? "BET" : "ADD BET")}
+                        {isDonating
+                          ? (isKo ? "처리 중..." : "PROCESSING...")
+                          : (isKo 
+                              ? (pendingCount === 0 ? "베팅" : "추가베팅") 
+                              : (pendingCount === 0 ? "BET" : "ADD BET"))}
                       </button>
                     </div>
 
