@@ -216,6 +216,27 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
 };
 
 // --- 6. 게임 이용 내역 화면 (기존 유지) ---
+// --- 6. 게임 이용 내역 화면 (기존 유지) ---
+// ★ ITEM_CONFIG import 추가 - 아이템 이름으로 이미지 URL 찾아서 표시
+import { ITEM_CONFIG } from "./EventService";
+
+// 아이템 이름을 아이콘+텍스트로 렌더링하는 헬퍼
+const HistoryItemDisplay = ({ name, isKo, size = 18 }) => {
+  const item = ITEM_CONFIG.find(it => it.name === name);
+  if (!item) return <span>{name}</span>;
+  const displayName = isKo ? item.name : item.nameEn;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle' }}>
+      {item.isImage ? (
+        <img src={item.icon} alt={displayName} style={{ width: size, height: size, objectFit: 'contain' }} />
+      ) : (
+        <span style={{ fontSize: size }}>{item.icon}</span>
+      )}
+      <span>{displayName}</span>
+    </span>
+  );
+};
+
 export const HistoryView = ({ onBack, isKo, userId, myBetHistory }) => {
   const donationHistory = useMemo(() => {
     if (Array.isArray(myBetHistory)) return myBetHistory;
@@ -236,7 +257,14 @@ export const HistoryView = ({ onBack, isKo, userId, myBetHistory }) => {
                 <span>{h.date}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: '#fff' }}>{h.selected?.join(", ")}</span>
+                <span style={{ color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {h.selected?.map((name, idx) => (
+                    <React.Fragment key={idx}>
+                      {idx > 0 && <span style={{ color: '#666' }}>,</span>}
+                      <HistoryItemDisplay name={name} isKo={isKo} />
+                    </React.Fragment>
+                  ))}
+                </span>
                 <span style={{ color: h.earn > 0 ? '#4cd137' : '#e84118', fontWeight: 'bold' }}>
                   {h.earn > 0 
                     ? `+${(h.earn - h.cost).toLocaleString()}` 

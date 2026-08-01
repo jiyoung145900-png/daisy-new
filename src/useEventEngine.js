@@ -42,7 +42,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     isDrawing: false
   });
 
-  const [drawingItems, setDrawingItems] = useState(["🚀", "❤️"]);
+  const [drawingItems, setDrawingItems] = useState(["/icons/instagram.png", "/icons/kakao.png"]);
   // ★ [변경] myPendingBet → myPendingBets (배열, 최대 MAX_BETS_PER_ROUND개)
   const [myPendingBets, setMyPendingBets] = useState([]);
   const [showResult, setShowResult] = useState(null);
@@ -96,7 +96,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
         })
         .filter(Boolean)
         .sort((a, b) => b.round - a.round)
-        .slice(0, 100);
+        .slice(0, 30);
 
       setMyHistory(records);
       // 로컬 캐시 갱신 (다음 mount 때 fast paint용)
@@ -117,7 +117,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     setMyHistory(prev => {
       const exists = prev.find(h => h.round === record.round && JSON.stringify(h.selected) === JSON.stringify(record.selected));
       if (exists) return prev;
-      const updated = [record, ...prev].slice(0, 100);
+      const updated = [record, ...prev].slice(0, 30);
       try { localStorage.setItem(`event_my_history_${user.id}`, JSON.stringify(updated)); } catch (e) {}
       return updated;
     });
@@ -162,11 +162,11 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       
       // 1. 전체 히스토리 복구
       const savedTotal = JSON.parse(localStorage.getItem("event_total_history") || "[]");
-      const lastSavedRound = savedTotal.length > 0 ? savedTotal[0].round : currentRound - 101;
+      const lastSavedRound = savedTotal.length > 0 ? savedTotal[0].round : currentRound - 51;
 
       if (currentRound > lastSavedRound + 1) {
-        const missed = await EventService.getMissedHistory(lastSavedRound, currentRound, 100);
-        const updatedTotal = [...missed.reverse(), ...savedTotal].slice(0, 100);
+        const missed = await EventService.getMissedHistory(lastSavedRound, currentRound, 50);
+        const updatedTotal = [...missed.reverse(), ...savedTotal].slice(0, 50);
         setTotalHistory(updatedTotal);
         localStorage.setItem("event_total_history", JSON.stringify(updatedTotal));
       } else {
@@ -539,7 +539,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
           winItems: winObjs.map(v => `${v.icon} ${v.name}`), 
           date: currentTime 
         };
-        const updated = [newHistoryItem, ...prev].slice(0, 100);
+        const updated = [newHistoryItem, ...prev].slice(0, 50);
         localStorage.setItem("event_total_history", JSON.stringify(updated));
         return updated;
       });

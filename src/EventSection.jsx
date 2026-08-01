@@ -14,6 +14,41 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
 
   const isKo = t && t.home === "홈페이지";
 
+  // ★ [헬퍼] 아이템 표시 컴포넌트 - 이미지 아이콘 + 텍스트
+  //   winItems 같은 문자열 "/icons/instagram.png 인스타" 형태 파싱해서 이미지+텍스트 렌더링
+  //   또는 이름만 있는 경우 ITEM_CONFIG에서 찾아서 표시
+  const ItemDisplay = ({ nameOrPath, size = 20, textStyle = {} }) => {
+    if (!nameOrPath) return null;
+    const parts = nameOrPath.split(" ");
+    let iconPart = "";
+    let namePart = nameOrPath;
+
+    if (parts.length > 1 && (parts[0].startsWith("/") || parts[0].startsWith("http") || parts[0].length <= 4)) {
+      iconPart = parts[0];
+      namePart = parts.slice(1).join(" ");
+    }
+
+    const targetItem = allItems.find(item => item.name === namePart);
+    const displayName = targetItem ? (isKo ? targetItem.name : targetItem.nameEn) : namePart;
+    const iconSrc = targetItem?.icon || iconPart;
+    const isImage = targetItem?.isImage || iconPart.startsWith("/") || iconPart.startsWith("http");
+
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle', ...textStyle }}>
+        {iconSrc && (
+          isImage ? (
+            <img src={iconSrc} alt={displayName} style={{ width: size, height: size, objectFit: 'contain', display: 'inline-block' }} />
+          ) : (
+            <span style={{ fontSize: size }}>{iconSrc}</span>
+          )
+        )}
+        <span>{displayName}</span>
+      </span>
+    );
+  };
+
+  // ★ [유지] getLocalizedText - 기존 코드 호환용 (문자열 반환)
+  //   이미지 URL이 있는 경우도 "이미지경로 이름" 문자열 반환 (렌더링은 ItemDisplay가 담당)
   const getLocalizedText = (inputName) => {
     if (!inputName) return "";
     const parts = inputName.split(" ");
@@ -21,7 +56,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     let icon = "";
     if (parts.length > 1 && isNaN(parts[0])) {
       icon = parts[0] + " ";
-      pureName = parts[1];
+      pureName = parts.slice(1).join(" ");
     }
     const targetItem = allItems.find(item => item.name === pureName);
     if (targetItem) {
@@ -244,7 +279,13 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                 style={{...localDs.itemCard, opacity: isMaxReached ? 0.5 : 1, background: isSelected ? `linear-gradient(145deg, ${item.color}88, #111)` : "#161616", border: isSelected ? `2px solid ${item.color}` : "2px solid #252525"}}>
                 <div style={localDs.multiplier}>{item.label}</div>
                 {!isSelected && <div style={localDs.statBadge}>{stats[item.name] ?? 0}%</div>}
-                <div style={localDs.itemIcon}>{item.icon}</div>
+                <div style={localDs.itemIcon}>
+                  {item.isImage ? (
+                    <img src={item.icon} alt={item.name} style={{ width: 44, height: 44, objectFit: 'contain' }} />
+                  ) : (
+                    <span>{item.icon}</span>
+                  )}
+                </div>
                 <div style={localDs.itemInfoText}>
                   <span style={localDs.itemName}>{isKo ? item.name : item.nameEn}</span>
                   <span style={localDs.itemDesc}>{isKo ? item.desc : item.descEn}</span>
@@ -269,7 +310,7 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
             {(activeTab === 'mine' ? myHistory : totalHistory)
               .slice()
               .sort((a, b) => b.round - a.round)
-              .slice(0, activeTab === 'total' ? 50 : 20)
+              .slice(0, activeTab === 'total' ? 50 : 30)
               .map((h, i) => (
               <div key={`${h.round}-${i}`} style={localDs.histItem}>
                 <div style={localDs.histLeft}>
@@ -282,12 +323,6 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
                   const roundWinItems = h.winItems || winItemsByRound[h.round] || fallbackWinItems[h.round];
                   const hasResult = roundWinItems && roundWinItems.length > 0;
                   const isWin = h.earn > 0;
-                  const formatItemName = (name) => {
-                    const item = allItems.find(it => it.name === name);
-                    if (!item) return name;
-                    return `${item.icon} ${isKo ? item.name : item.nameEn}`;
-                  };
-                  // 기존 리턴문을 아래 코드로 변경 (대략 218번째 라인 부근)
 return (
   <div style={localDs.histMiddle}>
     {hasResult ? (
@@ -306,12 +341,26 @@ return (
           {h.selected && h.selected.length > 0 && (
             <div style={localDs.histMyPick}>
               <span style={localDs.histSubLabel}>{isKo ? "내 선택" : "My pick"}</span>
-              <span style={localDs.histItemText}>{h.selected.map(formatItemName).join(" ")}</span>
+              <span style={localDs.histItemText}>
+                {h.selected.map((name, idx) => (
+                  <React.Fragment key={idx}>
+                    {idx > 0 && " "}
+                    <ItemDisplay nameOrPath={name} size={18} />
+                  </React.Fragment>
+                ))}
+              </span>
             </div>
           )}
           <div style={localDs.histWinIcons}>
             <span style={localDs.histSubLabel}>{isKo ? "당첨" : "Winner"}</span>
-            <span style={localDs.histItemText}>{roundWinItems.map(str => getLocalizedText(str)).join(" ")}</span>
+            <span style={localDs.histItemText}>
+              {roundWinItems.map((str, idx) => (
+                <React.Fragment key={idx}>
+                  {idx > 0 && " "}
+                  <ItemDisplay nameOrPath={str} size={18} />
+                </React.Fragment>
+              ))}
+            </span>
           </div>
         </div>
       </>
@@ -334,7 +383,12 @@ return (
                     </div>
                   ) : (
                     <div style={localDs.histWinIcons}>
-                      {h.winItems?.map(str => getLocalizedText(str)).join(" ")}
+                      {h.winItems?.map((str, idx) => (
+                        <React.Fragment key={idx}>
+                          {idx > 0 && " "}
+                          <ItemDisplay nameOrPath={str} size={18} />
+                        </React.Fragment>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -371,7 +425,12 @@ return (
                   <div key={bet.docId || idx} style={localDs.pendingRow}>
                     <span style={localDs.pendingIdx}>#{idx + 1}</span>
                     <span style={localDs.pendingItems}>
-                      {bet.items.map(name => getLocalizedText(name)).join(", ")}
+                      {bet.items.map((name, idx) => (
+                        <React.Fragment key={idx}>
+                          {idx > 0 && ", "}
+                          <ItemDisplay nameOrPath={name} size={16} />
+                        </React.Fragment>
+                      ))}
                     </span>
                     <span style={localDs.pendingCost}>
                       {bet.totalCost.toLocaleString()} DIA
@@ -497,17 +556,33 @@ return (
                   : (isKo ? "😢 아쉬워요" : "😢 YOU LOSE")}
               </motion.div>
 
-              <div style={{fontSize: '50px', margin: '20px 0', display: 'flex', justifyContent: 'center', gap: '12px'}}>
-                {showResult.winItems.map((str, i) => (
-                  <motion.span
-                    key={i}
-                    initial={{ scale: 0, rotate: -90 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    transition={{ type: "spring", stiffness: 260, damping: 14, delay: 0.25 + i * 0.15 }}
-                  >
-                    {getLocalizedText(str)}
-                  </motion.span>
-                ))}
+              <div style={{fontSize: '50px', margin: '20px 0', display: 'flex', justifyContent: 'center', gap: '12px', alignItems: 'center'}}>
+                {showResult.winItems.map((str, i) => {
+                  const parts = str.split(" ");
+                  const iconPart = parts[0];
+                  const namePart = parts.slice(1).join(" ");
+                  const isImagePath = iconPart.startsWith("/") || iconPart.startsWith("http");
+                  const targetItem = allItems.find(item => item.name === namePart);
+                  return (
+                    <motion.span
+                      key={i}
+                      initial={{ scale: 0, rotate: -90 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ type: "spring", stiffness: 260, damping: 14, delay: 0.25 + i * 0.15 }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                    >
+                      {isImagePath || targetItem?.isImage ? (
+                        <img 
+                          src={targetItem?.icon || iconPart} 
+                          alt={namePart} 
+                          style={{ width: 50, height: 50, objectFit: 'contain' }}
+                        />
+                      ) : (
+                        <span>{targetItem?.icon || iconPart}</span>
+                      )}
+                    </motion.span>
+                  );
+                })}
               </div>
 
               {/* ★ [신규] 다중 베팅인 경우 각 베팅 상세 표시 */}
@@ -519,7 +594,12 @@ return (
                       <div key={i} style={localDs.detailRow}>
                         <span style={localDs.detailIdx}>#{i + 1}</span>
                         <span style={localDs.detailItems}>
-                          {d.items.map(name => getLocalizedText(name)).join(", ")}
+                          {d.items.map((name, idx) => (
+                            <React.Fragment key={idx}>
+                              {idx > 0 && ", "}
+                              <ItemDisplay nameOrPath={name} size={16} />
+                            </React.Fragment>
+                          ))}
                         </span>
                         <span style={{
                           ...localDs.detailResult,

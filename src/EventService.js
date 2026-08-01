@@ -3,24 +3,28 @@ import { doc, getDoc, getDocFromServer, updateDoc, serverTimestamp } from "fireb
 
 export const ITEM_CONFIG = [
   { 
-    name: "로켓", nameEn: "Rocket", 
-    icon: "🚀", color: "#6366f1", label: "x2.0 / x4.0", 
-    desc: "고득점 찬스", descEn: "High Score Chance" 
+    name: "인스타", nameEn: "Instagram", 
+    icon: "/icons/instagram.png", isImage: true,
+    color: "#E4405F", label: "x2.0 / x4.0", 
+    desc: "감성 픽", descEn: "Aesthetic Pick" 
   },
   { 
-    name: "사랑", nameEn: "Heart",
-    icon: "❤️", color: "#f43f5e", label: "x2.0 / x4.0", 
-    desc: "행운의 심볼", descEn: "Symbol of Luck" 
+    name: "카카오", nameEn: "KakaoTalk",
+    icon: "/icons/kakao.png", isImage: true,
+    color: "#FEE500", label: "x2.0 / x4.0", 
+    desc: "친근한 선택", descEn: "Friendly Choice" 
   },
   { 
-    name: "요트", nameEn: "Yacht", 
-    icon: "🚢", color: "#0ea5e9", label: "x2.0 / x4.0", 
-    desc: "프리미엄 픽", descEn: "Premium Pick" 
+    name: "틱톡", nameEn: "TikTok", 
+    icon: "/icons/tiktok.png", isImage: true,
+    color: "#25F4EE", label: "x2.0 / x4.0", 
+    desc: "트렌디 픽", descEn: "Trendy Pick" 
   },
   { 
-    name: "장미", nameEn: "Rose", 
-    icon: "🌹", color: "#ef4444", label: "x2.0 / x4.0", 
-    desc: "정열의 배당", descEn: "Passion Payout" 
+    name: "유튜브", nameEn: "YouTube", 
+    icon: "/icons/youtube.png", isImage: true,
+    color: "#FF0000", label: "x2.0 / x4.0", 
+    desc: "인기 배당", descEn: "Popular Payout" 
   },
 ];
 

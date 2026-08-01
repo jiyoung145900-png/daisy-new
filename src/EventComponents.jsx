@@ -166,22 +166,29 @@ export const EventBanner = ({
         <div>
           {isDrawing ? (
             <div style={bs.drawRow}>
-              {drawingItems.map((icon, idx) => (
-                <motion.div
-                  key={`${impactTick}-${idx}-${icon}`}
-                  initial={{ scale: 0.4, opacity: 0, filter: "blur(4px)" }}
-                  animate={{
-                    scale: [0.4, 1.35, 1.1],
-                    opacity: 1,
-                    filter: "blur(0px)",
-                    textShadow: "0 0 30px rgba(255,215,0,0.9)",
-                  }}
-                  transition={{ duration: 0.35, ease: "backOut" }}
-                  style={bs.drawIcon}
-                >
-                  {icon}
-                </motion.div>
-              ))}
+              {drawingItems.map((icon, idx) => {
+                const isImagePath = typeof icon === "string" && (icon.startsWith("/") || icon.startsWith("http"));
+                return (
+                  <motion.div
+                    key={`${impactTick}-${idx}-${icon}`}
+                    initial={{ scale: 0.4, opacity: 0, filter: "blur(4px)" }}
+                    animate={{
+                      scale: [0.4, 1.35, 1.1],
+                      opacity: 1,
+                      filter: "blur(0px)",
+                      textShadow: "0 0 30px rgba(255,215,0,0.9)",
+                    }}
+                    transition={{ duration: 0.35, ease: "backOut" }}
+                    style={bs.drawIcon}
+                  >
+                    {isImagePath ? (
+                      <img src={icon} alt="drawing" style={{ width: 60, height: 60, objectFit: 'contain' }} />
+                    ) : (
+                      icon
+                    )}
+                  </motion.div>
+                );
+              })}
             </div>
           ) : (
             <motion.h2
@@ -201,11 +208,22 @@ export const EventBanner = ({
           </span>
           <div style={{ display: "flex", gap: "5px" }}>
             {lastResultItems && lastResultItems.length > 0
-              ? lastResultItems.map((item, idx) => (
-                  <span key={idx} style={{ ...bs.resTag, color: isDrawing ? "#ffd700" : "#000" }}>
-                    {item}
-                  </span>
-                ))
+              ? lastResultItems.map((item, idx) => {
+                  // item이 "/icons/xxx.png 이름" 형태면 파싱
+                  const parts = typeof item === "string" ? item.split(" ") : [];
+                  const iconPart = parts[0] || "";
+                  const namePart = parts.slice(1).join(" ") || item;
+                  const isImagePath = iconPart.startsWith("/") || iconPart.startsWith("http");
+                  
+                  return (
+                    <span key={idx} style={{ ...bs.resTag, color: isDrawing ? "#ffd700" : "#000", display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      {isImagePath && (
+                        <img src={iconPart} alt={namePart} style={{ width: 16, height: 16, objectFit: 'contain', verticalAlign: 'middle' }} />
+                      )}
+                      <span>{isImagePath ? namePart : item}</span>
+                    </span>
+                  );
+                })
               : (isKo ? "대기중" : "Waiting")}
           </div>
         </div>
