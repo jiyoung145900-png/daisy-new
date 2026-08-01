@@ -89,14 +89,54 @@ export default function HomeSection({
           )}
         </div>
 
-        {/* ===== TOP AD IMAGE (로고 밑, 가로폭에 맞춰 자동 사이즈 조절) ===== */}
+        {/* ===== ★ [이동] 슬라이드 (로고 바로 밑) ===== */}
+        {slideImages && slideImages.length > 0 && (
+          <div style={{ ...h.sliderContainer, marginBottom: 22 }}>
+            <div style={h.sliderWrap}>
+              {slideImages.map((img, idx) => {
+                const imgUrl = img.url || img;
+                const active = idx === currentSlide;
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      ...h.slide,
+                      opacity: active ? 1 : 0,
+                      visibility: active ? "visible" : "hidden",
+                    }}
+                  >
+                    <div style={h.imageBorderWrapper}>
+                      <img src={imgUrl} style={h.actualImg} alt="slide" draggable="false" />
+                      <div style={h.slideOverlay} />
+                      <div style={h.adTag}>PREMIUM PICK</div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={h.indicatorWrap}>
+                {slideImages.map((_, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      ...h.dot,
+                      width: i === currentSlide ? 20 : 6,
+                      backgroundColor: i === currentSlide ? "#FFD700" : "rgba(255,255,255,0.3)",
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== TOP AD IMAGE (슬라이드 밑, 첫 번째 광고) ===== */}
         {topAdImage && (
           <div style={h.topAdWrap}>
             <img src={topAdImage} style={h.topAdImg} alt="ad" draggable="false" />
           </div>
         )}
 
-        {/* ===== TOP AD IMAGE 2 (LIVE CONNECTED 배지 바로 위) ===== */}
+        {/* ===== TOP AD IMAGE 2 (첫 번째 광고 밑, 두 번째 광고) ===== */}
         {topAdImage2 && (
           <div style={h.topAdWrap}>
             <img src={topAdImage2} style={h.topAdImg} alt="ad2" draggable="false" />
@@ -122,64 +162,22 @@ export default function HomeSection({
         </div>
       </div>
 
-      {/* ===== MAIN SLIDER ===== */}
-      {slideImages && slideImages.length > 0 && (
-        <div style={h.sliderContainer}>
-          <div style={h.sliderWrap}>
-            {slideImages.map((img, idx) => {
-              const imgUrl = img.url || img;
-              const active = idx === currentSlide;
-              return (
-                <div
-                  key={idx}
-                  style={{
-                    ...h.slide,
-                    opacity: active ? 1 : 0,
-                    visibility: active ? "visible" : "hidden",
-                  }}
-                >
-                  <div style={h.imageBorderWrapper}>
-                    <img src={imgUrl} style={h.actualImg} alt="slide" draggable="false" />
-                    <div style={h.slideOverlay} />
-                    <div style={h.adTag}>PREMIUM PICK</div>
-                  </div>
-                </div>
-              );
-            })}
-            <div style={h.indicatorWrap}>
-              {slideImages.map((_, i) => (
-                <div
-                  key={i}
-                  style={{
-                    ...h.dot,
-                    width: i === currentSlide ? 20 : 6,
-                    backgroundColor: i === currentSlide ? "#FFD700" : "rgba(255,255,255,0.3)",
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ===== WELCOME TEXT (번역 적용) ===== */}
       <div style={h.welcomeBox}>
-        <div style={h.welcomeLine} />
+        <span style={h.welcomeLine}></span>
         <span style={h.welcomeText}>
-          {/* ★ 언어에 따른 감성 문구 처리 */}
-          {t.home === "홈페이지" 
-            ? "기다림마저 설레는 공간, 오늘 당신을 찾아갑니다" 
-            : "A space where even waiting is exciting, visiting you today"}
+          {t.home === "홈페이지"
+            ? "BANADA만의 특별한 매칭 서비스를 경험하세요"
+            : "Experience BANADA's exclusive matching service"}
         </span>
-        <div style={h.welcomeLine} />
+        <span style={h.welcomeLine}></span>
       </div>
 
-      {/* ===== SECTION LABEL (번역 적용) ===== */}
+      {/* ===== 매니저 섹션 라벨 ===== */}
       <div style={h.sectionLabel}>
         <div style={h.labelLeft}>
-          <span className="shine-text" style={h.labelIcon}>✦</span>
+          <span style={h.labelIcon}>✦</span>
           <span style={h.labelText}>
-            {/* ★ 한글: BANADA 매니저 / 영어: BANADA MODELS */}
             BANADA {t.manager.toUpperCase()}
           </span>
         </div>
