@@ -61,7 +61,6 @@ export default function App() {
   const [showPopup, setShowPopup] = useState(true);
   const [members, setMembers] = useState(() => load("members", []));
   const [slideImages, setSlideImages] = useState(() => load("slideImages", []));
-  const [hero, setHero] = useState(() => load("hero", { mode: "image", imageSrc: null, title: { ko: "BANADA", en: "BANADA" }, desc: { ko: "선택된 사람들을 위한 프라이빗 커넥션", en: "Private connections for the chosen few" } }));
   const [videoURL, setVideoURL] = useState(() => load("videoURL", null));
   const [videos, setVideos] = useState(() => load("videos", []));
   const [logo, setLogo] = useState(() => load("logo", null));
