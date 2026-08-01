@@ -260,10 +260,7 @@ export default function LandingPage({
       </div>
 
       <div style={styles.mainContent}>
-        <div style={styles.heroSection}>
-          <h1 style={styles.mainTitle}>{hero?.title?.[lang] ?? "BANADA"}</h1>
-          <p style={styles.subTitle}>{hero?.desc?.[lang] ?? ""}</p>
-        </div>
+        {/* ★ heroSection(제목/설명) 완전 삭제됨 */}
 
         {!isAdmin && (
           <div style={styles.authWrap}>

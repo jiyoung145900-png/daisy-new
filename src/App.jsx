@@ -59,6 +59,8 @@ export default function App() {
 
   const [telegramLink, setTelegramLink] = useState(() => load("telegramLink", "https://t.me/BANADA_OFFICIAL"));
   const [showPopup, setShowPopup] = useState(true);
+  // ★ hero 복구 (title/desc는 빈 문자열로 - 문구 안 보임)
+  const [hero, setHero] = useState(() => load("hero", { mode: "image", imageSrc: null, title: { ko: "", en: "" }, desc: { ko: "", en: "" } }));
   const [members, setMembers] = useState(() => load("members", []));
   const [slideImages, setSlideImages] = useState(() => load("slideImages", []));
   const [videoURL, setVideoURL] = useState(() => load("videoURL", null));
@@ -80,33 +82,32 @@ export default function App() {
   }, []);
 
   // ★ Firebase Realtime Listener (Global Settings)
- // ★ Firebase Realtime Listener (Global Settings)
-useEffect(() => {
-  let unsub = () => {};
-  
-  authReady.then(() => {
-    unsub = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.hero) setHero(data.hero);
-        if (data.videoURL !== undefined) setVideoURL(data.videoURL);
-        if (data.logo !== undefined) setLogo(data.logo);
-        if (data.logoSize) setLogoSize(data.logoSize);
-        if (data.logoPos) setLogoPos(data.logoPos);
-        if (data.members) setMembers(data.members);
-        if (data.slideImages) setSlideImages(data.slideImages);
-        if (data.videos) setVideos(data.videos);
-        if (data.innerLogo !== undefined) setInnerLogo(data.innerLogo);
-        if (data.topAdImage !== undefined) setTopAdImage(data.topAdImage);
-        if (data.topAdImage2 !== undefined) setTopAdImage2(data.topAdImage2);
-        if (data.telegramLink) setTelegramLink(data.telegramLink);
-        if (data.noticeText !== undefined) setNoticeText(data.noticeText);
-      }
+  useEffect(() => {
+    let unsub = () => {};
+    
+    authReady.then(() => {
+      unsub = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.hero) setHero(data.hero);
+          if (data.videoURL !== undefined) setVideoURL(data.videoURL);
+          if (data.logo !== undefined) setLogo(data.logo);
+          if (data.logoSize) setLogoSize(data.logoSize);
+          if (data.logoPos) setLogoPos(data.logoPos);
+          if (data.members) setMembers(data.members);
+          if (data.slideImages) setSlideImages(data.slideImages);
+          if (data.videos) setVideos(data.videos);
+          if (data.innerLogo !== undefined) setInnerLogo(data.innerLogo);
+          if (data.topAdImage !== undefined) setTopAdImage(data.topAdImage);
+          if (data.topAdImage2 !== undefined) setTopAdImage2(data.topAdImage2);
+          if (data.telegramLink) setTelegramLink(data.telegramLink);
+          if (data.noticeText !== undefined) setNoticeText(data.noticeText);
+        }
+      });
     });
-  });
-  
-  return () => unsub();
-}, []);
+    
+    return () => unsub();
+  }, []);
 
   // ★ Sync Function (LandingPage 회원가입 등에서 사용)
   const syncToFirebase = async (updates) => {
