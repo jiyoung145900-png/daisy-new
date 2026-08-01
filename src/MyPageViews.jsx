@@ -10,14 +10,13 @@ const SubHeader = ({ title, onBack }) => (
   </div>
 );
 
-// --- 1. 비밀번호 변경 화면 (기존 유지) ---
+// --- 1. 비밀번호 변경 화면 (이전 비밀번호 필드 제거) ---
 export const PasswordView = ({ onBack, isKo, onSubmit, userInfo }) => {
-  const [oldPw, setOldPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
 
   const handleSave = async () => {
-    const success = await onSubmit(oldPw, newPw, confirmPw);
+    const success = await onSubmit(newPw, confirmPw);
     if (success) onBack();
   };
 
@@ -29,9 +28,6 @@ export const PasswordView = ({ onBack, isKo, onSubmit, userInfo }) => {
           <input style={myStyles.inputDisabled} value={userInfo.id} disabled />
         </div>
         <div style={{height: 20}} />
-        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "이전 비밀번호" : "Old Password"}</label>
-          <input type="password" style={myStyles.input} value={oldPw} onChange={(e)=>setOldPw(e.target.value)} />
-        </div>
         <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "새 비밀번호" : "New Password"}</label>
           <input type="password" style={myStyles.input} value={newPw} onChange={(e)=>setNewPw(e.target.value)} />
         </div>
@@ -44,38 +40,8 @@ export const PasswordView = ({ onBack, isKo, onSubmit, userInfo }) => {
   );
 };
 
-// --- 2. PIN 설정 화면 (기존 유지) ---
-export const PinView = ({ onBack, isKo, onSubmit, userInfo }) => {
-  const [oldPin, setOldPin] = useState("");
-  const [newPin, setNewPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
-  const savedPin = localStorage.getItem(`user_pin_${userInfo.id}`);
-
-  const handleSave = async () => {
-    const success = await onSubmit(oldPin, newPin, confirmPin);
-    if (success) onBack();
-  };
-
-  return (
-    <div style={myStyles.container}>
-      <SubHeader title={savedPin ? (isKo ? "결제 비밀번호 변경" : "Change PIN") : (isKo ? "결제 비밀번호 생성" : "Create PIN")} onBack={onBack} />
-      <div style={myStyles.formArea}>
-        {savedPin ? (
-          <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "이전 PIN" : "Old PIN"}</label>
-            <input type="password" maxLength={6} style={{...myStyles.input, textAlign:'center', letterSpacing:'8px'}} value={oldPin} onChange={(e)=>setOldPin(e.target.value.replace(/[^0-9]/g,''))} />
-          </div>
-        ) : null}
-        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "새 PIN (6자리)" : "New PIN"}</label>
-          <input type="password" maxLength={6} style={{...myStyles.input, textAlign:'center', letterSpacing:'8px'}} value={newPin} onChange={(e)=>setNewPin(e.target.value.replace(/[^0-9]/g,''))} />
-        </div>
-        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "PIN 확인" : "Confirm"}</label>
-          <input type="password" maxLength={6} style={{...myStyles.input, textAlign:'center', letterSpacing:'8px'}} value={confirmPin} onChange={(e)=>setConfirmPin(e.target.value.replace(/[^0-9]/g,''))} />
-        </div>
-        <button style={myStyles.saveBtn} onClick={handleSave}>{isKo ? "완료" : "Done"}</button>
-      </div>
-    </div>
-  );
-};
+// --- 2. PIN 설정 화면 완전 삭제 ---
+// (PinView 컴포넌트 제거됨)
 
 // --- 3. 입금 화면 (기존 유지) ---
 export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
@@ -109,13 +75,12 @@ export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
   );
 };
 
-// --- 4. 출금 화면 (저장된 계좌 자동 불러오기 - 기존 유지) ---
+// --- 4. 출금 화면 (PIN 필드 삭제) ---
 export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }) => {
   const [amount, setAmount] = useState("");
   const [bank, setBank] = useState("");
   const [account, setAccount] = useState("");
   const [holder, setHolder] = useState("");
-  const [pin, setPin] = useState("");
 
   const hasSavedBankInfo = !!(userInfo?.savedBankInfo?.bank);
 
@@ -135,7 +100,7 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
   };
 
   const handleReq = async () => {
-    const success = await onSubmit(amount, { bank, account, holder }, pin);
+    const success = await onSubmit(amount, { bank, account, holder });
     if(success) onBack();
   }
 
@@ -176,16 +141,13 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
           <input style={myStyles.input} placeholder={isKo ? "예금주" : "Holder"} value={holder} onChange={(e)=>setHolder(e.target.value)}/>
         </div>
 
-        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>PIN</label>
-          <input type="password" maxLength={6} style={{...myStyles.input, textAlign:'center', letterSpacing:'8px'}} value={pin} onChange={(e)=>setPin(e.target.value.replace(/[^0-9]/g,''))} />
-        </div>
         <button style={{...myStyles.saveBtn, background:'#D4AF37', color:'#000'}} onClick={handleReq}>{isKo ? "신청하기" : "Request"}</button>
       </div>
     </div>
   );
 };
 
-// --- 5. 입/출금 신청 내역 화면 (기존 유지 - 승인/거절 사유 표시 포함) ---
+// --- 5. 입/출금 신청 내역 화면 (기존 유지) ---
 export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
     return (
       <div style={myStyles.container}>
@@ -224,7 +186,6 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
                     </div>
                   </div>
 
-                  {/* 승인 사유 표시 */}
                   {hasApproveReason && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(76, 209, 55, 0.2)' }}>
                       <div style={{ color: '#4cd137', fontSize: '11px', fontWeight: 'bold', marginBottom: 4 }}>
@@ -236,7 +197,6 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
                     </div>
                   )}
 
-                  {/* 거절 사유 표시 */}
                   {isRejected && h.rejectReason && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(239,68,68,0.2)' }}>
                       <div style={{ color: '#ef4444', fontSize: '11px', fontWeight: 'bold', marginBottom: 4 }}>
@@ -255,18 +215,10 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
     );
 };
 
-// --- 6. 게임 이용 내역 화면 ---
-// ★ [수정] myBetHistory prop 우선 사용 (Firestore 실시간 구독 기반)
-//   - 관리자가 배팅 수정하면 즉시 반영
-//   - prop이 없으면 (구버전 호환) localStorage로 fallback
-// ★ [수정] 손익 표시를 순손익(net profit)으로 변경
-//   기존: 이기면 +h.earn (총지급액 40000), 지면 -h.cost (20000)
-//   신규: 이기면 +(h.earn - h.cost) 순수익 (20000), 지면 -h.cost (20000)
+// --- 6. 게임 이용 내역 화면 (기존 유지) ---
 export const HistoryView = ({ onBack, isKo, userId, myBetHistory }) => {
   const donationHistory = useMemo(() => {
-    // 1순위: prop (실시간 구독 데이터)
     if (Array.isArray(myBetHistory)) return myBetHistory;
-    // 2순위: localStorage fallback (구버전 호환)
     if (!userId) return [];
     const saved = localStorage.getItem(`event_my_history_${userId}`);
     return saved ? JSON.parse(saved) : [];
@@ -285,7 +237,6 @@ export const HistoryView = ({ onBack, isKo, userId, myBetHistory }) => {
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#fff' }}>{h.selected?.join(", ")}</span>
-                {/* ★ [수정] 순손익 표시 */}
                 <span style={{ color: h.earn > 0 ? '#4cd137' : '#e84118', fontWeight: 'bold' }}>
                   {h.earn > 0 
                     ? `+${(h.earn - h.cost).toLocaleString()}` 
@@ -299,16 +250,17 @@ export const HistoryView = ({ onBack, isKo, userId, myBetHistory }) => {
   );
 };
 
-// --- 7. 설정 메뉴 화면 (기존 유지) ---
-export const SettingsView = ({ onBack, isKo, onChangeView }) => (
+// --- 7. 설정 메뉴 화면 (재구성) ---
+// ★ 결제 PIN 삭제, 1:1 실시간 상담 추가
+export const SettingsView = ({ onBack, isKo, onChangeView, telegramLink }) => (
   <div style={myStyles.container}>
     <SubHeader title={isKo ? "시스템 설정" : "Settings"} onBack={onBack} />
     <div style={myStyles.settingList}>
       <div style={myStyles.settingItem} onClick={() => onChangeView("profile")}>
         <span style={myStyles.settingText}>{isKo ? "로그인 비밀번호 변경" : "Change Password"}</span><span style={myStyles.arrow}>❯</span>
       </div>
-      <div style={myStyles.settingItem} onClick={() => onChangeView("payment_pin")}>
-        <span style={myStyles.settingText}>{isKo ? "결제 비밀번호(PIN) 설정" : "Setup PIN"}</span><span style={myStyles.arrow}>❯</span>
+      <div style={myStyles.settingItem} onClick={() => window.open(telegramLink || 'https://t.me/BANADA_support', '_blank')}>
+        <span style={myStyles.settingText}>{isKo ? "1:1 실시간 상담" : "1:1 Support"}</span><span style={myStyles.arrow}>❯</span>
       </div>
     </div>
   </div>

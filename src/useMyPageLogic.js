@@ -258,13 +258,8 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     }
   };
 
-  // Withdraw Request
-  const requestWithdraw = async (amount, bankInfo, pin) => {
-    // ✅ PIN은 users/{id}에 저장된 pin을 우선 사용 (로컬 fallback)
-    const savedPin =
-      userInfo?.pin || localStorage.getItem(`user_pin_${userInfo.id}`);
-
-    if (pin !== savedPin) return alert(isKo ? "비밀번호 불일치" : "PIN mismatch");
+  // Withdraw Request (PIN 체크 제거됨)
+  const requestWithdraw = async (amount, bankInfo) => {
     if (Number(amount) > (userInfo.diamond || 0))
       return alert(isKo ? "잔액 부족" : "Not enough balance");
 
@@ -305,16 +300,13 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     }
   };
 
-  // Update Password (users/{id})
-  const updatePassword = async (oldPw, newPw, confirmPw) => {
-    if (!oldPw || newPw !== confirmPw)
+  // Update Password (users/{id}) - 이전 비밀번호 체크 제거됨
+  const updatePassword = async (newPw, confirmPw) => {
+    if (!newPw || newPw !== confirmPw)
       return alert(isKo ? "입력 정보를 확인해주세요." : "Check inputs.");
+    if (newPw.length < 4)
+      return alert(isKo ? "비밀번호는 4자 이상이어야 합니다." : "Password must be at least 4 characters.");
     try {
-      // ✅ old password check (best effort)
-      const currentPw = userInfo?.password;
-      if (currentPw && oldPw !== currentPw)
-        return alert(isKo ? "기존 비밀번호가 틀립니다." : "Old password wrong");
-
       const userRef = doc(db, "users", userInfo.id);
       await updateDoc(userRef, { password: newPw, updatedAt: serverTimestamp() });
 
@@ -326,28 +318,7 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     }
   };
 
-  // Setup PIN (users/{id} + local fallback)
-  const updatePin = async (oldPin, newPin, confirmPin) => {
-    const savedPin =
-      userInfo?.pin || localStorage.getItem(`user_pin_${userInfo.id}`);
-
-    if (savedPin && oldPin !== savedPin)
-      return alert(isKo ? "이전 PIN 불일치" : "Old PIN wrong");
-    if (newPin !== confirmPin || newPin.length !== 6)
-      return alert(isKo ? "새 PIN 확인 필요" : "Check New PIN");
-
-    try {
-      const userRef = doc(db, "users", userInfo.id);
-      await updateDoc(userRef, { pin: newPin, updatedAt: serverTimestamp() });
-
-      localStorage.setItem(`user_pin_${userInfo.id}`, newPin);
-      alert(isKo ? "설정 완료" : "Done");
-      return true;
-    } catch (e) {
-      alert("Error: " + e.message);
-      return false;
-    }
-  };
+  // ★ [제거됨] Setup PIN (updatePin) 함수 완전 삭제
 
   // Change Avatar (users/{id} + local cache)
   const updateAvatar = async (img, idx, onLocalUpdate) => {
@@ -383,7 +354,6 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     requestDeposit,
     requestWithdraw,
     updatePassword,
-    updatePin,
     updateAvatar,
   };
 };

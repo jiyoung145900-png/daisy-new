@@ -10,8 +10,8 @@ import { useMyPageLogic } from "./useMyPageLogic.js";
 
 // ★ 뷰 파일 임포트 (.jsx) - TransactionHistoryView 추가됨
 import { 
-  PasswordView, PinView, DepositView, WithdrawView, HistoryView, SettingsView, TransactionHistoryView 
-} from "./MyPageViews.jsx"; 
+  PasswordView, DepositView, WithdrawView, HistoryView, SettingsView, TransactionHistoryView 
+} from "./MyPageViews.jsx";
 
 // ★ [수정완료] telegramLink 와 t 등 모든 인자(props)를 빠짐없이 받도록 세팅
 export default function MyPage({ 
@@ -29,9 +29,9 @@ export default function MyPage({
   const isKo = t.home === "홈페이지";
   
   // ★ [수정] myDeposits, myWithdraws (내역 데이터) 받아오기 / 데일리 보너스 관련 값 제거
-  const { 
+ const { 
     userInfo, myDeposits, myWithdraws,
-    requestDeposit, requestWithdraw, updatePassword, updatePin, updateAvatar 
+    requestDeposit, requestWithdraw, updatePassword, updateAvatar 
   } = useMyPageLogic(user, onUpdatePoint, isKo);
 
   const [tempSelectedIdx, setTempSelectedIdx] = useState(confirmedAvatarIdx || 0);
@@ -48,7 +48,6 @@ export default function MyPage({
 
   // --- 화면 라우팅 ---
   if (view === "profile") return <PasswordView onBack={()=>setView("settings")} isKo={isKo} onSubmit={updatePassword} userInfo={userInfo} />;
-  if (view === "payment_pin") return <PinView onBack={()=>setView("settings")} isKo={isKo} onSubmit={updatePin} userInfo={userInfo} />;
   
   // ★ [수정] 입금 화면: 내역 버튼 누르면 'deposit_history'로 이동
   if (view === "deposit") return <DepositView onBack={()=>setView("main")} isKo={isKo} onSubmit={requestDeposit} onViewHistory={()=>setView("deposit_history")} />;
@@ -63,7 +62,7 @@ export default function MyPage({
   if (view === "withdraw_history") return <TransactionHistoryView onBack={()=>setView("withdraw")} isKo={isKo} title={isKo?"출금 신청 내역":"Withdraw History"} data={myWithdraws} />;
 
   if (view === "history") return <HistoryView onBack={()=>setView("main")} isKo={isKo} userId={userInfo.id} />;
-  if (view === "settings") return <SettingsView onBack={()=>setView("main")} isKo={isKo} onChangeView={setView} />;
+if (view === "settings") return <SettingsView onBack={()=>setView("main")} isKo={isKo} onChangeView={setView} telegramLink={telegramLink} />;
   if (view === "event_donation") return <EventSection user={userInfo} userPoint={userInfo.diamond || 0} confirmedImage={confirmedImage} confirmedAvatarIdx={confirmedAvatarIdx} onBack={() => setView("main")} t={t} />;
 
   // --- 메인 대시보드 (기존 유지) ---
