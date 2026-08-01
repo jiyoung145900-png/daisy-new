@@ -25,10 +25,10 @@ export default function Dashboard({
   videos = [], 
   videoCategories = [], 
   innerLogo, 
-  topAdImage, // ★ [신규] 로고 밑 첫 번째 광고 이미지 URL
-  topAdImage2, // ★ [신규] LIVE CONNECTED 위, 두 번째 광고 이미지 URL
+  topAdImage,
+  topAdImage2,
   telegramLink = "https://t.me/your_address",
-  noticeText = "" // ★ [추가] 홈 상단 공지 티커 문구
+  noticeText = ""
 }) {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedM, setSelectedM] = useState(null);
@@ -37,22 +37,16 @@ export default function Dashboard({
   const [isEventLoading, setIsEventLoading] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // ★ 중요: props로 받은 user 대신 상위에서 관리되는 실시간 데이터를 참조해야 함
-  // userPoint가 바뀌면 EventSection에도 실시간으로 전달되도록 수정
   const safeUser = user || { id: "MEMBER", no: "2282290", diamond: 0, rewards: 0 };
 
-  // ★ [추가] 데일리 보너스 서버 저장 함수
-  // 이 함수를 HomeSection 등에 props로 내려주어 버튼 클릭 시 실행하게 합니다.
   const handleClaimBonus = async () => {
     if (isGuest) return alert("회원만 이용 가능합니다.");
     
     const bonusAmount = 100000;
     const nextPoint = (Number(user?.diamond) || 0) + bonusAmount;
 
-    // 1. 즉시 UI 업데이트 (상위 App.jsx의 포인트 변경)
     onUpdatePoint(nextPoint);
 
-    // 2. Firebase 서버에 영구 저장
     if (user?.id) {
       try {
         const userRef = doc(db, "users", user.id);
@@ -68,7 +62,6 @@ export default function Dashboard({
     }
   };
 
-  // 비디오 및 멤버 필터 로직 (기존 유지)
   const filteredVideos = videos.filter(v => {
     if (selectedCategory === "ALL" || !selectedCategory) return true;
     return v.category === selectedCategory;
@@ -79,18 +72,14 @@ export default function Dashboard({
     return m.region === selectedRegion;
   });
 
-  // ★ [수정] 실시간 접속자 카운트 - 매번 같은 값이 아니라 로드할 때마다 다르게 보이도록
-  //   1) localStorage 캐시를 없애서 새로고침/재방문 시 항상 새로운 시작값
-  //   2) 등락 폭도 좀 더 다양하게(가끔 큰 폭 변동 포함) + 범위도 넓힘
   const [matchingCount, setMatchingCount] = useState(() => {
-    return Math.floor(Math.random() * (198 - 131 + 1)) + 131; // 131 ~ 198 사이 랜덤 시작
+    return Math.floor(Math.random() * (198 - 131 + 1)) + 131;
   });
 
   useEffect(() => {
     const timer = setInterval(() => {
       setMatchingCount(prev => {
         const rand = Math.random();
-        // 대부분은 작은 변동(±1~2), 가끔 큰 변동(±3~6)까지 섞어서 더 자연스럽고 다양하게
         let change = rand < 0.35 ? 1 : rand < 0.70 ? -1
           : rand < 0.82 ? 2 : rand < 0.90 ? -2
           : rand < 0.95 ? 4 : -4;
@@ -150,8 +139,8 @@ export default function Dashboard({
             t={t} innerLogo={innerLogo} topAdImage={topAdImage} topAdImage2={topAdImage2} slideImages={slideImages} members={members} 
             setActiveTab={setActiveTab} openDetail={openDetail} 
             handleTelegram={handleTelegram} matchingCount={matchingCount}
-            onClaimBonus={handleClaimBonus} // ★ 보너스 함수 전달
-            noticeText={noticeText} // ★ [추가] 공지 티커 문구 전달
+            onClaimBonus={handleClaimBonus}
+            noticeText={noticeText}
           />
         );
       case 'manager':
@@ -171,8 +160,8 @@ export default function Dashboard({
         ) : (
           <EventSection 
             t={t} 
-            user={user} // ★ safeUser 대신 상위 props user를 직접 전달 (실시간 반영)
-            userPoint={user?.diamond || 0} // ★ 실시간 포인트 직접 전달
+            user={user}
+            userPoint={user?.diamond || 0}
             onUpdatePoint={onUpdatePoint}
             onBack={() => setActiveTab('home')} confirmedImage={appAvatarImage} confirmedAvatarIdx={appAvatarIdx}
           />
@@ -198,7 +187,12 @@ export default function Dashboard({
 
   return (
     <div style={{ ...dashStyles.container, background: '#080808', zIndex: 10, position: 'relative' }}>
-      <div style={{...dashStyles.contentArea, background: 'transparent'}}>
+      {/* ★ [수정] contentArea에 하단 여백 추가 (fixed 네비바에 안 가리게) */}
+      <div style={{
+        ...dashStyles.contentArea, 
+        background: 'transparent',
+        paddingBottom: 'calc(90px + env(safe-area-inset-bottom))'  // ← 네비바 높이만큼 여백
+      }}>
         {activeTab !== 'home' && activeTab !== 'event' && activeTab !== 'mypage' && (
           <div style={s.topStatus}>
             <div style={s.statusInner}>
@@ -228,7 +222,18 @@ export default function Dashboard({
         </div>
       )}
 
-      <nav style={{ ...dashStyles.bottomNav, backgroundColor: '#0F0F0F', borderTop: '1px solid #222', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      {/* ★ [수정] 하단 네비바를 화면 하단에 고정 (position: fixed) */}
+      <nav style={{ 
+        ...dashStyles.bottomNav, 
+        position: 'fixed',           // ← 고정
+        bottom: 0,                    // ← 화면 맨 아래
+        left: '50%',                  // ← 가운데 정렬 (maxWidth 500 대응)
+        transform: 'translateX(-50%)', // ← 가운데 정렬
+        zIndex: 1000,                 // ← 다른 요소 위에
+        backgroundColor: '#0F0F0F', 
+        borderTop: '1px solid #222', 
+        paddingBottom: 'env(safe-area-inset-bottom)'  // ← 아이폰 홈바 대응
+      }}>
         {[
           { key: 'home', label: t.home, icon: '🏠' },
           { key: 'manager', label: t.manager, icon: '💎' },
