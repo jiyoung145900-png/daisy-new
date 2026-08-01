@@ -6,19 +6,18 @@ export default function HomeSection({
   members = [],
   slideImages = [],
   innerLogo,
-  topAdImage, // ★ [신규] 로고 밑 첫 번째 광고 이미지
-  topAdImage2, // ★ [신규] LIVE CONNECTED 배지 바로 위, 두 번째 광고 이미지
+  topAdImage,
+  topAdImage2,
   handleTelegram,
   setActiveTab,
   openDetail,
   matchingCount = 0,
-  noticeText = "", // ★ [추가] 관리자가 설정하는 상단 공지 티커 문구
-  t, // ★ Dashboard에서 전달받은 번역 객체
+  noticeText = "",
+  t,
 }) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const scrollRef = useRef(null);
 
-  /* [기존 유지] 상단 배너 자동 슬라이드 */
   useEffect(() => {
     if (!slideImages || slideImages.length <= 1) return;
     const timer = setInterval(() => {
@@ -27,13 +26,11 @@ export default function HomeSection({
     return () => clearInterval(timer);
   }, [slideImages]);
 
-  /* [기존 유지] 무한 스크롤용 멤버 데이터 생성 */
   const loopMembers = useMemo(() => {
     if (!members || members.length === 0) return [];
     return [...members, ...members, ...members];
   }, [members]);
 
-  /* [기존 유지] PC 화살표 버튼 클릭 시 스크롤 이동 */
   const scrollByButton = (direction) => {
     if (scrollRef.current) {
       const scrollAmount = 300; 
@@ -44,7 +41,6 @@ export default function HomeSection({
     }
   };
 
-  /* [기존 유지] PC 마우스 드래그 핸들러 */
   const handleMouseDown = (e) => {
     const slider = scrollRef.current;
     if (!slider) return;
@@ -89,60 +85,7 @@ export default function HomeSection({
           )}
         </div>
 
-        {/* ===== ★ [이동] 슬라이드 (로고 바로 밑) ===== */}
-        {slideImages && slideImages.length > 0 && (
-          <div style={{ ...h.sliderContainer, marginBottom: 22 }}>
-            <div style={h.sliderWrap}>
-              {slideImages.map((img, idx) => {
-                const imgUrl = img.url || img;
-                const active = idx === currentSlide;
-                return (
-                  <div
-                    key={idx}
-                    style={{
-                      ...h.slide,
-                      opacity: active ? 1 : 0,
-                      visibility: active ? "visible" : "hidden",
-                    }}
-                  >
-                    <div style={h.imageBorderWrapper}>
-                      <img src={imgUrl} style={h.actualImg} alt="slide" draggable="false" />
-                      <div style={h.slideOverlay} />
-                      <div style={h.adTag}>PREMIUM PICK</div>
-                    </div>
-                  </div>
-                );
-              })}
-              <div style={h.indicatorWrap}>
-                {slideImages.map((_, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      ...h.dot,
-                      width: i === currentSlide ? 20 : 6,
-                      backgroundColor: i === currentSlide ? "#FFD700" : "rgba(255,255,255,0.3)",
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ===== TOP AD IMAGE (슬라이드 밑, 첫 번째 광고) ===== */}
-        {topAdImage && (
-          <div style={h.topAdWrap}>
-            <img src={topAdImage} style={h.topAdImg} alt="ad" draggable="false" />
-          </div>
-        )}
-
-        {/* ===== TOP AD IMAGE 2 (첫 번째 광고 밑, 두 번째 광고) ===== */}
-        {topAdImage2 && (
-          <div style={h.topAdWrap}>
-            <img src={topAdImage2} style={h.topAdImg} alt="ad2" draggable="false" />
-          </div>
-        )}
-
+        {/* ===== ★ LIVE CONNECTED 배지 (로고 바로 밑) ===== */}
         <div style={h.statusBadge}>
           <div className="dot-pulse-wrap">
             <span className="dot-pulse" />
@@ -152,17 +95,16 @@ export default function HomeSection({
         </div>
       </header>
 
-      {/* ===== INTRO TEXT (번역 적용) ===== */}
+      {/* ===== ★ INTRO TEXT (LIVE CONNECTED 밑) ===== */}
       <div style={h.introTextArea}>
         <div style={h.introSub}>WELCOME TO THE PRIVATE</div>
         <div style={h.introMain}>
-          {/* ★ 한글: BANADA에 오신 것을 환영합니다 / 영어: Welcome to BANADA! */}
           {t.welcome.replace("📢 ", "")} 
           <span style={h.introSparkle}>✦</span>
         </div>
       </div>
 
-      {/* ===== WELCOME TEXT (번역 적용) ===== */}
+      {/* ===== ★ WELCOME TEXT (INTRO 밑) ===== */}
       <div style={h.welcomeBox}>
         <span style={h.welcomeLine}></span>
         <span style={h.welcomeText}>
@@ -172,6 +114,60 @@ export default function HomeSection({
         </span>
         <span style={h.welcomeLine}></span>
       </div>
+
+      {/* ===== ★ [이동] 슬라이드 (WELCOME 문구 아래로) ===== */}
+      {slideImages && slideImages.length > 0 && (
+        <div style={{ ...h.sliderContainer, marginTop: 10, marginBottom: 22 }}>
+          <div style={h.sliderWrap}>
+            {slideImages.map((img, idx) => {
+              const imgUrl = img.url || img;
+              const active = idx === currentSlide;
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    ...h.slide,
+                    opacity: active ? 1 : 0,
+                    visibility: active ? "visible" : "hidden",
+                  }}
+                >
+                  <div style={h.imageBorderWrapper}>
+                    <img src={imgUrl} style={h.actualImg} alt="slide" draggable="false" />
+                    <div style={h.slideOverlay} />
+                    <div style={h.adTag}>PREMIUM PICK</div>
+                  </div>
+                </div>
+              );
+            })}
+            <div style={h.indicatorWrap}>
+              {slideImages.map((_, i) => (
+                <div
+                  key={i}
+                  style={{
+                    ...h.dot,
+                    width: i === currentSlide ? 20 : 6,
+                    backgroundColor: i === currentSlide ? "#FFD700" : "rgba(255,255,255,0.3)",
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== ★ [이동] 광고 1 (슬라이드 밑) ===== */}
+      {topAdImage && (
+        <div style={h.topAdWrap}>
+          <img src={topAdImage} style={h.topAdImg} alt="ad" draggable="false" />
+        </div>
+      )}
+
+      {/* ===== ★ [이동] 광고 2 (광고 1 밑) ===== */}
+      {topAdImage2 && (
+        <div style={h.topAdWrap}>
+          <img src={topAdImage2} style={h.topAdImg} alt="ad2" draggable="false" />
+        </div>
+      )}
 
       {/* ===== 매니저 섹션 라벨 ===== */}
       <div style={h.sectionLabel}>
@@ -211,7 +207,6 @@ export default function HomeSection({
               <div style={h.cardInfo}>
                 <div style={h.cardName}>{m.name}</div>
                 
-                {/* 1열: 지역(loc) · 나이(age) */}
                 <div style={h.cardSpecs}>
                   <span style={h.specText}>
                     {m.loc || m.region || (t.home === "홈페이지" ? "지역" : "Area")}
@@ -222,7 +217,6 @@ export default function HomeSection({
                   </span>
                 </div>
                 
-                {/* 2열: 키 · 몸무게 · 가슴 */}
                 <div style={{ ...h.cardSpecs, marginTop: '5px' }}>
                   <span style={h.specText}>{m.height ? m.height + 'cm' : 'cm'}</span>
                   <span style={h.specDivider}>·</span>
@@ -230,20 +224,18 @@ export default function HomeSection({
                   <span style={h.specDivider}>·</span>
                   <span style={h.specText}>{m.bust || m.size || "Size"}</span>
                 </div>
-
               </div>
             </div>
           ))}
         </div>
 
-        {/* PC 전용 좌우 화살표 버튼 */}
         <div className="pc-arrows-wrap">
           <button className="arrow-btn" onClick={(e) => { e.stopPropagation(); scrollByButton('left'); }}>❮</button>
           <button className="arrow-btn" onClick={(e) => { e.stopPropagation(); scrollByButton('right'); }}>❯</button>
         </div>
       </div>
 
-      {/* ===== FOOTER (번역 적용) ===== */}
+      {/* ===== FOOTER ===== */}
       <div style={h.footerBtnArea}>
         <button onClick={handleTelegram} className="shimmer-btn" style={h.teleBtn}>
           💬 {t.home === "홈페이지" ? "실시간 상담 연결하기" : "Connect Real-time Chat"}
