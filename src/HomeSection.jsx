@@ -104,17 +104,6 @@ export default function HomeSection({
         </div>
       </div>
 
-      {/* ===== ★ WELCOME TEXT (INTRO 밑) ===== */}
-      <div style={h.welcomeBox}>
-        <span style={h.welcomeLine}></span>
-        <span style={h.welcomeText}>
-          {t.home === "홈페이지"
-            ? "BANADA만의 특별한 매칭 서비스를 경험하세요"
-            : "Experience BANADA's exclusive matching service"}
-        </span>
-        <span style={h.welcomeLine}></span>
-      </div>
-
       {/* ===== ★ [이동] 슬라이드 (WELCOME 문구 아래로) ===== */}
       {slideImages && slideImages.length > 0 && (
         <div style={{ ...h.sliderContainer, marginTop: 10, marginBottom: 22 }}>
