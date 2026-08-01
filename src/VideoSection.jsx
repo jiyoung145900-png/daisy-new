@@ -65,7 +65,7 @@ export default function VideoSection({
           video.pause();
           setShowContactMsg(true);
         }
-      }, 30000);
+      }, 10000);  // ★ 30초 → 10초로 변경
     }
     
     return () => {
@@ -172,11 +172,12 @@ export default function VideoSection({
           <div style={s.fullContent} onClick={e => e.stopPropagation()}>
             <video 
               ref={videoRef}
-              src={optimizeVideo(fullScreenVideo, { width: 720 })} 
+              src={optimizeVideo(fullScreenVideo, { width: 480 })}  // ★ 720 → 480 (대역폭 40% 절약)
               style={s.fullVideoEl} 
               controls 
               autoPlay 
               playsInline 
+              preload="metadata"  // ★ 초기 로딩 최소화
             />
             
             {/* ★ 10초 후 노출되는 관리자 문의 안내 */}
