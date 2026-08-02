@@ -688,11 +688,21 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       }
     };
     const messages = ["대박 당첨!", "적중 성공!", "수익 실현!", "축하합니다!", "배당금 획득!"];
+    // ★ [수정] 티커 알림에 이미지 경로 대신 이모지 사용
+    //   기존: `${rItem.icon}` → "/icons/kakao.png" 이 그대로 문자열로 뿌려짐
+    //   수정: 아이템 이름별로 브랜드 이모지 매핑
+    const iconEmoji = {
+      "인스타": "📸",
+      "카카오": "💛",
+      "틱톡": "🎵",
+      "유튜브": "▶️"
+    };
     const notiTimer = setInterval(() => {
       const rName = generateRandomUser();
       const rItem = ITEM_CONFIG[Math.floor(Math.random() * ITEM_CONFIG.length)];
       const rMsg = messages[Math.floor(Math.random() * messages.length)];
-      setLiveNoti(`${rName}님이 ${rItem.icon} ${rItem.name} ${rMsg}`);
+      const emoji = iconEmoji[rItem.name] || "🎁";
+      setLiveNoti(`${rName}님이 ${emoji} ${rItem.name} ${rMsg}`);
     }, 6000 + Math.random() * 4000);
     return () => clearInterval(notiTimer);
   }, []);
