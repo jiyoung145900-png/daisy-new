@@ -54,6 +54,7 @@ export default function LandingPage({
   const [pw, setPw] = useState("");
   const [ref, setRef] = useState("");
   const [isExpanded, setIsExpanded] = useState(false); // ★ [신규] 로그인 카드 접힘/펼침 상태
+  const [isLoading, setIsLoading] = useState(false); // ★ [신규] 로그인/회원가입 처리 중 상태
 
   // 언어 판별 (t.home이 "홈페이지"면 한국어)
   const isKo = t && t.home === "홈페이지";
@@ -75,6 +76,8 @@ export default function LandingPage({
   );
 
   const signup = async () => {
+    if (isLoading) return; // 중복 클릭 방지
+    
     const cleanIdRaw = sanitizeText(id);
     const cleanPw = normalizePw(pw);
     const cleanRef = sanitizeText(ref);
@@ -87,66 +90,98 @@ export default function LandingPage({
       return alert(texts.idExists);
     }
 
-    let agentName = "";
-    let isValidRef = false;
+    setIsLoading(true); // ★ [신규] 처리 시작
 
-    if (cleanRef === "ADMIN") {
-      isValidRef = true;
-      agentName = "ADMIN";
-    } else {
-      const localInviteOwner = users.find((u) => u?.id === cleanRef);
-      if (localInviteOwner) {
+    try {
+      let agentName = "";
+      let isValidRef = false;
+
+      if (cleanRef === "ADMIN") {
         isValidRef = true;
-        agentName = localInviteOwner.id;
+        agentName = "ADMIN";
       } else {
-        try {
-          const inviteRef = doc(db, "invite_codes", cleanRef);
-          const inviteSnap = await getDoc(inviteRef);
+        const localInviteOwner = users.find((u) => u?.id === cleanRef);
+        if (localInviteOwner) {
+          isValidRef = true;
+          agentName = localInviteOwner.id;
+        } else {
+          try {
+            const inviteRef = doc(db, "invite_codes", cleanRef);
+            const inviteSnap = await getDoc(inviteRef);
 
-          if (inviteSnap.exists()) {
-            isValidRef = true;
-            agentName = inviteSnap.data()?.name ?? "";
-          } else {
-            return alert(texts.invalidInvite);
+            if (inviteSnap.exists()) {
+              isValidRef = true;
+              agentName = inviteSnap.data()?.name ?? "";
+            } else {
+              alert(texts.invalidInvite);
+              return;
+            }
+          } catch (e) {
+            console.error("Invite check error:", e);
+            alert(`Error: ${e.message}`);
+            return;
           }
-        } catch (e) {
-          console.error("Invite check error:", e);
-          return alert(`Error: ${e.message}`);
         }
       }
+
+      if (!isValidRef) return;
+
+      const startNo = 2783982189;
+      const generatedNo = (startNo + users.length).toString();
+
+      // ★ [신규] 회원가입 시 IP + 브라우저 정보 자동 조회
+      //   - 봇/멀티계정 감지용 (관리자가 조회 가능)
+      //   - IP 조회 실패해도 가입은 정상 진행 (fallback)
+      let signupIp = "";
+      let userAgent = "";
+      try {
+        const ipRes = await fetch('https://api.ipify.org?format=json');
+        if (ipRes.ok) {
+          const ipData = await ipRes.json();
+          signupIp = ipData.ip || "";
+        }
+      } catch (ipErr) {
+        console.warn("IP 조회 실패:", ipErr);
+      }
+      try {
+        userAgent = navigator.userAgent || "";
+      } catch (uaErr) {}
+
+      const newUser = {
+        id: cleanId,
+        ...buildUserPasswordFields(cleanPw),
+        no: generatedNo,
+        referral: cleanRef,
+        diamond: 0,
+        refCode: cleanId,
+        agentName,
+        joinedAt: new Date().toISOString(),
+        // ★ [신규] 봇/멀티계정 방지용 메타 데이터
+        signupIp: signupIp,
+        signupUA: userAgent.substring(0, 200),
+        signupAt: new Date().toISOString(),
+      };
+
+      const updatedUsers = [...users, newUser];
+      setUsers(updatedUsers);
+
+      if (syncToFirebase) {
+        await syncToFirebase({ users: updatedUsers });
+      }
+
+      alert(texts.signupOk);
+      setId("");
+      setPw("");
+      setRef("");
+      setMode("login");
+    } finally {
+      setIsLoading(false); // ★ [신규] 성공/실패 상관없이 로딩 해제
     }
-
-    if (!isValidRef) return;
-
-    const startNo = 2783982189;
-    const generatedNo = (startNo + users.length).toString();
-
-    const newUser = {
-      id: cleanId,
-      ...buildUserPasswordFields(cleanPw),
-      no: generatedNo,
-      referral: cleanRef,
-      diamond: 0,
-      refCode: cleanId,
-      agentName,
-      joinedAt: new Date().toISOString(),
-    };
-
-    const updatedUsers = [...users, newUser];
-    setUsers(updatedUsers);
-
-    if (syncToFirebase) {
-      await syncToFirebase({ users: updatedUsers });
-    }
-
-    alert(texts.signupOk);
-    setId("");
-    setPw("");
-    setRef("");
-    setMode("login");
   };
 
   const handleLogin = async () => {
+    if (isLoading) return; // 중복 클릭 방지
+    
     const cleanIdRaw = sanitizeText(id);
     const cleanPw = normalizePw(pw);
 
@@ -159,32 +194,38 @@ export default function LandingPage({
       return;
     }
 
-    const localUser = users.find(
-      (u) => normalizeId(u?.id) === cleanId && passOf(u) === cleanPw
-    );
-    if (localUser) {
-      onLogin(cleanId, cleanPw);
-      return;
-    }
+    setIsLoading(true); // ★ [신규] 처리 시작
 
     try {
-      const userRef = doc(db, "users", cleanId);
-      const userSnap = await getDoc(userRef);
-
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        if (passOf(userData) === cleanPw) {
-          setUsers((prev) => [...prev, userData]);
-          onLogin(cleanId, cleanPw);
-        } else {
-          alert(texts.wrongPw);
-        }
-      } else {
-        alert(texts.idNotFound);
+      const localUser = users.find(
+        (u) => normalizeId(u?.id) === cleanId && passOf(u) === cleanPw
+      );
+      if (localUser) {
+        onLogin(cleanId, cleanPw);
+        return;
       }
-    } catch (e) {
-      console.error("Login check error:", e);
-      alert("Error checking login.");
+
+      try {
+        const userRef = doc(db, "users", cleanId);
+        const userSnap = await getDoc(userRef);
+
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          if (passOf(userData) === cleanPw) {
+            setUsers((prev) => [...prev, userData]);
+            onLogin(cleanId, cleanPw);
+          } else {
+            alert(texts.wrongPw);
+          }
+        } else {
+          alert(texts.idNotFound);
+        }
+      } catch (e) {
+        console.error("Login check error:", e);
+        alert("Error checking login.");
+      }
+    } finally {
+      setIsLoading(false); // ★ [신규] 성공/실패 상관없이 로딩 해제
     }
   };
 
@@ -270,6 +311,23 @@ export default function LandingPage({
 
       {/* ===== 메인 콘텐츠 ===== */}
       <div style={{ ...styles.mainContent, paddingTop: "28vh" }}>
+        {/* ★ [신규] 스피너 CSS */}
+        <style>{`
+          @keyframes lp-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          .lp-spinner {
+            width: 18px;
+            height: 18px;
+            border: 3px solid rgba(0,0,0,0.15);
+            border-top: 3px solid #000;
+            border-radius: 50%;
+            animation: lp-spin 0.7s linear infinite;
+            display: inline-block;
+          }
+        `}</style>
+
         {/* ★ [신규] 문구 섹션 - 서브(작은) 위, 웰컴(큰) 아래 */}
         <div style={landingStyles.heroSection}>
           <p style={landingStyles.subText}>
@@ -390,10 +448,20 @@ export default function LandingPage({
                       fontSize: "18px",
                       fontWeight: "900",
                       marginTop: "10px",
+                      opacity: isLoading ? 0.6 : 1,
+                      cursor: isLoading ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 10,
                     }}
                     onClick={() => (mode === "login" ? handleLogin() : signup())}
+                    disabled={isLoading}
                   >
-                    {mode === "login" ? t.login : t.signup}
+                    {isLoading && <span className="lp-spinner" />}
+                    {isLoading 
+                      ? (isKo ? "처리 중..." : "Processing...")
+                      : (mode === "login" ? t.login : t.signup)}
                   </button>
 
                   <button
@@ -401,13 +469,17 @@ export default function LandingPage({
                       ...styles.guestBtn,
                       height: "48px",
                       marginTop: "12px",
+                      opacity: isLoading ? 0.5 : 1,
+                      cursor: isLoading ? 'not-allowed' : 'pointer',
                     }}
                     onClick={() => {
+                      if (isLoading) return;
                       setMode(mode === "login" ? "signup" : "login");
                       setId("");
                       setPw("");
                       setRef("");
                     }}
+                    disabled={isLoading}
                   >
                     {mode === "login" ? t.signup : t.login}
                   </button>

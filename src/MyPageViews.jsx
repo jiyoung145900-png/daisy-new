@@ -1,6 +1,25 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { myStyles } from "./MyPage.styles";
 
+// ★ [신규] 스피너 CSS - MyPageViews 전체에서 재사용
+const SpinnerStyle = () => (
+  <style>{`
+    @keyframes mp-spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .mp-spinner {
+      width: 16px;
+      height: 16px;
+      border: 3px solid rgba(0,0,0,0.15);
+      border-top: 3px solid #000;
+      border-radius: 50%;
+      animation: mp-spin 0.7s linear infinite;
+      display: inline-block;
+    }
+  `}</style>
+);
+
 // 공통 헤더 컴포넌트
 const SubHeader = ({ title, onBack }) => (
   <div style={myStyles.subHeader}>
@@ -47,14 +66,22 @@ export const PasswordView = ({ onBack, isKo, onSubmit, userInfo }) => {
 export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false); // ★ [신규] 신청 처리 중
 
   const handleReq = async () => {
-    const success = await onSubmit(name, amount);
-    if(success) onBack();
+    if (isSubmitting) return; // 중복 클릭 방지
+    setIsSubmitting(true);
+    try {
+      const success = await onSubmit(name, amount);
+      if(success) onBack();
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
     <div style={myStyles.container}>
+      <SpinnerStyle />
       <SubHeader title={isKo ? "입금 신청" : "Deposit"} onBack={onBack} />
       <div style={myStyles.formArea}>
         <div style={{display:'flex', justifyContent:'flex-end', marginBottom:20}}>
@@ -64,12 +91,26 @@ export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
         </div>
 
         <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "입금자명" : "Name"}</label>
-          <input style={myStyles.input} value={name} onChange={(e)=>setName(e.target.value)} />
+          <input style={myStyles.input} value={name} onChange={(e)=>setName(e.target.value)} disabled={isSubmitting} />
         </div>
         <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "금액" : "Amount"}</label>
-          <input type="number" style={myStyles.input} value={amount} onChange={(e)=>setAmount(e.target.value)} />
+          <input type="number" style={myStyles.input} value={amount} onChange={(e)=>setAmount(e.target.value)} disabled={isSubmitting} />
         </div>
-        <button style={myStyles.saveBtn} onClick={handleReq}>{isKo ? "신청하기" : "Request"}</button>
+        <button 
+          style={{
+            ...myStyles.saveBtn,
+            opacity: isSubmitting ? 0.6 : 1,
+            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+          }} 
+          onClick={handleReq}
+          disabled={isSubmitting}
+        >
+          {isSubmitting && <span className="mp-spinner" />}
+          {isSubmitting 
+            ? (isKo ? "신청 중..." : "Submitting...")
+            : (isKo ? "신청하기" : "Request")}
+        </button>
       </div>
     </div>
   );
@@ -81,6 +122,7 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
   const [bank, setBank] = useState("");
   const [account, setAccount] = useState("");
   const [holder, setHolder] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false); // ★ [신규] 신청 처리 중
 
   const hasSavedBankInfo = !!(userInfo?.savedBankInfo?.bank);
 
@@ -100,12 +142,19 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
   };
 
   const handleReq = async () => {
-    const success = await onSubmit(amount, { bank, account, holder });
-    if(success) onBack();
+    if (isSubmitting) return; // 중복 클릭 방지
+    setIsSubmitting(true);
+    try {
+      const success = await onSubmit(amount, { bank, account, holder });
+      if(success) onBack();
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
     <div style={myStyles.container}>
+      <SpinnerStyle />
       <SubHeader title={isKo ? "출금 신청" : "Withdraw"} onBack={onBack} />
       <div style={myStyles.formArea}>
         <div style={{display:'flex', justifyContent:'flex-end', marginBottom:20}}>
@@ -115,7 +164,7 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
         </div>
 
         <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "금액" : "Amount"}</label>
-          <input type="number" style={myStyles.input} value={amount} onChange={(e)=>setAmount(e.target.value)} />
+          <input type="number" style={myStyles.input} value={amount} onChange={(e)=>setAmount(e.target.value)} disabled={isSubmitting} />
         </div>
 
         <div style={myStyles.inputGroup}>
@@ -129,6 +178,7 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
                 <button
                   type="button"
                   onClick={handleClearBank}
+                  disabled={isSubmitting}
                   style={{background:'transparent', border:'1px solid #444', color:'#888', padding:'3px 8px', borderRadius:6, fontSize:11, cursor:'pointer'}}
                 >
                   {isKo ? "다시 입력" : "Clear"}
@@ -136,12 +186,28 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
               </div>
             )}
           </div>
-          <input style={{...myStyles.input, marginBottom:5}} placeholder={isKo ? "은행명" : "Bank Name"} value={bank} onChange={(e)=>setBank(e.target.value)}/>
-          <input style={{...myStyles.input, marginBottom:5}} placeholder={isKo ? "계좌번호" : "Account No"} value={account} onChange={(e)=>setAccount(e.target.value)}/>
-          <input style={myStyles.input} placeholder={isKo ? "예금주" : "Holder"} value={holder} onChange={(e)=>setHolder(e.target.value)}/>
+          <input style={{...myStyles.input, marginBottom:5}} placeholder={isKo ? "은행명" : "Bank Name"} value={bank} onChange={(e)=>setBank(e.target.value)} disabled={isSubmitting}/>
+          <input style={{...myStyles.input, marginBottom:5}} placeholder={isKo ? "계좌번호" : "Account No"} value={account} onChange={(e)=>setAccount(e.target.value)} disabled={isSubmitting}/>
+          <input style={myStyles.input} placeholder={isKo ? "예금주" : "Holder"} value={holder} onChange={(e)=>setHolder(e.target.value)} disabled={isSubmitting}/>
         </div>
 
-        <button style={{...myStyles.saveBtn, background:'#D4AF37', color:'#000'}} onClick={handleReq}>{isKo ? "신청하기" : "Request"}</button>
+        <button 
+          style={{
+            ...myStyles.saveBtn, 
+            background:'#D4AF37', 
+            color:'#000',
+            opacity: isSubmitting ? 0.6 : 1,
+            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+          }} 
+          onClick={handleReq}
+          disabled={isSubmitting}
+        >
+          {isSubmitting && <span className="mp-spinner" />}
+          {isSubmitting
+            ? (isKo ? "신청 중..." : "Submitting...")
+            : (isKo ? "신청하기" : "Request")}
+        </button>
       </div>
     </div>
   );

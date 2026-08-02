@@ -74,11 +74,39 @@ export default function App() {
 
   const [noticeText, setNoticeText] = useState(() => load("noticeText", "📢 BANADA에 오신 것을 환영합니다!"));
 
+  // ★ [신규] 온라인/오프라인 상태 감지 + 재연결 알림
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showReconnected, setShowReconnected] = useState(false);
+
   const t = useMemo(() => translations[lang] || translations.ko, [lang]);
 
   // ★ 서버 시간 동기화
   useEffect(() => {
     startTimeSyncLoop();
+  }, []);
+
+  // ★ [신규] 온라인/오프라인 감지 이벤트 리스너
+  //   - 인터넷 끊기면 빨간 배너 표시
+  //   - 재연결되면 초록 배너 3초 표시 후 자동 사라짐
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      setShowReconnected(true);
+      // 3초 후 재연결 알림 자동 숨김
+      setTimeout(() => setShowReconnected(false), 3000);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setShowReconnected(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // ★ Firebase Realtime Listener (Global Settings)
@@ -275,6 +303,34 @@ export default function App() {
   return (
     <div style={{ ...styles.app, height: '100vh', overflow: 'hidden' }}>
 
+      {/* ★ [신규] 배너 슬라이드 애니메이션 CSS */}
+      <style>{`
+        @keyframes slideDown {
+          from { transform: translateY(-100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
+
+      {/* ★ [신규] 오프라인 알림 배너 - 화면 최상단 고정 */}
+      {!isOnline && (
+        <div style={styles.offlineBanner}>
+          <span style={styles.offlineIcon}>📶</span>
+          <span>{lang === "ko" 
+            ? "인터넷 연결이 끊어졌습니다. 연결을 확인해주세요." 
+            : "You're offline. Please check your connection."}</span>
+        </div>
+      )}
+      
+      {/* ★ [신규] 재연결 알림 배너 - 3초 후 자동 사라짐 */}
+      {showReconnected && isOnline && (
+        <div style={styles.onlineBanner}>
+          <span style={styles.onlineIcon}>✅</span>
+          <span>{lang === "ko" 
+            ? "다시 연결되었습니다!" 
+            : "Back online!"}</span>
+        </div>
+      )}
+
       {showPopup && actualLoggedIn && !showLanding && (
         <div style={styles.popupOverlay}>
           <div style={styles.popupContent}>
@@ -347,7 +403,53 @@ const styles = {
   langBtn: { padding: "8px 16px", borderRadius: 20, background: 'rgba(255,255,255,0.1)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', cursor: 'pointer', fontWeight: 600, backdropFilter: 'blur(5px)' },
   popupOverlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 10001, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(5px)' },
   popupContent: { width: '90%', maxWidth: '350px', backgroundColor: '#111', border: '2px solid #ffb347', borderRadius: '25px', padding: '30px', textAlign: 'center', boxShadow: '0 0 30px rgba(255,179,71,0.4)' },
-  popupBtn: { width: '100%', padding: '12px', background: '#ffb347', border: 'none', borderRadius: '12px', fontWeight: 'bold', color: '#000', cursor: 'pointer' }
+  popupBtn: { width: '100%', padding: '12px', background: '#ffb347', border: 'none', borderRadius: '12px', fontWeight: 'bold', color: '#000', cursor: 'pointer' },
+  // ★ [신규] 오프라인 배너 (빨간색, 최상단 고정)
+  offlineBanner: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 99999,
+    background: 'linear-gradient(90deg, #dc2626, #b91c1c)',
+    color: '#fff',
+    padding: '12px 20px',
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: 700,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    boxShadow: '0 4px 20px rgba(220,38,38,0.4)',
+    animation: 'slideDown 0.3s ease-out',
+  },
+  offlineIcon: {
+    fontSize: 18,
+  },
+  // ★ [신규] 재연결 배너 (초록색, 3초 후 자동 사라짐)
+  onlineBanner: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 99999,
+    background: 'linear-gradient(90deg, #16a34a, #15803d)',
+    color: '#fff',
+    padding: '12px 20px',
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: 700,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    boxShadow: '0 4px 20px rgba(22,163,74,0.4)',
+    animation: 'slideDown 0.3s ease-out',
+  },
+  onlineIcon: {
+    fontSize: 18,
+  }
 };
 
 const dashStyles = {
