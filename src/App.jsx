@@ -246,7 +246,40 @@ export default function App() {
           setCurrentUser(userData);
           setLoggedIn(true);
           setIsGuest(false);
-          updateDoc(userRef, { lastActive: Date.now() });
+          
+          // ★ [신규] 로그인 시 접속 이력 저장 (관리자 모니터링용)
+          //   - IP + UserAgent + 시각 저장
+          //   - loginHistory 배열에 append (최근 20개만 유지)
+          //   - IP 조회 실패해도 lastActive는 갱신됨
+          try {
+            let ip = "";
+            try {
+              const ipRes = await fetch('https://api.ipify.org?format=json');
+              if (ipRes.ok) {
+                const d = await ipRes.json();
+                ip = d.ip || "";
+              }
+            } catch (e) {}
+            
+            const historyEntry = { 
+              at: Date.now(), 
+              ip: ip,
+              ua: (navigator.userAgent || "").substring(0, 100)
+            };
+            
+            const currentHistory = userData.loginHistory || [];
+            const newHistory = [...currentHistory, historyEntry].slice(-20); // 최근 20개
+            
+            updateDoc(userRef, { 
+              lastActive: Date.now(),
+              currentIp: ip,
+              currentUA: (navigator.userAgent || "").substring(0, 200),
+              loginHistory: newHistory,
+            });
+          } catch (histErr) {
+            // 이력 저장 실패해도 로그인은 성공시킴
+            updateDoc(userRef, { lastActive: Date.now() });
+          }
         } else {
           alert(t.login_fail || "비밀번호가 일치하지 않습니다.");
         }

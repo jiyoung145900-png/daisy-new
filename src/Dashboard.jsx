@@ -142,22 +142,44 @@ export default function Dashboard({
 
   useEffect(() => { window.scrollTo(0, 0); }, [activeTab]);
 
-  // ★ [신규] Heartbeat - 30초마다 lastActive 서버 갱신
+  // ★ [신규+확장] Heartbeat - 30초마다 lastActive + IP + 브라우저 서버 갱신
   //   - 유저가 접속중임을 관리자가 실시간 확인 가능
-  //   - 브라우저 탭이 활성 상태(document.visibilityState === 'visible')일 때만 갱신
+  //   - IP는 5분에 한 번씩만 조회 (부담 줄이기)
+  //   - 브라우저 탭이 활성 상태일 때만 갱신
   //   - 게스트는 갱신 안 함 (유저 문서 없음)
   useEffect(() => {
     if (!user?.id || isGuest) return;
     
     let interval = null;
+    let cachedIp = "";
+    let lastIpFetch = 0;
+    
+    const fetchIp = async () => {
+      // 5분 캐시
+      if (cachedIp && Date.now() - lastIpFetch < 300000) return cachedIp;
+      try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        if (res.ok) {
+          const data = await res.json();
+          cachedIp = data.ip || "";
+          lastIpFetch = Date.now();
+        }
+      } catch (e) {}
+      return cachedIp;
+    };
     
     const updateLastActive = async () => {
       // 탭이 백그라운드면 스킵 (배터리/네트워크 절약)
       if (document.visibilityState !== 'visible') return;
       try {
-        await updateDoc(doc(db, "users", user.id), { 
-          lastActive: Date.now() 
-        });
+        const ip = await fetchIp();
+        const updates = { 
+          lastActive: Date.now(),
+          currentUA: (navigator.userAgent || "").substring(0, 200),
+        };
+        if (ip) updates.currentIp = ip;
+        
+        await updateDoc(doc(db, "users", user.id), updates);
       } catch (e) {
         // 조용히 실패 (오프라인 등)
       }
