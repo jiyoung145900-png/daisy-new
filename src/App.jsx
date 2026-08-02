@@ -74,8 +74,10 @@ export default function App() {
 
   const [noticeText, setNoticeText] = useState(() => load("noticeText", "📢 BANADA에 오신 것을 환영합니다!"));
 
-  // ★ [신규] 온라인/오프라인 상태 감지 + 재연결 알림
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  // ★ [수정] 온라인/오프라인 상태 감지
+  //   - 초기값은 항상 true (오탐지 방지)
+  //   - 실제 오프라인 이벤트 발생 시 검증 후 배너 표시
+  const [isOnline, setIsOnline] = useState(true);
   const [showReconnected, setShowReconnected] = useState(false);
 
   const t = useMemo(() => translations[lang] || translations.ko, [lang]);
@@ -85,19 +87,49 @@ export default function App() {
     startTimeSyncLoop();
   }, []);
 
-  // ★ [신규] 온라인/오프라인 감지 이벤트 리스너
-  //   - 인터넷 끊기면 빨간 배너 표시
-  //   - 재연결되면 초록 배너 3초 표시 후 자동 사라짐
+  // ★ [수정] 온라인/오프라인 감지 - 오탐지 방지를 위해 실제 서버 요청으로 검증
+  //   - navigator.onLine은 부정확 (네트워크 인터페이스만 확인)
+  //   - offline 이벤트 발생 시 실제 인터넷 연결 확인 후에만 배너 표시
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      setShowReconnected(true);
-      // 3초 후 재연결 알림 자동 숨김
-      setTimeout(() => setShowReconnected(false), 3000);
+    let checkTimer = null;
+    
+    const verifyConnection = async () => {
+      try {
+        // Google DNS를 fetch로 확인 (매우 빠르고 안정적)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        await fetch('https://www.google.com/generate_204', { 
+          method: 'HEAD', 
+          mode: 'no-cors',
+          signal: controller.signal 
+        });
+        clearTimeout(timeoutId);
+        return true; // 성공 = 실제 온라인
+      } catch (e) {
+        return false; // 실패 = 실제 오프라인
+      }
     };
-    const handleOffline = () => {
-      setIsOnline(false);
-      setShowReconnected(false);
+
+    const handleOnline = async () => {
+      const reallyOnline = await verifyConnection();
+      if (reallyOnline) {
+        setIsOnline(true);
+        setShowReconnected(true);
+        setTimeout(() => setShowReconnected(false), 3000);
+      }
+    };
+    
+    const handleOffline = async () => {
+      // 오프라인 이벤트가 와도 즉시 배너 표시하지 않고 검증
+      // 3초 지연 후 실제로 확인 (일시적 오탐지 방지)
+      if (checkTimer) clearTimeout(checkTimer);
+      checkTimer = setTimeout(async () => {
+        const reallyOnline = await verifyConnection();
+        if (!reallyOnline) {
+          setIsOnline(false);
+          setShowReconnected(false);
+        }
+      }, 3000);
     };
 
     window.addEventListener('online', handleOnline);
@@ -106,6 +138,7 @@ export default function App() {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      if (checkTimer) clearTimeout(checkTimer);
     };
   }, []);
 
