@@ -748,7 +748,7 @@ const localDs = {
     lineHeight: '1.4',
   },
   emptyText: { padding: '40px', textAlign: 'center', color: '#444', fontSize: '13px' },
-  bottomPanel: { position: "fixed", bottom: 'calc(20px + env(safe-area-inset-bottom))', left: 15, right: 15, background: "#1c1c1e", padding: "18px", borderRadius: "28px", border: "1px solid #333", zIndex: 999, boxShadow: '0 -10px 40px rgba(0,0,0,0.7)', boxSizing: 'border-box' },
+  bottomPanel: { position: "fixed", bottom: 'calc(90px + env(safe-area-inset-bottom))', left: 15, right: 15, background: "#1c1c1e", padding: "18px", borderRadius: "28px", border: "1px solid #333", zIndex: 999, boxShadow: '0 -10px 40px rgba(0,0,0,0.7)', boxSizing: 'border-box' },
 
   // ★ [신규] 다중 베팅 상태 표시 UI
   pendingBox: { 
