@@ -59,8 +59,22 @@ export default function LandingPage({
   // 언어 판별 (t.home이 "홈페이지"면 한국어)
   const isKo = t && t.home === "홈페이지";
 
+  // ★ [수정] 한글/영어 자동 전환 - isKo 값에 따라 문구 자동 변경
   const texts = useMemo(
-    () => ({
+    () => (isKo ? {
+      // 한글 버전
+      fillAll: "모든 정보를 입력해주세요.",
+      idExists: "이미 존재하는 아이디입니다.",
+      invalidInvite: "잘못된 초대 코드입니다.",
+      needIdPw: "아이디와 비밀번호를 입력하세요.",
+      wrongPw: "비밀번호가 일치하지 않습니다.",
+      idNotFound: "존재하지 않는 아이디입니다.",
+      signupOk: "가입 완료! 로그인해주세요.",
+      enterInvite: "초대 코드 입력",
+      newHere: "처음이신가요? 회원가입",
+      haveAccount: "계정이 있으신가요? 로그인",
+    } : {
+      // 영어 버전
       fillAll: "Please fill all info.",
       idExists: "ID already exists.",
       invalidInvite: "Invalid invitation code.",
@@ -72,7 +86,7 @@ export default function LandingPage({
       newHere: "New here? Sign Up",
       haveAccount: "Have an account? Login",
     }),
-    []
+    [isKo]
   );
 
   const signup = async () => {
