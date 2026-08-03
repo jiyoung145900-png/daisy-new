@@ -695,7 +695,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       "인스타": "📸",
       "카카오": "💛",
       "틱톡": "🎵",
-      "유튜브": "▶️"
+      "유튜브": "🎬"
     };
     const notiTimer = setInterval(() => {
       const rName = generateRandomUser();

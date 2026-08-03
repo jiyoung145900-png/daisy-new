@@ -23,7 +23,7 @@ export const ITEM_CONFIG = [
   { 
     name: "유튜브", nameEn: "YouTube", 
     icon: "/icons/youtube.png", isImage: true,
-    color: "#FF0000", label: "x2.0 / x4.0", 
+    color: "#CC0000", label: "x2.0 / x4.0", 
     desc: "인기 배당", descEn: "Popular Payout" 
   },
 ];
