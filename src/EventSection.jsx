@@ -4,7 +4,7 @@ import { useEventEngine, allItems } from "./useEventEngine";
 import { EventBanner, ImpactBurst } from "./EventComponents";
 import { EventService } from "./EventService";
 import { db } from "./firebase"; 
-import { collection, addDoc, doc, setDoc, updateDoc, increment } from "firebase/firestore";
+import { collection, addDoc, doc, setDoc, updateDoc, increment, runTransaction } from "firebase/firestore";
 import { avatarStyles, getAvatarUrl } from "./MyPage.utils";
 
 export default function EventSection({ user, userPoint = 0, confirmedImage, confirmedAvatarIdx, onBack, onUpdatePoint, t }) {
@@ -158,13 +158,24 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     });
   }, [myHistory, winItemsByRound, fallbackWinItems, resolveWinItems]);
 
-  // ★ [수정] handleDonate - 다중 베팅 지원 + 중복 클릭 방지
-  //   - 렉이나 빠른 재클릭으로 인한 이중 베팅 방지 (isDonating 락)
-  //   - 최대 횟수 체크 → 초과 시 알림
-  //   - Firestore 잔액 즉시 차감 (기존 유지)
-  //   - addPendingBet으로 배열에 추가 (기존 setMyPendingBet 방식 대체)
+  // ★ [버그 수정] handleDonate - 다이아 차감과 베팅 기록 생성을 하나의 Firestore 트랜잭션으로 묶음
+  //
+  //   ▶ 기존 버그: updateDoc(잔액 차감)과 addDoc(베팅 기록 생성)이 서로 "따로" 실행됐음.
+  //     즉 순서가 [1] 잔액 먼저 차감 → [2] 베팅 기록 생성 이었는데,
+  //     [1]은 성공하고 [2]가 실패(네트워크 오류, 일시적 권한 오류 등)하면
+  //     - Firestore에는 다이아가 이미 차감된 상태로 남고
+  //     - 베팅 기록(event_bets)은 생성되지 않아서 addPendingBet도 호출되지 않음
+  //     → catch 블록은 "화면에 보이는 값"만 원래 값으로 되돌렸을 뿐, Firestore의 실제 잔액은
+  //       그대로 차감된 채였음. 그런데 useEventEngine의 유저 다이아 실시간 구독(onSnapshot)이
+  //       곧바로 그 "실제로 깎인" 값을 다시 화면에 덮어써버려서, 손님 입장에서는 아무 것도
+  //       받은 것 없이 다이아만 사라지고 다시 돌아오지 않는 것처럼 보였음.
+  //       (화면에서 "초기화"를 누르든 안 누르든, 이미 이 시점에 다이아는 안 돌아오는 상태)
+  //
+  //   ▶ 수정: runTransaction으로 "잔액 확인 + 차감 + 베팅 기록 생성"을 원자적으로 묶어서
+  //     한쪽만 성공하고 한쪽은 실패하는 상황 자체를 없앰. 트랜잭션이 실패하면
+  //     Firestore에는 애초에 아무 변화도 없으므로, 로컬 화면 값도 안전하게 그대로 되돌릴 수 있음.
   const handleDonate = async () => {
-    // ★ [신규] 중복 클릭 방지 - 이미 처리 중이면 즉시 종료
+    // ★ 중복 클릭 방지 - 이미 처리 중이면 즉시 종료
     if (isDonating) return;
 
     if (isMaxReached) {
@@ -179,45 +190,69 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     if (!perAmount || perAmount <= 0) return alert(isKo ? "금액을 입력해주세요." : "Please enter amount.");
     if (totalCost > displayPoint) return alert(isKo ? "보유 다이아를 확인해주세요." : "Check your diamond balance.");
 
-    // ★ [신규] 처리 시작 락 - 이후 클릭은 위 if (isDonating) return에서 차단됨
+    // ★ 처리 시작 락 - 이후 클릭은 위 if (isDonating) return에서 차단됨
     setIsDonating(true);
 
-    const newPoint = displayPoint - totalCost;
-    setDisplayPoint(newPoint); 
-    updatePointWithAnim(newPoint); 
+    // 베팅 기록용 문서 참조를 트랜잭션 밖에서 미리 생성 (auto-id)
+    const betDocRef = doc(collection(db, "event_bets"));
+    const userDocRef = user?.id ? doc(db, "users", user.id) : null;
+
+    // 낙관적 UI 업데이트 (트랜잭션 성공 시 그대로 유지, 실패 시 아래 catch에서 원복)
+    const optimisticPoint = displayPoint - totalCost;
+    setDisplayPoint(optimisticPoint);
+    updatePointWithAnim(optimisticPoint);
 
     try {
-      // ★ [수정] Firestore 잔액 delta 방식으로 차감 (관리자 편집과 충돌 방지)
-      //   기존: updateDoc(userRef, { diamond: newPoint }) - 절대값 덮어쓰기
-      //   신규: updateDoc(userRef, { diamond: increment(-totalCost) }) - 원자적 차감
-      if (user?.id) {
-        await updateDoc(doc(db, "users", user.id), { diamond: increment(-totalCost) });
+      if (userDocRef) {
+        // ★ [핵심 수정] 잔액 확인 → 차감 → 베팅 기록 생성을 하나의 트랜잭션으로 원자 처리
+        //   실패하면 Firestore에 아무 것도 반영되지 않음 (다이아도 그대로, 기록도 안 생김)
+        await runTransaction(db, async (tx) => {
+          const userSnap = await tx.get(userDocRef);
+          const currentDiamond = userSnap.exists() ? (userSnap.data()?.diamond ?? 0) : 0;
+
+          if (currentDiamond < totalCost) {
+            const err = new Error("INSUFFICIENT_BALANCE");
+            err.code = "INSUFFICIENT_BALANCE";
+            throw err;
+          }
+
+          tx.update(userDocRef, { diamond: increment(-totalCost) });
+          tx.set(betDocRef, {
+            round: round, userId: user.id, betAmount: totalCost, items: [...selectedItems], win: null, timestamp: new Date().toISOString()
+          });
+        });
+      } else {
+        // user.id가 없는 예외적인 상황 대비 (기존 동작 유지)
+        await setDoc(betDocRef, {
+          round: round, userId: user?.id, betAmount: totalCost, items: [...selectedItems], win: null, timestamp: new Date().toISOString()
+        });
       }
 
-      const docRef = await addDoc(collection(db, "event_bets"), {
-        round: round, userId: user.id, betAmount: totalCost, items: [...selectedItems], win: null, timestamp: new Date().toISOString()
-      });
-
-      // ★ [변경] 배열에 추가 (기존 세팅 방식과 달리 append)
+      // ★ 트랜잭션(또는 기록 생성)이 완전히 성공했을 때만 배열에 추가
       addPendingBet({ 
         round: round, 
         items: [...selectedItems], 
         perAmount, 
         totalCost, 
-        docId: docRef.id 
+        docId: betDocRef.id 
       });
 
       // 입력 초기화 → 다음 베팅 위한 상태 리셋
       setSelectedItems([]);
       setBetAmount("");
     } catch (e) { 
-      console.error("서버 기록 실패:", e); 
-      alert(isKo ? "베팅 처리 중 오류가 발생했습니다." : "Error processing bet.");
-      // 실패 시 UI 롤백
+      console.error("베팅 처리 실패 (다이아 변동 없음):", e); 
+      alert(
+        e?.code === "INSUFFICIENT_BALANCE"
+          ? (isKo ? "보유 다이아를 확인해주세요." : "Check your diamond balance.")
+          : (isKo ? "베팅 처리 중 오류가 발생했습니다. 다이아는 차감되지 않았습니다." : "Error processing bet. Your diamonds were not deducted.")
+      );
+      // ★ 트랜잭션이 실패하면 Firestore에는 애초에 아무 변화가 없으므로
+      //   화면 값도 안전하게 베팅 시도 전 값으로 되돌릴 수 있음 (실제 잔액과 항상 일치)
       setDisplayPoint(displayPoint);
       updatePointWithAnim(displayPoint);
     } finally {
-      // ★ [신규] 처리 완료 락 해제 - 성공/실패 상관없이 다음 베팅 가능
+      // ★ 처리 완료 락 해제 - 성공/실패 상관없이 다음 베팅 가능
       setIsDonating(false);
     }
   };
