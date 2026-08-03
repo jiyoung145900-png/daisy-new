@@ -159,35 +159,49 @@ export default function Dashboard({
       // 5분 캐시
       if (cachedIpData && Date.now() - lastIpFetch < 300000) return cachedIpData;
       try {
-        // ipapi.co: HTTPS 지원, 무료 1000회/일, 국가/지역 정보 포함
-        const res = await fetch('https://ipapi.co/json/');
+        // ★ [교체] ipinfo.io: 무료 5만회/월, 도시 정확도 훨씬 우수
+        //   반환 형태: { ip, city, region, country(2자리코드), loc, org, timezone }
+        const res = await fetch('https://ipinfo.io/json');
         if (res.ok) {
           const data = await res.json();
           cachedIpData = {
             ip: data.ip || "",
-            country: data.country_name || "",
-            countryCode: data.country_code || "",
-            region: data.region || "",
-            city: data.city || "",
+            country: data.country || "",  // 2자리 코드 (KR)
+            countryCode: data.country || "",
+            region: data.region || "",     // 예: "Seoul"
+            city: data.city || "",         // 예: "Seoul"
           };
           lastIpFetch = Date.now();
         }
       } catch (e) {
-        // API 실패 시 fallback: ipify (IP만)
+        // Fallback 1: ipapi.co
         try {
-          const res = await fetch('https://api.ipify.org?format=json');
+          const res = await fetch('https://ipapi.co/json/');
           if (res.ok) {
             const data = await res.json();
             cachedIpData = {
               ip: data.ip || "",
-              country: "",
-              countryCode: "",
-              region: "",
-              city: "",
+              country: data.country_name || "",
+              countryCode: data.country_code || "",
+              region: data.region || "",
+              city: data.city || "",
             };
             lastIpFetch = Date.now();
           }
-        } catch (e2) {}
+        } catch (e2) {
+          // Fallback 2: ipify (IP만)
+          try {
+            const res = await fetch('https://api.ipify.org?format=json');
+            if (res.ok) {
+              const data = await res.json();
+              cachedIpData = {
+                ip: data.ip || "",
+                country: "", countryCode: "", region: "", city: "",
+              };
+              lastIpFetch = Date.now();
+            }
+          } catch (e3) {}
+        }
       }
       return cachedIpData;
     };

@@ -258,26 +258,39 @@ export default function App() {
             let region = "";
             let city = "";
             
-            // ipapi.co로 IP + 위치 함께 조회
+            // ★ [교체] ipinfo.io로 IP + 위치 조회 (도시 정확도 우수, 무료 5만회/월)
             try {
-              const ipRes = await fetch('https://ipapi.co/json/');
+              const ipRes = await fetch('https://ipinfo.io/json');
               if (ipRes.ok) {
                 const d = await ipRes.json();
                 ip = d.ip || "";
-                country = d.country_name || "";
-                countryCode = d.country_code || "";
+                country = d.country || "";
+                countryCode = d.country || "";
                 region = d.region || "";
                 city = d.city || "";
               }
             } catch (e) {
-              // Fallback: ipify (IP만)
+              // Fallback 1: ipapi.co
               try {
-                const ipRes = await fetch('https://api.ipify.org?format=json');
+                const ipRes = await fetch('https://ipapi.co/json/');
                 if (ipRes.ok) {
                   const d = await ipRes.json();
                   ip = d.ip || "";
+                  country = d.country_name || "";
+                  countryCode = d.country_code || "";
+                  region = d.region || "";
+                  city = d.city || "";
                 }
-              } catch (e2) {}
+              } catch (e2) {
+                // Fallback 2: ipify (IP만)
+                try {
+                  const ipRes = await fetch('https://api.ipify.org?format=json');
+                  if (ipRes.ok) {
+                    const d = await ipRes.json();
+                    ip = d.ip || "";
+                  }
+                } catch (e3) {}
+              }
             }
             
             const historyEntry = { 
