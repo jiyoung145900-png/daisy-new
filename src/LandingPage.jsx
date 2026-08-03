@@ -272,6 +272,9 @@ export default function LandingPage({
         }}
       >
         <div style={styles.bgOverlay} />
+        
+        {/* ★ [럭셔리] 은은한 로즈골드 & 립스틱 레드 광채 오버레이 */}
+        <div style={landingStyles.luxuryOverlay} />
 
         {hero?.mode === "image" && hero?.imageSrc && (
           <img
@@ -393,7 +396,12 @@ export default function LandingPage({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
-                  style={{ ...styles.authCard, padding: "40px 30px", position: "relative" }}
+                  style={{ 
+                    ...styles.authCard, 
+                    ...landingStyles.authCardOverride,
+                    padding: "45px 32px", 
+                    position: "relative" 
+                  }}
                 >
                   {/* 접기 버튼 (우상단) */}
                   <button
@@ -412,8 +420,7 @@ export default function LandingPage({
                   <h2
                     style={{
                       ...styles.authTitle,
-                      fontSize: "26px",
-                      marginBottom: "30px",
+                      ...landingStyles.authTitleOverride,
                     }}
                   >
                     {mode === "login" ? t.login : t.signup}
@@ -422,9 +429,8 @@ export default function LandingPage({
                   <input
                     style={{
                       ...styles.authInput,
-                      height: "55px",
-                      fontSize: "16px",
-                      marginBottom: "15px",
+                      ...landingStyles.authInputOverride,
+                      height: "50px",
                     }}
                     placeholder={t.id}
                     value={id}
@@ -438,9 +444,8 @@ export default function LandingPage({
                     type="password"
                     style={{
                       ...styles.authInput,
-                      height: "55px",
-                      fontSize: "16px",
-                      marginBottom: "15px",
+                      ...landingStyles.authInputOverride,
+                      height: "50px",
                     }}
                     placeholder={t.pw}
                     value={pw}
@@ -452,11 +457,11 @@ export default function LandingPage({
                     <input
                       style={{
                         ...styles.authInput,
-                        height: "55px",
-                        fontSize: "16px",
-                        marginBottom: "15px",
-                        border: "2px solid #ffb347",
-                        background: "rgba(255,179,71,0.05)",
+                        ...landingStyles.authInputOverride,
+                        height: "50px",
+                        borderBottom: "1px solid #e0a898",
+                        background: "linear-gradient(to bottom, rgba(224, 168, 152, 0.03) 0%, transparent 100%)",
+                        color: "#f5e6d3",
                       }}
                       placeholder={texts.enterInvite}
                       value={ref}
@@ -468,10 +473,9 @@ export default function LandingPage({
                   <button
                     style={{
                       ...styles.primaryBtn,
-                      height: "58px",
-                      fontSize: "18px",
-                      fontWeight: "900",
-                      marginTop: "10px",
+                      ...landingStyles.primaryBtnOverride,
+                      height: "55px",
+                      marginTop: "18px",
                       opacity: isLoading ? 0.6 : 1,
                       cursor: isLoading ? 'not-allowed' : 'pointer',
                       display: 'flex',
@@ -491,8 +495,9 @@ export default function LandingPage({
                   <button
                     style={{
                       ...styles.guestBtn,
+                      ...landingStyles.guestBtnOverride,
                       height: "48px",
-                      marginTop: "12px",
+                      marginTop: "14px",
                       opacity: isLoading ? 0.5 : 1,
                       cursor: isLoading ? 'not-allowed' : 'pointer',
                     }}
@@ -518,77 +523,242 @@ export default function LandingPage({
 }
 
 // ★ [신규] 랜딩페이지 전용 스타일
+// ============================================================
+// ★ [럭셔리 리뉴얼] 딥 블랙 + 로즈골드 컨셉
+//   - 브랜드 컨셉: 프라이빗 라운지, 매혹적, 유혹적
+//   - 컬러 팔레트:
+//     · 배경: 순 블랙 + 미묘한 붉은 광채
+//     · 로즈골드: #e0a898, #d4af7f (텍스트)
+//     · 골드: #d4af37 (액센트)
+//     · 립스틱 레드: #ff2d55 (강조/포인트)
+//     · 부드러운 화이트: #f5f5f5
+//   - 폰트: 세리프 (Playfair Display 느낌)
+//   - 효과: 글래스모피즘, 은은한 광채, 골드 그라디언트
+// ============================================================
 const landingStyles = {
   heroSection: {
     textAlign: "center",
-    marginBottom: 40,
+    marginBottom: 45,
     padding: "0 20px",
   },
+  // ★ 서브 텍스트 - 세리프 폰트로 우아하게, 로즈골드 그라디언트
   subText: {
-    fontSize: "0.95rem",
-    color: "rgba(255,255,255,0.65)",
+    fontSize: "0.85rem",
+    color: "rgba(224, 168, 152, 0.85)", // 로즈골드
     fontWeight: 300,
-    letterSpacing: "2px",
+    letterSpacing: "6px", // 넓은 자간으로 우아하게
     margin: 0,
-    marginBottom: 12,
+    marginBottom: 18,
     textTransform: "uppercase",
+    fontFamily: "'Playfair Display', 'Cormorant Garamond', Georgia, serif",
+    fontStyle: "italic",
+    textShadow: "0 0 20px rgba(224, 168, 152, 0.3)",
   },
+  // ★ 메인 텍스트 - 세리프 폰트, 골드 그라디언트로 반짝임
   mainText: {
-    fontSize: "1.5rem",
-    fontWeight: 700,
-    color: "#fff",
+    fontSize: "1.75rem",
+    fontWeight: 400,
+    color: "#f5f5f5",
     margin: 0,
-    letterSpacing: "-0.5px",
-    lineHeight: 1.4,
-    textShadow: "0 2px 20px rgba(0,0,0,0.5)",
+    letterSpacing: "1px",
+    lineHeight: 1.5,
+    fontFamily: "'Playfair Display', 'Cormorant Garamond', Georgia, serif",
+    // 골드 그라디언트 텍스트
+    background: "linear-gradient(135deg, #f5e6d3 0%, #e0a898 40%, #d4af7f 60%, #f5e6d3 100%)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    backgroundClip: "text",
+    textShadow: "0 4px 30px rgba(224, 168, 152, 0.3)",
+    filter: "drop-shadow(0 0 25px rgba(224, 168, 152, 0.2))",
   },
-  // 접힌 로그인 카드
+  // ★ 접힌 로그인 카드 - 매혹적인 딥 블랙 + 로즈골드 테두리
   collapsedCard: {
     width: "100%",
-    maxWidth: 340,
-    padding: "18px 24px",
-    borderRadius: 20,
-    background: "rgba(255,255,255,0.08)",
-    backdropFilter: "blur(20px)",
-    border: "1px solid rgba(255,255,255,0.15)",
-    boxShadow: "0 10px 40px rgba(0,0,0,0.4)",
+    maxWidth: 320,
+    padding: "20px 26px",
+    borderRadius: 100, // 완전 둥근 모양 (립스틱 느낌)
+    // 딥 블랙 + 미묘한 붉은 광채
+    background: "linear-gradient(135deg, rgba(10, 5, 8, 0.85) 0%, rgba(20, 10, 15, 0.85) 100%)",
+    backdropFilter: "blur(30px) saturate(180%)",
+    WebkitBackdropFilter: "blur(30px) saturate(180%)",
+    // 로즈골드 테두리 광채
+    border: "1px solid rgba(224, 168, 152, 0.4)",
+    boxShadow: `
+      0 8px 32px rgba(0, 0, 0, 0.6),
+      0 0 40px rgba(224, 168, 152, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08)
+    `,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 12,
+    gap: 14,
     cursor: "pointer",
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: 700,
-    letterSpacing: "0.5px",
+    color: "#f5f5f5",
+    fontSize: 14,
+    fontWeight: 500,
+    letterSpacing: "3px",
+    textTransform: "uppercase",
+    transition: "all 0.3s ease",
+    fontFamily: "'Playfair Display', Georgia, serif",
   },
   collapsedIcon: {
-    fontSize: 18,
+    fontSize: 16,
+    color: "#e0a898", // 로즈골드
+    filter: "drop-shadow(0 0 8px rgba(224, 168, 152, 0.5))",
   },
   collapsedText: {
     flex: 1,
     textAlign: "left",
+    // 로즈골드 그라디언트
+    background: "linear-gradient(135deg, #f5e6d3 0%, #e0a898 100%)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    backgroundClip: "text",
   },
   collapsedArrow: {
-    fontSize: 12,
-    opacity: 0.7,
+    fontSize: 10,
+    color: "#e0a898",
+    opacity: 0.8,
   },
-  // 펼친 카드의 접기 버튼 (우상단)
+  // ★ 펼친 카드의 접기 버튼 - 우아한 로즈골드
   closeBtn: {
     position: "absolute",
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
+    top: 14,
+    right: 14,
+    width: 34,
+    height: 34,
     borderRadius: "50%",
-    background: "rgba(255,255,255,0.1)",
-    border: "1px solid rgba(255,255,255,0.15)",
-    color: "#fff",
-    fontSize: 12,
+    background: "linear-gradient(135deg, rgba(224, 168, 152, 0.1) 0%, rgba(224, 168, 152, 0.05) 100%)",
+    border: "1px solid rgba(224, 168, 152, 0.3)",
+    color: "#e0a898",
+    fontSize: 13,
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,
+    backdropFilter: "blur(10px)",
+    transition: "all 0.25s ease",
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+  },
+  // ★ [신규] 배경 오버레이 - 은은한 붉은 광채
+  luxuryOverlay: {
+    position: "absolute",
+    inset: 0,
+    background: `
+      radial-gradient(ellipse at 30% 40%, rgba(255, 45, 85, 0.08) 0%, transparent 60%),
+      radial-gradient(ellipse at 70% 70%, rgba(224, 168, 152, 0.05) 0%, transparent 50%),
+      linear-gradient(180deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.7) 100%)
+    `,
+    pointerEvents: "none",
+    zIndex: 1,
+  },
+  // ★ [신규] 카드 스타일 오버라이드 (styles.authCard 위에 겹치기)
+  authCardOverride: {
+    background: "linear-gradient(135deg, rgba(10, 5, 8, 0.9) 0%, rgba(20, 10, 15, 0.85) 100%)",
+    backdropFilter: "blur(40px) saturate(180%)",
+    WebkitBackdropFilter: "blur(40px) saturate(180%)",
+    border: "1px solid rgba(224, 168, 152, 0.25)",
+    boxShadow: `
+      0 20px 60px rgba(0, 0, 0, 0.8),
+      0 0 80px rgba(224, 168, 152, 0.1),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05)
+    `,
+    borderRadius: 24,
+  },
+  // ★ [신규] 로그인/회원가입 제목 - 세리프, 로즈골드
+  authTitleOverride: {
+    fontFamily: "'Playfair Display', 'Cormorant Garamond', Georgia, serif",
+    fontSize: "1.6rem",
+    fontWeight: 500,
+    letterSpacing: "3px",
+    textAlign: "center",
+    marginBottom: 30,
+    background: "linear-gradient(135deg, #f5e6d3 0%, #e0a898 50%, #d4af7f 100%)",
+    WebkitBackgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    backgroundClip: "text",
+    filter: "drop-shadow(0 0 20px rgba(224, 168, 152, 0.2))",
+  },
+  // ★ [신규] 입력 필드 - 우아하고 매혹적
+  authInputOverride: {
+    background: "rgba(255, 255, 255, 0.03)",
+    border: "none",
+    borderBottom: "1px solid rgba(224, 168, 152, 0.3)",
+    borderRadius: 0,
+    padding: "14px 4px",
+    marginBottom: 22,
+    color: "#f5f5f5",
+    fontSize: 15,
+    letterSpacing: "0.5px",
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    outline: "none",
+    transition: "all 0.3s ease",
+    width: "100%",
+    boxSizing: "border-box",
+  },
+  // ★ [신규] 메인 버튼 - 로즈골드 그라디언트, 우아함
+  primaryBtnOverride: {
+    background: "linear-gradient(135deg, #e0a898 0%, #d4af7f 50%, #e0a898 100%)",
+    color: "#1a0d10",
+    border: "none",
+    padding: "16px 24px",
+    borderRadius: 100,
+    fontSize: 14,
+    fontWeight: 700,
+    letterSpacing: "3px",
+    textTransform: "uppercase",
+    cursor: "pointer",
+    width: "100%",
+    boxShadow: `
+      0 10px 30px rgba(224, 168, 152, 0.4),
+      0 0 40px rgba(224, 168, 152, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3)
+    `,
+    transition: "all 0.3s ease",
+    fontFamily: "'Playfair Display', Georgia, serif",
+  },
+  // ★ [신규] 게스트 버튼 - 부드럽고 은은
+  guestBtnOverride: {
+    background: "transparent",
+    color: "rgba(224, 168, 152, 0.7)",
+    border: "1px solid rgba(224, 168, 152, 0.3)",
+    padding: "14px 24px",
+    borderRadius: 100,
+    fontSize: 13,
+    fontWeight: 400,
+    letterSpacing: "2px",
+    textTransform: "uppercase",
+    cursor: "pointer",
+    width: "100%",
+    transition: "all 0.3s ease",
+    fontFamily: "'Playfair Display', Georgia, serif",
+  },
+  // ★ [신규] 언어 전환 링크 - 우아하게
+  languageLink: {
+    color: "rgba(224, 168, 152, 0.6)",
+    fontSize: 11,
+    letterSpacing: "2px",
+    textTransform: "uppercase",
+    fontFamily: "'Playfair Display', Georgia, serif",
+    cursor: "pointer",
+    transition: "color 0.25s ease",
+  },
+  // ★ [신규] 모드 전환 (로그인/회원가입 스위치)
+  modeSwitch: {
+    textAlign: "center",
+    marginTop: 20,
+    color: "rgba(245, 245, 245, 0.6)",
+    fontSize: 12,
+    letterSpacing: "1.5px",
+    fontFamily: "'Playfair Display', Georgia, serif",
+  },
+  modeSwitchLink: {
+    color: "#e0a898",
+    cursor: "pointer",
+    fontWeight: 500,
+    textDecoration: "none",
+    transition: "color 0.25s ease",
+    marginLeft: 8,
   },
 };
