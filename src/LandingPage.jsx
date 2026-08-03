@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { optimizeImage, optimizeVideo } from "./CloudinaryUrl";
 import { motion, AnimatePresence } from "framer-motion";
@@ -179,6 +179,16 @@ export default function LandingPage({
       const updatedUsers = [...users, newUser];
       setUsers(updatedUsers);
 
+      // ★ [필수 수정] users 컬렉션에 개별 문서로 저장
+      //   - 관리자 페이지가 users 컬렉션을 실시간 구독
+      //   - 이거 안 하면 회원가입해도 관리자 화면에 안 뜸
+      try {
+        await setDoc(doc(db, "users", cleanId), newUser);
+      } catch (userDocErr) {
+        console.error("users 컬렉션 저장 실패:", userDocErr);
+      }
+
+      // 기존 settings/global 동기화도 유지 (랜딩페이지용 유저 목록)
       if (syncToFirebase) {
         await syncToFirebase({ users: updatedUsers });
       }
