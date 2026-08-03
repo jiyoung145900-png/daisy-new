@@ -247,23 +247,46 @@ export default function App() {
           setLoggedIn(true);
           setIsGuest(false);
           
-          // ★ [신규] 로그인 시 접속 이력 저장 (관리자 모니터링용)
-          //   - IP + UserAgent + 시각 저장
+          // ★ [신규+확장] 로그인 시 접속 이력 저장 (관리자 모니터링용)
+          //   - IP + 국가 + 지역 + UserAgent + 시각 저장
           //   - loginHistory 배열에 append (최근 20개만 유지)
           //   - IP 조회 실패해도 lastActive는 갱신됨
           try {
             let ip = "";
+            let country = "";
+            let countryCode = "";
+            let region = "";
+            let city = "";
+            
+            // ipapi.co로 IP + 위치 함께 조회
             try {
-              const ipRes = await fetch('https://api.ipify.org?format=json');
+              const ipRes = await fetch('https://ipapi.co/json/');
               if (ipRes.ok) {
                 const d = await ipRes.json();
                 ip = d.ip || "";
+                country = d.country_name || "";
+                countryCode = d.country_code || "";
+                region = d.region || "";
+                city = d.city || "";
               }
-            } catch (e) {}
+            } catch (e) {
+              // Fallback: ipify (IP만)
+              try {
+                const ipRes = await fetch('https://api.ipify.org?format=json');
+                if (ipRes.ok) {
+                  const d = await ipRes.json();
+                  ip = d.ip || "";
+                }
+              } catch (e2) {}
+            }
             
             const historyEntry = { 
               at: Date.now(), 
               ip: ip,
+              country: country,
+              countryCode: countryCode,
+              region: region,
+              city: city,
               ua: (navigator.userAgent || "").substring(0, 100)
             };
             
@@ -273,6 +296,10 @@ export default function App() {
             updateDoc(userRef, { 
               lastActive: Date.now(),
               currentIp: ip,
+              currentCountry: country,
+              currentCountryCode: countryCode,
+              currentRegion: region,
+              currentCity: city,
               currentUA: (navigator.userAgent || "").substring(0, 200),
               loginHistory: newHistory,
             });

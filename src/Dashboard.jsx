@@ -142,42 +142,72 @@ export default function Dashboard({
 
   useEffect(() => { window.scrollTo(0, 0); }, [activeTab]);
 
-  // ★ [신규+확장] Heartbeat - 30초마다 lastActive + IP + 브라우저 서버 갱신
+  // ★ [신규+확장] Heartbeat - 30초마다 lastActive + IP + 국가 + 지역 저장
   //   - 유저가 접속중임을 관리자가 실시간 확인 가능
   //   - IP는 5분에 한 번씩만 조회 (부담 줄이기)
+  //   - 국가/지역 정보 함께 저장 (ipapi.co, HTTPS 무료)
   //   - 브라우저 탭이 활성 상태일 때만 갱신
   //   - 게스트는 갱신 안 함 (유저 문서 없음)
   useEffect(() => {
     if (!user?.id || isGuest) return;
     
     let interval = null;
-    let cachedIp = "";
+    let cachedIpData = null;
     let lastIpFetch = 0;
     
-    const fetchIp = async () => {
+    const fetchIpWithLocation = async () => {
       // 5분 캐시
-      if (cachedIp && Date.now() - lastIpFetch < 300000) return cachedIp;
+      if (cachedIpData && Date.now() - lastIpFetch < 300000) return cachedIpData;
       try {
-        const res = await fetch('https://api.ipify.org?format=json');
+        // ipapi.co: HTTPS 지원, 무료 1000회/일, 국가/지역 정보 포함
+        const res = await fetch('https://ipapi.co/json/');
         if (res.ok) {
           const data = await res.json();
-          cachedIp = data.ip || "";
+          cachedIpData = {
+            ip: data.ip || "",
+            country: data.country_name || "",
+            countryCode: data.country_code || "",
+            region: data.region || "",
+            city: data.city || "",
+          };
           lastIpFetch = Date.now();
         }
-      } catch (e) {}
-      return cachedIp;
+      } catch (e) {
+        // API 실패 시 fallback: ipify (IP만)
+        try {
+          const res = await fetch('https://api.ipify.org?format=json');
+          if (res.ok) {
+            const data = await res.json();
+            cachedIpData = {
+              ip: data.ip || "",
+              country: "",
+              countryCode: "",
+              region: "",
+              city: "",
+            };
+            lastIpFetch = Date.now();
+          }
+        } catch (e2) {}
+      }
+      return cachedIpData;
     };
     
     const updateLastActive = async () => {
       // 탭이 백그라운드면 스킵 (배터리/네트워크 절약)
       if (document.visibilityState !== 'visible') return;
       try {
-        const ip = await fetchIp();
+        const ipData = await fetchIpWithLocation();
         const updates = { 
           lastActive: Date.now(),
           currentUA: (navigator.userAgent || "").substring(0, 200),
         };
-        if (ip) updates.currentIp = ip;
+        if (ipData?.ip) {
+          updates.currentIp = ipData.ip;
+          updates.currentCountry = ipData.country;
+          updates.currentCountryCode = ipData.countryCode;
+          updates.currentRegion = ipData.region;
+          updates.currentCity = ipData.city;
+        }
         
         await updateDoc(doc(db, "users", user.id), updates);
       } catch (e) {
