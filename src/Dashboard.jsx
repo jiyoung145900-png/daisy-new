@@ -8,6 +8,20 @@ import MyPageSection from "./MyPage";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
+// ★ [신규] 시간대별 baseline 범위 계산
+//   - 새벽/오전/오후/저녁마다 자연스러운 접속자 범위
+const getTimeBasedBaseline = () => {
+  const hour = new Date().getHours();
+  if (hour >= 0 && hour < 6)   return { min: 130, max: 170, target: 150 };  // 새벽
+  if (hour >= 6 && hour < 11)  return { min: 140, max: 180, target: 160 };  // 오전
+  if (hour >= 11 && hour < 18) return { min: 160, max: 200, target: 180 };  // 오후
+  return { min: 180, max: 230, target: 205 };                                 // 저녁 (18~24시)
+};
+
+// ★ [신규] localStorage 키 (새로고침해도 값 유지)
+const LIVE_COUNT_KEY = 'banada_live_count';
+const LIVE_COUNT_TIME_KEY = 'banada_live_count_time';
+
 export default function Dashboard({ 
   user, 
   onUpdatePoint, 
@@ -79,24 +93,71 @@ export default function Dashboard({
     return m.region === selectedRegion;
   });
 
-  // ★ [수정] 실시간 접속자 카운트 - 매번 같은 값이 아니라 로드할 때마다 다르게 보이도록
-  //   1) localStorage 캐시를 없애서 새로고침/재방문 시 항상 새로운 시작값
-  //   2) 등락 폭도 좀 더 다양하게(가끔 큰 폭 변동 포함) + 범위도 넓힘
+  // ★ [개선] 실시간 접속자 카운트 - 자연스럽고 안정적으로
+  //   1) localStorage에 저장 → 새로고침해도 이전 값 유지 (급격한 변화 방지)
+  //   2) 시간대별 baseline → 저녁은 높게, 새벽은 낮게 (자연스러움)
+  //   3) 4초마다 부드럽게 변화 (대부분 ±1, 가끔 ±2~3)
+  //   4) baseline에서 너무 벗어나면 서서히 수렴
+  //   5) 30분 이상 지난 캐시는 재생성 (오래된 값 방지)
   const [matchingCount, setMatchingCount] = useState(() => {
-    return Math.floor(Math.random() * (198 - 131 + 1)) + 131; // 131 ~ 198 사이 랜덤 시작
+    try {
+      const saved = localStorage.getItem(LIVE_COUNT_KEY);
+      const savedTime = localStorage.getItem(LIVE_COUNT_TIME_KEY);
+      const baseline = getTimeBasedBaseline();
+      
+      // 저장된 값이 있고, 30분 이내면 그대로 사용
+      if (saved && savedTime) {
+        const elapsed = Date.now() - Number(savedTime);
+        if (elapsed < 30 * 60 * 1000) { // 30분
+          const savedNum = Number(saved);
+          if (savedNum >= 100 && savedNum <= 260) return savedNum;
+        }
+      }
+      // 없거나 오래됐으면 → 현재 시간대 baseline 범위 내에서 랜덤 시작
+      return Math.floor(Math.random() * (baseline.max - baseline.min + 1)) + baseline.min;
+    } catch (e) {
+      return 175; // fallback
+    }
   });
 
   useEffect(() => {
     const timer = setInterval(() => {
       setMatchingCount(prev => {
+        const baseline = getTimeBasedBaseline();
         const rand = Math.random();
-        // 대부분은 작은 변동(±1~2), 가끔 큰 변동(±3~6)까지 섞어서 더 자연스럽고 다양하게
-        let change = rand < 0.35 ? 1 : rand < 0.70 ? -1
-          : rand < 0.82 ? 2 : rand < 0.90 ? -2
-          : rand < 0.95 ? 4 : -4;
+        
+        // baseline에서 얼마나 벗어났는지 계산
+        const distFromTarget = prev - baseline.target;
+        
+        let change;
+        
+        // baseline에서 많이 벗어났으면 (30%) 서서히 수렴 방향으로
+        if (Math.abs(distFromTarget) > 20 && rand < 0.30) {
+          change = distFromTarget > 0 ? -1 : 1;
+        } else {
+          // 일반 변동: 대부분 ±1 (부드럽게)
+          //   60% → ±1, 25% → ±2, 10% → ±3, 5% → 유지
+          if (rand < 0.30) change = 1;
+          else if (rand < 0.60) change = -1;
+          else if (rand < 0.72) change = 2;
+          else if (rand < 0.85) change = -2;
+          else if (rand < 0.92) change = 3;
+          else if (rand < 0.97) change = -3;
+          else change = 0;
+        }
+        
         let nextCount = prev + change;
-        if (nextCount <= 110) nextCount = 118;
-        if (nextCount >= 215) nextCount = 205;
+        
+        // 시간대 범위 벗어나면 강제 조정
+        if (nextCount < baseline.min - 10) nextCount = baseline.min;
+        if (nextCount > baseline.max + 10) nextCount = baseline.max;
+        
+        // localStorage 저장 (새로고침해도 유지)
+        try {
+          localStorage.setItem(LIVE_COUNT_KEY, String(nextCount));
+          localStorage.setItem(LIVE_COUNT_TIME_KEY, String(Date.now()));
+        } catch (e) {}
+        
         return nextCount;
       });
     }, 4000); 
