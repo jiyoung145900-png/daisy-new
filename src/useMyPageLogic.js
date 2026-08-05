@@ -10,6 +10,7 @@ import {
   where,
   onSnapshot,
   serverTimestamp,
+  runTransaction,
 } from "firebase/firestore";
 
 const broadcast = new BroadcastChannel("daisy_global_channel");
@@ -258,44 +259,74 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     }
   };
 
-  // Withdraw Request (PIN 체크 제거됨)
+  // ★★★ Withdraw Request - 다이아 즉시 홀딩 (트랜잭션) ★★★
+  //   - 출금 신청 시 다이아를 즉시 차감 (중복 신청 방지)
+  //   - 잔액 부족 시 트랜잭션 자동 실패
+  //   - 관리자가 거절하면 heldAmount 만큼 회원에게 환급 (Admin useAdminLogic.js 참조)
   const requestWithdraw = async (amount, bankInfo) => {
-    if (Number(amount) > (userInfo.diamond || 0))
+    const withdrawAmount = Number(amount);
+
+    // 프론트 1차 검증 (트랜잭션에서 다시 재검증)
+    if (!withdrawAmount || withdrawAmount <= 0)
+      return alert(isKo ? "올바른 금액을 입력해주세요." : "Enter valid amount");
+    if (withdrawAmount > (userInfo.diamond || 0))
       return alert(isKo ? "잔액 부족" : "Not enough balance");
 
-    // ★ [신규] 은행 정보 유효성 체크
+    // 은행 정보 유효성 체크
     if (!bankInfo?.bank?.trim() || !bankInfo?.account?.trim() || !bankInfo?.holder?.trim()) {
       return alert(isKo ? "은행 정보를 모두 입력해주세요." : "Please fill in all bank info.");
     }
 
     try {
-      await addDoc(collection(db, "withdraw_requests"), {
-        userId: userInfo.id,
-        userName: userInfo.name || userInfo.id,
-        amount: Number(amount),
-        bankInfo,
-        status: "pending",
-        timestamp: new Date().toISOString(),
-      });
+      const userRef = doc(db, "users", userInfo.id);
 
-      // ★ [신규] 계좌 정보 자동 저장 - 다음 출금 신청 시 자동으로 불러올 수 있게
-      // users/{id}.savedBankInfo 필드에 저장
-      try {
-        const userRef = doc(db, "users", userInfo.id);
-        await updateDoc(userRef, {
+      // ★★★ 트랜잭션: 잔액 재확인 + 다이아 차감 + 요청 문서 생성을 원자적으로 처리
+      //   - 회원이 여러 창에서 동시 신청해도 안전
+      //   - 잔액 부족 시 트랜잭션 자체가 실패해서 아무것도 반영 안 됨
+      await runTransaction(db, async (tx) => {
+        const userSnap = await tx.get(userRef);
+        if (!userSnap.exists()) throw new Error("USER_NOT_FOUND");
+
+        const currentDiamond = userSnap.data().diamond || 0;
+
+        // 서버 기준 잔액 재확인 (동시 신청 방어)
+        if (currentDiamond < withdrawAmount) {
+          throw new Error("INSUFFICIENT_BALANCE");
+        }
+
+        // 1) 회원 다이아에서 즉시 차감 (홀딩) + 은행 정보 저장
+        tx.update(userRef, {
+          diamond: currentDiamond - withdrawAmount,
           savedBankInfo: bankInfo,
           updatedAt: serverTimestamp(),
         });
-      } catch (saveErr) {
-        // 계좌 저장은 실패해도 출금 신청 자체는 성공했으므로 사용자에게는 알리지 않음
-        console.warn("Failed to save bank info:", saveErr);
-      }
+
+        // 2) 요청 문서 생성 (heldAmount 필드로 홀딩 표시)
+        //    → 관리자가 거절 시 이 금액만큼 환급함
+        const requestRef = doc(collection(db, "withdraw_requests"));
+        tx.set(requestRef, {
+          userId: userInfo.id,
+          userName: userInfo.name || userInfo.id,
+          amount: withdrawAmount,
+          bankInfo,
+          status: "pending",
+          heldAmount: withdrawAmount,      // ★ 홀딩된 금액 (환급 시 사용)
+          heldAt: new Date().toISOString(), // ★ 홀딩 시각
+          timestamp: new Date().toISOString(),
+        });
+      });
 
       playFemaleVoice(isKo ? "출금이 신청되었습니다." : "Withdrawal requested.");
-      alert(isKo ? "신청 완료!" : "Done!");
+      alert(isKo ? "신청 완료! 신청 금액은 심사 완료까지 홀딩됩니다." : "Done! Amount held until reviewed.");
       return true;
     } catch (e) {
-      alert("Error: " + e.message);
+      if (e.message === "INSUFFICIENT_BALANCE") {
+        alert(isKo ? "잔액 부족" : "Not enough balance");
+      } else if (e.message === "USER_NOT_FOUND") {
+        alert(isKo ? "회원 정보를 찾을 수 없습니다." : "User not found");
+      } else {
+        alert("Error: " + e.message);
+      }
       return false;
     }
   };
