@@ -557,19 +557,49 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     const fixedResult = await EventService.getFixedResult(targetRound);
 
     // ★★★ [중앙집중식 결과 결정] 트랜잭션으로 원자 처리 ★★★
+    //   우선순위 (매우 중요!):
+    //     1. fixedResult (관리자 조작) → 항상 최우선!
+    //        관리자가 조작한 결과는 무조건 반영되어야 함
+    //     2. game_history (다른 회원이 이미 저장한 결과) → 그 다음
+    //        조작 없을 때만 첫 결정자 결과 유지
+    //     3. generateResult (알고리즘 계산) → 마지막 fallback
+    //   
+    //   → 관리자 조작 → 자동으로 game_history 덮어쓰기 (다른 회원도 조작 결과 참조)
     let winNames = null;
     try {
       await runTransaction(db, async (tx) => {
         const historyRef = doc(db, "game_history", String(targetRound));
         const historySnap = await tx.get(historyRef);
-        
-        if (historySnap.exists() && Array.isArray(historySnap.data().winner) && historySnap.data().winner.length > 0) {
-          // ★ 다른 회원(또는 관리자)이 이미 결정한 결과 사용 → 모든 회원 동일 결과 보장
-          winNames = historySnap.data().winner;
-          console.log(`✅ ${targetRound}회차 결과 서버 로드 (첫 결정자 기준):`, winNames);
+        const historyWinner = historySnap.exists() && Array.isArray(historySnap.data().winner) 
+          ? historySnap.data().winner 
+          : null;
+
+        if (fixedResult && fixedResult.length > 0) {
+          // ★★★ 1순위: 관리자 조작 → 항상 최우선 (game_history 덮어쓰기)
+          winNames = fixedResult.map(i => i.name);
+          
+          // 기존 game_history가 다르면 강제 덮어쓰기 → 다른 회원도 관리자 결과 참조
+          const isDifferent = !historyWinner || 
+            JSON.stringify([...historyWinner].sort()) !== JSON.stringify([...winNames].sort());
+          
+          if (isDifferent) {
+            tx.set(historyRef, {
+              round: targetRound,
+              winner: winNames,
+              overriddenByAdmin: true,
+              overriddenAt: new Date().toISOString(),
+            }, { merge: true });
+            console.log(`⚡ ${targetRound}회차 관리자 조작 결과 적용 + game_history 덮어씀:`, winNames);
+          } else {
+            console.log(`✅ ${targetRound}회차 관리자 조작 결과 (game_history 이미 동일):`, winNames);
+          }
+        } else if (historyWinner && historyWinner.length > 0) {
+          // ★ 2순위: 다른 회원이 저장한 결과 사용 (조작 없음)
+          winNames = historyWinner;
+          console.log(`✅ ${targetRound}회차 결과 서버 로드 (다른 회원 결정):`, winNames);
         } else {
-          // ★ 이 회원이 첫 종료자 → 결과 계산 + 서버 저장 (이후 다른 회원은 이걸 참조)
-          const winObjs = fixedResult || EventService.generateResult(targetRound);
+          // ★ 3순위: 첫 결정자 → generateResult로 계산 + 저장
+          const winObjs = EventService.generateResult(targetRound);
           winNames = winObjs.map(i => i.name);
           tx.set(historyRef, {
             round: targetRound,
@@ -577,7 +607,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
             firstDecidedBy: user?.id || "unknown",
             firstDecidedAt: new Date().toISOString(),
           }, { merge: true });
-          console.log(`✅ ${targetRound}회차 결과 첫 결정 + 서버 저장:`, winNames);
+          console.log(`✅ ${targetRound}회차 첫 결정 (generateResult):`, winNames);
         }
       });
     } catch (e) {
