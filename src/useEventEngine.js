@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { EventService, soundManager, ITEM_CONFIG, syncServerClock } from "./EventService"; 
 import { db } from "./firebase";
-import { collection, onSnapshot, query, where, doc, setDoc, updateDoc, increment, addDoc, getDocs, orderBy, limit } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, getDoc, setDoc, updateDoc, increment, addDoc, getDocs, orderBy, limit, runTransaction } from "firebase/firestore";
 
 export { ITEM_CONFIG as allItems }; 
 
@@ -212,9 +212,26 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
           let totalMissedWin = 0;
           for (const roundStr of Object.keys(roundGroups)) {
             const roundNum = parseInt(roundStr, 10);
-            const fixedResult = await EventService.getFixedResult(roundNum);
-            const winObjs = fixedResult || EventService.generateResult(roundNum);
-            const winNames = winObjs.map(i => i.name);
+            
+            // ★ [수정] 부재중 정산도 서버 중앙집중식 결과 사용
+            //   game_history/{round} 우선 조회 → 없으면 fixedResult/generateResult
+            let winNames;
+            try {
+              const historySnap = await getDoc(doc(db, "game_history", String(roundNum)));
+              if (historySnap.exists() && Array.isArray(historySnap.data().winner) && historySnap.data().winner.length > 0) {
+                winNames = historySnap.data().winner;
+              } else {
+                const fixedResult = await EventService.getFixedResult(roundNum);
+                const winObjs = fixedResult || EventService.generateResult(roundNum);
+                winNames = winObjs.map(i => i.name);
+              }
+            } catch (e) {
+              console.warn(`부재중 정산 결과 조회 실패 (${roundNum}), fallback:`, e);
+              const fixedResult = await EventService.getFixedResult(roundNum);
+              const winObjs = fixedResult || EventService.generateResult(roundNum);
+              winNames = winObjs.map(i => i.name);
+            }
+            const winObjs = winNames.map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
             const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
             for (const parsedBet of roundGroups[roundStr]) {
@@ -507,6 +524,22 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
   }, [user?.id]);
 
   // --- 라운드 종료: 서버 연동 및 정산 처리 ---
+  //
+  // ★★★ [핵심 수정] 서버 중앙집중식 결과 결정 ★★★
+  //
+  //   이전 버그: 각 회원 브라우저가 자기 판단으로 결과를 결정 → 회원마다 결과 다름!
+  //   
+  //   시나리오 (버그 재현):
+  //     1. 회원 A: fixedResult 없음 → generateResult 실행 → ["틱톡"] 판정
+  //     2. 관리자: 결과 조작 → winner: ["인스타"]
+  //     3. 회원 B: fixedResult 있음 → ["인스타"] 사용
+  //     → 같은 회차인데 A와 B의 결과가 다름 😱
+  //   
+  //   수정 방식: "첫 종료자의 결과가 진리 (Source of Truth)"
+  //     1. Firestore의 game_history/{round} 확인
+  //     2. 이미 winner 있음 → 그거 사용 (다른 회원과 동일 결과 보장)
+  //     3. 없음 → 결과 계산 + 서버에 저장 (내가 첫 결정자)
+  //     4. 트랜잭션으로 원자적 처리 (동시성 안전)
   const handleRoundEnd = useCallback(async (targetRound) => {
     if (isProcessingRef.current) return;
     isProcessingRef.current = true;
@@ -519,13 +552,47 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       setDrawingItems(randomIcons);
     }, 120);
 
+    // ★ [사전 조회] fixedResult (관리자 조작) - 트랜잭션 밖에서 조회
+    //   트랜잭션 내부에서는 tx.get()만 써야 하므로 여기서 미리 준비
     const fixedResult = await EventService.getFixedResult(targetRound);
+
+    // ★★★ [중앙집중식 결과 결정] 트랜잭션으로 원자 처리 ★★★
+    let winNames = null;
+    try {
+      await runTransaction(db, async (tx) => {
+        const historyRef = doc(db, "game_history", String(targetRound));
+        const historySnap = await tx.get(historyRef);
+        
+        if (historySnap.exists() && Array.isArray(historySnap.data().winner) && historySnap.data().winner.length > 0) {
+          // ★ 다른 회원(또는 관리자)이 이미 결정한 결과 사용 → 모든 회원 동일 결과 보장
+          winNames = historySnap.data().winner;
+          console.log(`✅ ${targetRound}회차 결과 서버 로드 (첫 결정자 기준):`, winNames);
+        } else {
+          // ★ 이 회원이 첫 종료자 → 결과 계산 + 서버 저장 (이후 다른 회원은 이걸 참조)
+          const winObjs = fixedResult || EventService.generateResult(targetRound);
+          winNames = winObjs.map(i => i.name);
+          tx.set(historyRef, {
+            round: targetRound,
+            winner: winNames,
+            firstDecidedBy: user?.id || "unknown",
+            firstDecidedAt: new Date().toISOString(),
+          }, { merge: true });
+          console.log(`✅ ${targetRound}회차 결과 첫 결정 + 서버 저장:`, winNames);
+        }
+      });
+    } catch (e) {
+      // 트랜잭션 실패 시 fallback (최악의 경우 로컬 계산)
+      console.error("game_history 트랜잭션 실패, 로컬 fallback:", e);
+      const winObjs = fixedResult || EventService.generateResult(targetRound);
+      winNames = winObjs.map(i => i.name);
+    }
+
+    // ★ winNames로부터 winObjs 재구성 (아이콘, 색상 등 UI 정보 포함)
+    const winObjs = winNames.map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
 
     setTimeout(() => {
       clearInterval(shuffleInterval);
       
-      const winObjs = fixedResult || EventService.generateResult(targetRound);
-      const winNames = winObjs.map(i => i.name);
       const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
       
       setDrawingItems(winObjs.map(v => v.icon));
@@ -544,15 +611,16 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
         return updated;
       });
 
+      // ★ [수정] winner는 이미 트랜잭션에서 저장됨. 여기선 UI용 부가 정보만 merge
+      //   (winItems, date, savedAt 등 - 첫 결정자만 실질적으로 저장)
       try {
         setDoc(doc(db, "game_history", String(targetRound)), {
           round: targetRound,
-          winner: winNames,
           winItems: winObjs.map(v => `${v.icon} ${v.name}`),
           date: currentTime,
           savedAt: new Date().toISOString()
         }, { merge: true }).catch(err => {
-          console.error("game_history 저장 실패:", err);
+          console.error("game_history 부가정보 저장 실패:", err);
         });
       } catch (e) {
         console.error("game_history 저장 오류:", e);

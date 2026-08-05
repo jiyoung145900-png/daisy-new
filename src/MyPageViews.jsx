@@ -93,8 +93,48 @@ export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
         <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "입금자명" : "Name"}</label>
           <input style={myStyles.input} value={name} onChange={(e)=>setName(e.target.value)} disabled={isSubmitting} />
         </div>
-        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "금액" : "Amount"}</label>
-          <input type="number" style={myStyles.input} value={amount} onChange={(e)=>setAmount(e.target.value)} disabled={isSubmitting} />
+        {/* ★ [신규] 금액 입력 + 보유 다이아 실시간 표시 + 전액 버튼 */}
+        <div style={myStyles.inputGroup}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10, paddingLeft:5}}>
+            <label style={{...myStyles.inputLabel, marginBottom:0}}>{isKo ? "금액" : "Amount"}</label>
+            <div style={{display:'flex', alignItems:'center', gap:8}}>
+              <span style={{fontSize:12, color:'#D4AF37', fontWeight:600}}>
+                💎 {(userInfo?.diamond || 0).toLocaleString()}
+              </span>
+              <button
+                type="button"
+                onClick={() => setAmount(String(userInfo?.diamond || 0))}
+                disabled={isSubmitting || !userInfo?.diamond}
+                style={{
+                  background:'transparent',
+                  border:'1px solid #D4AF37',
+                  color:'#D4AF37',
+                  padding:'3px 10px',
+                  borderRadius:6,
+                  fontSize:11,
+                  cursor: (isSubmitting || !userInfo?.diamond) ? 'not-allowed' : 'pointer',
+                  fontWeight:700,
+                  letterSpacing:1,
+                  opacity: (isSubmitting || !userInfo?.diamond) ? 0.4 : 1,
+                }}
+              >
+                {isKo ? "전액" : "MAX"}
+              </button>
+            </div>
+          </div>
+          <input
+            type="number"
+            style={myStyles.input}
+            value={amount}
+            onChange={(e)=>setAmount(e.target.value)}
+            disabled={isSubmitting}
+            placeholder={isKo ? "출금할 금액 입력" : "Enter amount"}
+          />
+          {amount && Number(amount) > (userInfo?.diamond || 0) && (
+            <div style={{color:'#ef4444', fontSize:11, marginTop:6, paddingLeft:5, fontWeight:600}}>
+              ⚠️ {isKo ? "보유 다이아를 초과했습니다" : "Exceeds your balance"}
+            </div>
+          )}
         </div>
         <button 
           style={{
@@ -163,8 +203,48 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
             </button>
         </div>
 
-        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "금액" : "Amount"}</label>
-          <input type="number" style={myStyles.input} value={amount} onChange={(e)=>setAmount(e.target.value)} disabled={isSubmitting} />
+        {/* ★ [신규] 금액 입력 + 보유 다이아 실시간 표시 + 전액 버튼 */}
+        <div style={myStyles.inputGroup}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10, paddingLeft:5}}>
+            <label style={{...myStyles.inputLabel, marginBottom:0}}>{isKo ? "금액" : "Amount"}</label>
+            <div style={{display:'flex', alignItems:'center', gap:8}}>
+              <span style={{fontSize:12, color:'#D4AF37', fontWeight:600}}>
+                💎 {(userInfo?.diamond || 0).toLocaleString()}
+              </span>
+              <button
+                type="button"
+                onClick={() => setAmount(String(userInfo?.diamond || 0))}
+                disabled={isSubmitting || !userInfo?.diamond}
+                style={{
+                  background:'transparent',
+                  border:'1px solid #D4AF37',
+                  color:'#D4AF37',
+                  padding:'3px 10px',
+                  borderRadius:6,
+                  fontSize:11,
+                  cursor: (isSubmitting || !userInfo?.diamond) ? 'not-allowed' : 'pointer',
+                  fontWeight:700,
+                  letterSpacing:1,
+                  opacity: (isSubmitting || !userInfo?.diamond) ? 0.4 : 1,
+                }}
+              >
+                {isKo ? "전액" : "MAX"}
+              </button>
+            </div>
+          </div>
+          <input
+            type="number"
+            style={myStyles.input}
+            value={amount}
+            onChange={(e)=>setAmount(e.target.value)}
+            disabled={isSubmitting}
+            placeholder={isKo ? "출금할 금액 입력" : "Enter amount"}
+          />
+          {amount && Number(amount) > (userInfo?.diamond || 0) && (
+            <div style={{color:'#ef4444', fontSize:11, marginTop:6, paddingLeft:5, fontWeight:600}}>
+              ⚠️ {isKo ? "보유 다이아를 초과했습니다" : "Exceeds your balance"}
+            </div>
+          )}
         </div>
 
         <div style={myStyles.inputGroup}>
@@ -191,17 +271,18 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
           <input style={myStyles.input} placeholder={isKo ? "예금주" : "Holder"} value={holder} onChange={(e)=>setHolder(e.target.value)} disabled={isSubmitting}/>
         </div>
 
+        {/* ★ [수정] 잔액 초과 or 0 이하 시 신청 버튼 자동 비활성화 */}
         <button 
           style={{
             ...myStyles.saveBtn, 
             background:'#D4AF37', 
             color:'#000',
-            opacity: isSubmitting ? 0.6 : 1,
-            cursor: isSubmitting ? 'not-allowed' : 'pointer',
+            opacity: (isSubmitting || !amount || Number(amount) <= 0 || Number(amount) > (userInfo?.diamond || 0)) ? 0.4 : 1,
+            cursor: (isSubmitting || !amount || Number(amount) <= 0 || Number(amount) > (userInfo?.diamond || 0)) ? 'not-allowed' : 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
           }} 
           onClick={handleReq}
-          disabled={isSubmitting}
+          disabled={isSubmitting || !amount || Number(amount) <= 0 || Number(amount) > (userInfo?.diamond || 0)}
         >
           {isSubmitting && <span className="mp-spinner" />}
           {isSubmitting
