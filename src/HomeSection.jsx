@@ -26,9 +26,10 @@ export default function HomeSection({
     return () => clearInterval(timer);
   }, [slideImages]);
 
+  // ★ [수정] 무한 캐러셀용: 정확히 2배 복제 (translateX(-50%)로 완벽 무한 루프)
   const loopMembers = useMemo(() => {
     if (!members || members.length === 0) return [];
-    return [...members, ...members, ...members];
+    return [...members, ...members];
   }, [members]);
 
   const scrollByButton = (direction) => {
@@ -171,58 +172,64 @@ export default function HomeSection({
         </div>
       </div>
 
-      {/* ===== 매니저 카드 리스트 영역 ===== */}
-      <div style={{ position: 'relative', width: '100%' }}>
-        <div 
-          ref={scrollRef}
-          className="snap-container"
-          style={h.scrollArea}
-          onMouseDown={handleMouseDown}
-        >
-          {loopMembers.map((m, i) => (
-            <div 
-              key={i} 
-              style={h.card} 
-              onClick={() => openDetail && openDetail(m)}
-            >
-              <div style={h.cardImgWrap}>
-                <img src={m.img} style={h.cardImg} alt={m.name || "member"} draggable="false" />
-                <div style={h.cardOverlay} />
-                <div style={h.cardBadge}>
-                  {LEFT_TAGS[i % LEFT_TAGS.length]}
-                </div>
-              </div>
-              
-              <div style={h.cardInfo}>
-                <div style={h.cardName}>{m.name}</div>
-                
-                <div style={h.cardSpecs}>
-                  <span style={h.specText}>
-                    {m.loc || m.region || (t.home === "홈페이지" ? "지역" : "Area")}
-                  </span>
-                  <span style={h.specDivider}>·</span>
-                  <span style={h.specText}>
-                    {m.age ? `${m.age}${t.home === "홈페이지" ? "세" : ""}` : (t.home === "홈페이지" ? "20대" : "20s")}
-                  </span>
+      {/* ===== 매니저 카드 리스트 - ★★ 무한 자동 캐러셀 ★★ ===== */}
+      {/*
+        ★ [신규] 안전한 CSS 애니메이션 기반 무한 슬라이드
+        - React state 없음 (리렌더 X, 안정적)
+        - CSS transform + GPU 가속 (부드러움)
+        - Hover 시 자동 pause (사진 자세히 보기)
+        - 매니저 수에 따라 속도 자동 조정
+        - 예전 오류 원인들 완전 회피
+      */}
+      {members && members.length > 0 && (
+        <div className="infinite-carousel-container">
+          <div 
+            className="infinite-carousel-track"
+            style={{
+              // ★ 매니저 수에 따라 duration 자동 조정 (한 명당 약 3.5초)
+              animationDuration: `${Math.max(20, members.length * 3.5)}s`
+            }}
+          >
+            {loopMembers.map((m, i) => (
+              <div 
+                key={`carousel-${m.id || 'noid'}-${i}`}
+                style={h.card} 
+                onClick={() => openDetail && openDetail(m)}
+              >
+                <div style={h.cardImgWrap}>
+                  <img src={m.img} style={h.cardImg} alt={m.name || "member"} draggable="false" />
+                  <div style={h.cardOverlay} />
+                  <div style={h.cardBadge}>
+                    {LEFT_TAGS[i % LEFT_TAGS.length]}
+                  </div>
                 </div>
                 
-                <div style={{ ...h.cardSpecs, marginTop: '5px' }}>
-                  <span style={h.specText}>{m.height ? m.height + 'cm' : 'cm'}</span>
-                  <span style={h.specDivider}>·</span>
-                  <span style={h.specText}>{m.weight ? m.weight + 'kg' : 'kg'}</span>
-                  <span style={h.specDivider}>·</span>
-                  <span style={h.specText}>{m.bust || m.size || "Size"}</span>
+                <div style={h.cardInfo}>
+                  <div style={h.cardName}>{m.name}</div>
+                  
+                  <div style={h.cardSpecs}>
+                    <span style={h.specText}>
+                      {m.loc || m.region || (t.home === "홈페이지" ? "지역" : "Area")}
+                    </span>
+                    <span style={h.specDivider}>·</span>
+                    <span style={h.specText}>
+                      {m.age ? `${m.age}${t.home === "홈페이지" ? "세" : ""}` : (t.home === "홈페이지" ? "20대" : "20s")}
+                    </span>
+                  </div>
+                  
+                  <div style={{ ...h.cardSpecs, marginTop: '5px' }}>
+                    <span style={h.specText}>{m.height ? m.height + 'cm' : 'cm'}</span>
+                    <span style={h.specDivider}>·</span>
+                    <span style={h.specText}>{m.weight ? m.weight + 'kg' : 'kg'}</span>
+                    <span style={h.specDivider}>·</span>
+                    <span style={h.specText}>{m.bust || m.size || "Size"}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-
-        <div className="pc-arrows-wrap">
-          <button className="arrow-btn" onClick={(e) => { e.stopPropagation(); scrollByButton('left'); }}>❮</button>
-          <button className="arrow-btn" onClick={(e) => { e.stopPropagation(); scrollByButton('right'); }}>❯</button>
-        </div>
-      </div>
+      )}
 
       {/* ===== FOOTER ===== */}
       <div style={h.footerBtnArea}>
@@ -254,6 +261,52 @@ export default function HomeSection({
         .shimmer-btn { position: relative; overflow: hidden; outline: none; border: none; }
         .shimmer-btn::after { content: ''; position: absolute; top: -50%; left: -100%; width: 200%; height: 200%; background: linear-gradient(45deg, transparent, rgba(255,255,255,0.2), transparent); transform: rotate(45deg); animation: shimmer 3s infinite; }
         @keyframes shimmer { 0% { left: -100%; } 100% { left: 100%; } }
+
+        /* ★★★ 무한 자동 캐러셀 스타일 (매니저 카드) ★★★ */
+        .infinite-carousel-container {
+          width: 100%;
+          overflow: hidden;
+          padding: 10px 0 40px;
+          box-sizing: border-box;
+          position: relative;
+          /* 좌우 페이드 효과 (자연스러운 흘러감) */
+          -webkit-mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%);
+        }
+
+        .infinite-carousel-track {
+          display: flex;
+          width: max-content;
+          animation-name: scrollLeftInfinite;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
+          will-change: transform;
+          padding-left: 20px;
+        }
+
+        /* Hover 시 자동 pause */
+        .infinite-carousel-track:hover {
+          animation-play-state: paused;
+        }
+
+        @keyframes scrollLeftInfinite {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+
+        /* 모바일에서 hover 대신 활성 스타일 */
+        @media (hover: none) {
+          .infinite-carousel-track {
+            /* 모바일: 터치 시 pause (선택적, animation-play-state는 CSS만으로 어려움) */
+          }
+        }
+
+        /* 접근성: 모션 줄이기 설정한 사용자 배려 */
+        @media (prefers-reduced-motion: reduce) {
+          .infinite-carousel-track {
+            animation: none;
+          }
+        }
       `}</style>
     </div>
   );
