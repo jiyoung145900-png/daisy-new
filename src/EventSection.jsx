@@ -545,8 +545,8 @@ return (
                     {/* 예상 순수익 표시 (2배 지급 = 순수익 = 베팅액 그대로) */}
                     {currentTotalCost > 0 && (
                       <div style={localDs.totalCostBar}>
-                        {isKo ? "베팅 합계:" : "Total Bet:"} <b style={{color: '#ffb347'}}>{currentTotalCost.toLocaleString()} DIA</b>
-                        <span style={{marginLeft: 10, color: '#34D399'}}>
+                        {isKo ? "베팅 합계:" : "Total Bet:"} <b style={{color: '#888'}}>{currentTotalCost.toLocaleString()} DIA</b>
+                        <span style={{marginLeft: 10, color: '#888'}}>
                           → {isKo ? "당첨시 순수익" : "Net Profit"}: +{currentTotalCost.toLocaleString()}
                         </span>
                       </div>
