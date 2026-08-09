@@ -210,6 +210,17 @@ export default function Dashboard({
     if (activeTab !== 'event') setIsBettingActive(false);
   }, [activeTab]);
 
+  // ★★★ [신규] CustomEvent 리스너 - MyPage에서 이벤트 참여 클릭 시 이벤트 탭으로 이동
+  //   props chain 없이 window 이벤트로 직접 통신 → 캐시/전달 실패 문제 원천 차단
+  useEffect(() => {
+    const handleNavigateToEvent = () => {
+      console.log('📢 navigate-to-event 이벤트 수신 → 이벤트 탭으로 이동');
+      setActiveTab('event');
+    };
+    window.addEventListener('navigate-to-event', handleNavigateToEvent);
+    return () => window.removeEventListener('navigate-to-event', handleNavigateToEvent);
+  }, []);
+
   // ★ [신규+확장] Heartbeat - 30초마다 lastActive + IP + 국가 + 지역 저장
   //   - 유저가 접속중임을 관리자가 실시간 확인 가능
   //   - IP는 5분에 한 번씩만 조회 (부담 줄이기)

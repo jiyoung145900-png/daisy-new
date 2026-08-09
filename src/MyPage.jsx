@@ -136,8 +136,8 @@ if (view === "settings") return <SettingsView onBack={()=>setView("main")} isKo=
       </div>
 
       <div style={myStyles.menuList}>
-        {/* ★ [수정] setView 대신 setActiveTab으로 완전히 이벤트 탭으로 이동 (마이페이지 닫기) */}
-        <div style={myStyles.goldMenu} onClick={() => setActiveTab && setActiveTab("event")}>
+        {/* ★ [수정] CustomEvent로 직접 발송 → Dashboard가 리스닝해서 이벤트 탭으로 이동 (props 없이 확실히) */}
+        <div style={myStyles.goldMenu} onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-event'))}>
           <div style={myStyles.goldMenuContent}>
             <div style={myStyles.goldTag}>HOT</div>
             <span style={myStyles.goldMenuTitle}>{isKo ? "프라이빗 이벤트 참여" : "Join Event"}</span>
