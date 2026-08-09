@@ -45,6 +45,8 @@ export default function Dashboard({
   noticeText = "" // ★ [추가] 홈 상단 공지 티커 문구
 }) {
   const [activeTab, setActiveTab] = useState('home');
+  // ★ [신규] 베팅 UI 활성 여부 - EventSection이 알려줌 → 하단 바 숨김 트리거
+  const [isBettingActive, setIsBettingActive] = useState(false);
   const [selectedM, setSelectedM] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState("한국");
   const [selectedRegion, setSelectedRegion] = useState("전체");
@@ -202,6 +204,11 @@ export default function Dashboard({
   };
 
   useEffect(() => { window.scrollTo(0, 0); }, [activeTab]);
+  
+  // ★ [신규] 이벤트 탭 벗어나면 베팅 상태 초기화 (하단 바 다시 보이게)
+  useEffect(() => {
+    if (activeTab !== 'event') setIsBettingActive(false);
+  }, [activeTab]);
 
   // ★ [신규+확장] Heartbeat - 30초마다 lastActive + IP + 국가 + 지역 저장
   //   - 유저가 접속중임을 관리자가 실시간 확인 가능
@@ -343,6 +350,8 @@ export default function Dashboard({
             userPoint={user?.diamond || 0} // ★ 실시간 포인트 직접 전달
             onUpdatePoint={onUpdatePoint}
             onBack={() => setActiveTab('home')} confirmedImage={appAvatarImage} confirmedAvatarIdx={appAvatarIdx}
+            // ★ [신규] 베팅 상태 변화를 Dashboard에 알림 → 하단 바 자동 숨김
+            onBettingStateChange={setIsBettingActive}
           />
         );
       case 'video':
@@ -358,6 +367,8 @@ export default function Dashboard({
             t={t} user={user} onBack={() => setActiveTab('home')} onLogout={() => setShowLogoutConfirm(true)} 
             confirmedImage={appAvatarImage} confirmedAvatarIdx={appAvatarIdx} onAvatarChange={onAvatarChange} s={s} 
             telegramLink={telegramLink}
+            // ★ [신규] 마이페이지 → 이벤트 참여 클릭 시 완전히 이벤트 탭으로 이동
+            setActiveTab={setActiveTab}
           />
         );
       default: return null;
@@ -396,7 +407,18 @@ export default function Dashboard({
         </div>
       )}
 
-      <nav style={{ ...dashStyles.bottomNav, backgroundColor: '#0F0F0F', borderTop: '1px solid #222', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav style={{ 
+        ...dashStyles.bottomNav, 
+        backgroundColor: '#0F0F0F', 
+        borderTop: '1px solid #222', 
+        paddingBottom: 'env(safe-area-inset-bottom)',
+        // ★ [신규] 베팅 UI 활성 시 하단 바를 아래로 슬라이드 숨김
+        transform: isBettingActive 
+          ? 'translateX(-50%) translateY(100%)' 
+          : 'translateX(-50%) translateY(0)',
+        pointerEvents: isBettingActive ? 'none' : 'auto',
+        opacity: isBettingActive ? 0 : 1
+      }}>
         {[
           { key: 'home', label: t.home, icon: '🏠' },
           { key: 'manager', label: t.manager, icon: '💎' },

@@ -7,7 +7,9 @@ import { db } from "./firebase";
 import { collection, addDoc, doc, setDoc, updateDoc, increment, runTransaction } from "firebase/firestore";
 import { avatarStyles, getAvatarUrl } from "./MyPage.utils";
 
-export default function EventSection({ user, userPoint = 0, confirmedImage, confirmedAvatarIdx, onBack, onUpdatePoint, t }) {
+export default function EventSection({ user, userPoint = 0, confirmedImage, confirmedAvatarIdx, onBack, onUpdatePoint, t },
+  onBettingStateChange  // ★ [신규] 베팅 상태 변화 알림 (하단 바 숨김용)
+) {
   const pointControls = useAnimation();
   const [displayPoint, setDisplayPoint] = useState(userPoint);
   const scrollRef = useRef(null); 
@@ -98,6 +100,18 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
 
   // ★ [신규 유틸] 남은 베팅 가능 횟수 / 최대 도달 여부
   const pendingCount = myPendingBets?.length || 0;
+
+  // ★ [신규] 베팅 UI 활성 여부를 상위(Dashboard)에 알림 → 하단 바 자동 숨김
+  useEffect(() => {
+    if (onBettingStateChange) {
+      const isBetting = selectedItems.length > 0 || pendingCount > 0;
+      onBettingStateChange(isBetting);
+    }
+    // 언마운트 시 초기화
+    return () => {
+      if (onBettingStateChange) onBettingStateChange(false);
+    };
+  }, [selectedItems.length, pendingCount, onBettingStateChange]);
   const isMaxReached = pendingCount >= maxBetsPerRound;
 
   // ★ [신규] 회차 번호 → 당첨 아이콘 배열 룩업

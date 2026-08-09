@@ -564,12 +564,17 @@ const dashStyles = {
     height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden'
   },
   contentArea: {
-    flex: 1, overflowY: 'auto', paddingBottom: 20, WebkitOverflowScrolling: 'touch'
+    // ★ [수정] 하단 바가 fixed로 고정되므로 padding-bottom으로 겹침 방지
+    flex: 1, overflowY: 'auto', paddingBottom: 100, WebkitOverflowScrolling: 'touch'
   },
   bottomNav: {
-    position: 'relative', width: '100%', maxWidth: 500, height: 80, background: 'rgba(20,20,20,0.95)',
+    // ★ [수정] position: fixed로 완전 고정 → iOS 사파리 URL 바 변화에도 흔들리지 않음
+    position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)',
+    width: '100%', maxWidth: 500, height: 80, background: 'rgba(20,20,20,0.95)',
     display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderTop: '1px solid #222',
-    backdropFilter: 'blur(10px)', flexShrink: 0
+    backdropFilter: 'blur(10px)', zIndex: 100,
+    // ★ [신규] 부드러운 hide/show transition (베팅 UI 나올 때 자연스럽게)
+    transition: 'transform 0.3s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.3s ease'
   },
   navItem: { display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', transition: 'all 0.2s' },
   logoutBtn: { padding: '12px 30px', borderRadius: 15, background: 'rgba(255,45,85,0.1)', color: '#ff2d55', border: '1px solid #ff2d55', fontWeight: 700, cursor: 'pointer' }
