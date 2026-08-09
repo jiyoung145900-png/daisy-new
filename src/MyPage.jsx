@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import EventSection from "./EventSection"; 
 import AvatarEditorModal from "./AvatarEditorModal";
 import { myStyles } from "./MyPage.styles";
 // ★ [수정] getCreditInfo 추가 임포트
@@ -23,7 +22,8 @@ export default function MyPage({
   confirmedAvatarIdx, 
   onAvatarChange, 
   onUpdatePoint, 
-  t             // <- 빠지면 에러나는 번역 함수 (복구 완료)
+  t,            // <- 빠지면 에러나는 번역 함수 (복구 완료)
+  setActiveTab  // ★ [신규] 이벤트 참여 시 완전히 이벤트 탭으로 이동하기 위해
 }) {
   const [view, setView] = useState("main");
   const isKo = t.home === "홈페이지";
@@ -63,7 +63,6 @@ export default function MyPage({
 
   if (view === "history") return <HistoryView onBack={()=>setView("main")} isKo={isKo} userId={userInfo.id} />;
 if (view === "settings") return <SettingsView onBack={()=>setView("main")} isKo={isKo} onChangeView={setView} telegramLink={telegramLink} />;
-  if (view === "event_donation") return <EventSection user={userInfo} userPoint={userInfo.diamond || 0} confirmedImage={confirmedImage} confirmedAvatarIdx={confirmedAvatarIdx} onBack={() => setView("main")} t={t} />;
 
   // --- 메인 대시보드 (기존 유지) ---
   return (
@@ -137,7 +136,8 @@ if (view === "settings") return <SettingsView onBack={()=>setView("main")} isKo=
       </div>
 
       <div style={myStyles.menuList}>
-        <div style={myStyles.goldMenu} onClick={() => setView("event_donation")}>
+        {/* ★ [수정] setView 대신 setActiveTab으로 완전히 이벤트 탭으로 이동 (마이페이지 닫기) */}
+        <div style={myStyles.goldMenu} onClick={() => setActiveTab && setActiveTab("event")}>
           <div style={myStyles.goldMenuContent}>
             <div style={myStyles.goldTag}>HOT</div>
             <span style={myStyles.goldMenuTitle}>{isKo ? "프라이빗 이벤트 참여" : "Join Event"}</span>
