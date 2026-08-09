@@ -123,6 +123,31 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     (totalHistory || []).forEach(h => {
       if (h && h.round && h.winItems) map[h.round] = h.winItems;
     });
+
+  // ★★★ [신규] 결과 모달 닫힐 때 스크롤 강제 리셋 (스크롤 스턱 버그 해결)
+  //   문제: 모달 exit 애니메이션 후 스크롤 이벤트가 안 먹힘
+  //   해결: pointer-events 토글로 브라우저 강제 리페인트 유도
+  useEffect(() => {
+    if (showResult === null && scrollRef.current) {
+      const el = scrollRef.current;
+      const timer = setTimeout(() => {
+        if (el) {
+          // 잠깐 none 후 auto로 복구 → 스크롤 이벤트 재활성화
+          el.style.pointerEvents = 'none';
+          requestAnimationFrame(() => {
+            if (el) {
+              el.style.pointerEvents = 'auto';
+              // 강제 스크롤 인식 (스크롤 위치 1px 조정 후 복구)
+              const currentTop = el.scrollTop;
+              el.scrollTop = currentTop + 1;
+              el.scrollTop = currentTop;
+            }
+          });
+        }
+      }, 250); // exit 애니메이션(0.2s) 완료 후 여유있게
+      return () => clearTimeout(timer);
+    }
+  }, [showResult]);
     return map;
   }, [totalHistory]);
 
@@ -578,9 +603,17 @@ return (
       <ImpactBurst impactTick={impactTick} />
 
       {/* 5. 결과 모달 - ★ 다중 베팅 상세 + 순손익 표시로 재설계 */}
-      <AnimatePresence>
+      {/* ★ [수정] mode="wait" + exit 애니메이션 짧게 → 스크롤 스턱 방지 */}
+      <AnimatePresence mode="wait">
         {showResult && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={localDs.modalOverlay} onClick={() => setShowResult(null)}>
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            transition={{ duration: 0.2 }}
+            style={localDs.modalOverlay} 
+            onClick={() => setShowResult(null)}
+          >
             <motion.div 
               initial={{ scale: 0.3, rotate: -6, opacity: 0 }} 
               animate={{ scale: 1, rotate: 0, opacity: 1 }} 
