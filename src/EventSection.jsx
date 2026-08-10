@@ -75,6 +75,31 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
     syncDiamondToFirestore, maxBetsPerRound
   } = useEventEngine(user, userPoint, onUpdatePoint, pointControls);
 
+  // ★★★ [신규] 결과 모달 닫힐 때 스크롤 강제 리셋 (스크롤 스턱 버그 해결)
+  //   컴포넌트 최상위 레벨에 위치해야 함 - Hooks 규칙 준수
+  //   useMemo/useCallback 안에 넣으면 안 됨!
+  useEffect(() => {
+    if (showResult === null && scrollRef.current) {
+      const el = scrollRef.current;
+      const timer = setTimeout(() => {
+        if (el) {
+          // 잠깐 none 후 auto로 복구 → 스크롤 이벤트 재활성화
+          el.style.pointerEvents = 'none';
+          requestAnimationFrame(() => {
+            if (el) {
+              el.style.pointerEvents = 'auto';
+              // 강제 스크롤 인식 (scrollTop 1px 조정)
+              const currentTop = el.scrollTop;
+              el.scrollTop = currentTop + 1;
+              el.scrollTop = currentTop;
+            }
+          });
+        }
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [showResult]);
+
   const [selectedItems, setSelectedItems] = useState([]);
   const [betAmount, setBetAmount] = useState("");
   const [activeTab, setActiveTab] = useState("mine");
@@ -124,30 +149,6 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
       if (h && h.round && h.winItems) map[h.round] = h.winItems;
     });
 
-  // ★★★ [신규] 결과 모달 닫힐 때 스크롤 강제 리셋 (스크롤 스턱 버그 해결)
-  //   문제: 모달 exit 애니메이션 후 스크롤 이벤트가 안 먹힘
-  //   해결: pointer-events 토글로 브라우저 강제 리페인트 유도
-  useEffect(() => {
-    if (showResult === null && scrollRef.current) {
-      const el = scrollRef.current;
-      const timer = setTimeout(() => {
-        if (el) {
-          // 잠깐 none 후 auto로 복구 → 스크롤 이벤트 재활성화
-          el.style.pointerEvents = 'none';
-          requestAnimationFrame(() => {
-            if (el) {
-              el.style.pointerEvents = 'auto';
-              // 강제 스크롤 인식 (스크롤 위치 1px 조정 후 복구)
-              const currentTop = el.scrollTop;
-              el.scrollTop = currentTop + 1;
-              el.scrollTop = currentTop;
-            }
-          });
-        }
-      }, 250); // exit 애니메이션(0.2s) 완료 후 여유있게
-      return () => clearTimeout(timer);
-    }
-  }, [showResult]);
     return map;
   }, [totalHistory]);
 
