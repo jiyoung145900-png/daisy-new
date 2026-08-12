@@ -13,6 +13,7 @@ import {
   getDocs
 } from "firebase/firestore";
 import LandingPage from "./LandingPage";
+import IntroAnimation from "./IntroAnimation"; // ★ [신규] 시네마틱 인트로 애니메이션
 import Dashboard from "./Dashboard";
 import { validateUserId, validatePassword, validateNickname, sanitizeText } from "./validation";
 
@@ -65,6 +66,8 @@ export default function App() {
   const [slideImages, setSlideImages] = useState(() => load("slideImages", []));
   const [videoURL, setVideoURL] = useState(() => load("videoURL", null));
   const [videos, setVideos] = useState(() => load("videos", []));
+  // ★★★ [신규] 인트로 애니메이션 표시 여부 (매번 접속 시 4초)
+  const [showIntro, setShowIntro] = useState(true);
   const [logo, setLogo] = useState(() => load("logo", null));
   const [logoSize, setLogoSize] = useState(() => load("logoSize", 140));
   const [logoPos, setLogoPos] = useState(() => load("logoPos", { x: 0, y: 0 }));
@@ -408,6 +411,14 @@ export default function App() {
 
   return (
     <div style={{ ...styles.app, height: '100vh', overflow: 'hidden' }}>
+
+      {/* ★★★ [신규] 시네마틱 인트로 애니메이션 (매번 접속 시 4초) */}
+      {showIntro && (
+        <IntroAnimation 
+          logo={logo} 
+          onComplete={() => setShowIntro(false)} 
+        />
+      )}
 
       {/* ★ [신규] 배너 슬라이드 애니메이션 CSS */}
       <style>{`

@@ -290,16 +290,64 @@ export default function LandingPage({
         )}
 
         {hero?.mode === "video" && videoURL && (
-          <video
-            key={videoURL}
-            src={optimizeVideo(videoURL, { width: 720 })}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            style={{ ...styles.bgVideo, height: "100dvh", objectFit: "cover" }}
-          />
+          <>
+            <video
+              key={videoURL}
+              src={optimizeVideo(videoURL, { width: 720 })}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              style={{ 
+                ...styles.bgVideo, 
+                height: "100dvh", 
+                objectFit: "cover",
+                // ★ [수정] 살짝만 부드럽게 - 밝기 유지, 대비 살짝만 조정
+                filter: "contrast(1.05) saturate(1.05)",
+              }}
+            />
+            {/* ★★★ [신규] 부드러운 하단 그라디언트 - 폼 가독성 확보 */}
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              background: `
+                linear-gradient(
+                  180deg,
+                  transparent 0%,
+                  transparent 40%,
+                  rgba(0,0,0,0.15) 60%,
+                  rgba(0,0,0,0.55) 100%
+                )
+              `,
+              pointerEvents: "none",
+              zIndex: 1,
+            }} />
+            {/* ★★★ [신규] 부드러운 눈송이/반짝임 파티클 */}
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              pointerEvents: "none",
+              zIndex: 2,
+              overflow: "hidden",
+            }}>
+              {[...Array(20)].map((_, i) => (
+                <div key={i} style={{
+                  position: "absolute",
+                  width: Math.random() > 0.6 ? 4 : 2,
+                  height: Math.random() > 0.6 ? 4 : 2,
+                  background: "#fff",
+                  borderRadius: "50%",
+                  top: `-10px`,
+                  left: `${Math.random() * 100}%`,
+                  boxShadow: "0 0 8px rgba(255, 255, 255, 0.9), 0 0 15px rgba(255, 255, 255, 0.4)",
+                  animation: `snowFall ${8 + Math.random() * 10}s linear infinite`,
+                  animationDelay: `${Math.random() * 8}s`,
+                  opacity: 0.7,
+                }} />
+              ))}
+            </div>
+          </>
         )}
       </div>
 
@@ -325,7 +373,9 @@ export default function LandingPage({
               height: `${logoSize || 140}px`,
               width: "auto",
               objectFit: "contain",
-              filter: "drop-shadow(0 0 15px rgba(0,0,0,0.5))",
+              // ★★★ [수정] 부드러운 화이트/샴페인 발광 + 은은한 맥동
+              filter: "drop-shadow(0 0 20px rgba(255, 255, 255, 0.5)) drop-shadow(0 4px 12px rgba(0,0,0,0.4))",
+              animation: "logoBreathe 4s ease-in-out infinite",
             }}
           />
         ) : (
@@ -335,7 +385,7 @@ export default function LandingPage({
 
       {/* ===== 메인 콘텐츠 ===== */}
       <div style={{ ...styles.mainContent, paddingTop: "28vh" }}>
-        {/* ★ [신규] 스피너 CSS */}
+        {/* ★ [신규] 스피너 CSS + 부드러운 감성 애니메이션 */}
         <style>{`
           @keyframes lp-spin {
             0% { transform: rotate(0deg); }
@@ -350,13 +400,59 @@ export default function LandingPage({
             animation: lp-spin 0.7s linear infinite;
             display: inline-block;
           }
+          /* ★★★ [신규] 로고 은은한 맥동 (숨쉬듯 부드럽게) */
+          @keyframes logoBreathe {
+            0%, 100% {
+              transform: scale(1);
+              opacity: 1;
+            }
+            50% {
+              transform: scale(1.03);
+              opacity: 0.95;
+            }
+          }
+          /* ★★★ [신규] 눈송이 낙하 애니메이션 */
+          @keyframes snowFall {
+            0% {
+              transform: translateY(0) translateX(0);
+              opacity: 0;
+            }
+            10% {
+              opacity: 0.7;
+            }
+            90% {
+              opacity: 0.7;
+            }
+            100% {
+              transform: translateY(100vh) translateX(30px);
+              opacity: 0;
+            }
+          }
         `}</style>
 
-        {/* ★ [신규] 문구 섹션 - 서브(작은) 위, 웰컴(큰) 아래 */}
+        {/* ★ [수정] 부드러운 감성 슬로건 - 양옆 화이트 라인 */}
         <div style={landingStyles.heroSection}>
-          <p style={landingStyles.subText}>
-            {isKo ? "시간이 멈추는 곳" : "Where time slows"}
-          </p>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 15,
+            marginBottom: 14,
+          }}>
+            <div style={{
+              width: 40,
+              height: 1,
+              background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.6))",
+            }} />
+            <p style={landingStyles.subText}>
+              {isKo ? "시간이 멈추는 곳" : "Where time slows"}
+            </p>
+            <div style={{
+              width: 40,
+              height: 1,
+              background: "linear-gradient(90deg, rgba(255,255,255,0.6), transparent)",
+            }} />
+          </div>
           <h1 style={landingStyles.mainText}>
             {isKo ? "BANADA에 오신 것을 환영합니다" : "Welcome to BANADA"}
           </h1>
@@ -525,22 +621,27 @@ const landingStyles = {
     padding: "0 20px",
   },
   subText: {
-    fontSize: "0.95rem",
-    color: "rgba(255,255,255,0.65)",
+    // ★★★ [수정] 부드러운 화이트 세리프 (겨울 감성)
+    fontSize: "0.85rem",
+    color: "rgba(255,255,255,0.9)",
     fontWeight: 300,
-    letterSpacing: "2px",
+    letterSpacing: "0.4em",
     margin: 0,
-    marginBottom: 12,
     textTransform: "uppercase",
+    fontFamily: '"Cormorant Garamond", "Noto Serif KR", serif',
+    textShadow: "0 0 12px rgba(255, 255, 255, 0.3), 0 2px 8px rgba(0,0,0,0.5)",
+    whiteSpace: "nowrap",
   },
   mainText: {
-    fontSize: "1.5rem",
-    fontWeight: 700,
+    // ★★★ [수정] 우아한 세리프 - 부드러운 발광
+    fontSize: "1.65rem",
+    fontWeight: 400,
     color: "#fff",
     margin: 0,
-    letterSpacing: "-0.5px",
+    letterSpacing: "0.03em",
     lineHeight: 1.4,
-    textShadow: "0 2px 20px rgba(0,0,0,0.5)",
+    fontFamily: '"Cormorant Garamond", "Noto Serif KR", serif',
+    textShadow: "0 0 25px rgba(255, 255, 255, 0.25), 0 2px 20px rgba(0,0,0,0.6)",
   },
   // 접힌 로그인 카드
   collapsedCard: {
