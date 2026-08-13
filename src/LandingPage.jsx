@@ -323,27 +323,75 @@ export default function LandingPage({
               pointerEvents: "none",
               zIndex: 1,
             }} />
-            {/* ★★★ [신규] 부드러운 눈송이/반짝임 파티클 */}
+            {/* ★★★ [신규] 다층 파티클 - 원거리 별 반짝임 */}
             <div style={{
               position: "absolute",
               inset: 0,
               pointerEvents: "none",
               zIndex: 2,
+              opacity: 0.5,
+            }}>
+              {[...Array(25)].map((_, i) => (
+                <div key={`star-${i}`} style={{
+                  position: "absolute",
+                  width: 1,
+                  height: 1,
+                  background: "#fff",
+                  borderRadius: "50%",
+                  top: `${Math.random() * 100}%`,
+                  left: `${Math.random() * 100}%`,
+                  boxShadow: "0 0 3px rgba(255, 255, 255, 0.9)",
+                  animation: `landingStarTwinkle ${4 + Math.random() * 5}s ease-in-out infinite`,
+                  animationDelay: `${Math.random() * 4}s`,
+                }} />
+              ))}
+            </div>
+
+            {/* ★★★ [신규] 다층 파티클 - 중거리 눈송이 */}
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              pointerEvents: "none",
+              zIndex: 3,
               overflow: "hidden",
             }}>
-              {[...Array(20)].map((_, i) => (
-                <div key={i} style={{
+              {[...Array(15)].map((_, i) => (
+                <div key={`mid-${i}`} style={{
                   position: "absolute",
-                  width: Math.random() > 0.6 ? 4 : 2,
-                  height: Math.random() > 0.6 ? 4 : 2,
-                  background: "#fff",
+                  width: 3,
+                  height: 3,
+                  background: "rgba(255, 255, 255, 0.9)",
                   borderRadius: "50%",
                   top: `-10px`,
                   left: `${Math.random() * 100}%`,
-                  boxShadow: "0 0 8px rgba(255, 255, 255, 0.9), 0 0 15px rgba(255, 255, 255, 0.4)",
-                  animation: `snowFall ${8 + Math.random() * 10}s linear infinite`,
+                  boxShadow: "0 0 8px rgba(255, 255, 255, 0.8)",
+                  animation: `landingMidSnow ${9 + Math.random() * 8}s linear infinite`,
                   animationDelay: `${Math.random() * 8}s`,
-                  opacity: 0.7,
+                }} />
+              ))}
+            </div>
+
+            {/* ★★★ [신규] 다층 파티클 - 근거리 큰 눈송이 (blur 살짝) */}
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              pointerEvents: "none",
+              zIndex: 4,
+              overflow: "hidden",
+              filter: "blur(0.5px)",
+            }}>
+              {[...Array(6)].map((_, i) => (
+                <div key={`near-${i}`} style={{
+                  position: "absolute",
+                  width: 5 + Math.random() * 3,
+                  height: 5 + Math.random() * 3,
+                  background: "radial-gradient(circle, rgba(255, 255, 255, 1) 30%, transparent 70%)",
+                  borderRadius: "50%",
+                  top: `-15px`,
+                  left: `${Math.random() * 100}%`,
+                  boxShadow: "0 0 15px rgba(255, 255, 255, 0.9)",
+                  animation: `landingNearSnow ${6 + Math.random() * 4}s linear infinite`,
+                  animationDelay: `${Math.random() * 4}s`,
                 }} />
               ))}
             </div>
@@ -365,19 +413,64 @@ export default function LandingPage({
           pointerEvents: "none",
         }}
       >
+        {/* ★★★ [신규] 로고 컨테이너 - 발광 링 + shimmer 효과 */}
         {logo ? (
-          <img
-            src={optimizeImage(logo, { width: 500 })}
-            alt="logo"
-            style={{
+          <div style={{
+            position: "relative",
+            display: "inline-block",
+          }}>
+            {/* 이중 발광 링 */}
+            <div style={{
+              position: "absolute",
+              inset: -30,
+              background: "radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 60%)",
+              borderRadius: "50%",
+              animation: "logoOuterGlow 4s ease-in-out infinite",
+              pointerEvents: "none",
+            }} />
+            <div style={{
+              position: "absolute",
+              inset: -50,
+              background: "radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, transparent 70%)",
+              borderRadius: "50%",
+              animation: "logoOuterGlow 5s ease-in-out infinite reverse",
+              pointerEvents: "none",
+            }} />
+
+            {/* 로고 이미지 (shimmer 포함) */}
+            <div style={{
+              position: "relative",
               height: `${logoSize || 140}px`,
-              width: "auto",
-              objectFit: "contain",
-              // ★★★ [수정] 부드러운 화이트/샴페인 발광 + 은은한 맥동
-              filter: "drop-shadow(0 0 20px rgba(255, 255, 255, 0.5)) drop-shadow(0 4px 12px rgba(0,0,0,0.4))",
-              animation: "logoBreathe 4s ease-in-out infinite",
-            }}
-          />
+              display: "inline-block",
+              borderRadius: "50%",
+              overflow: "hidden",
+            }}>
+              <img
+                src={optimizeImage(logo, { width: 500 })}
+                alt="logo"
+                style={{
+                  height: `${logoSize || 140}px`,
+                  width: "auto",
+                  objectFit: "contain",
+                  filter: "drop-shadow(0 0 25px rgba(255, 255, 255, 0.5)) drop-shadow(0 0 50px rgba(255, 255, 255, 0.15)) drop-shadow(0 4px 12px rgba(0,0,0,0.4))",
+                  animation: "logoBreathe 4s ease-in-out infinite",
+                  display: "block",
+                }}
+              />
+              {/* Shimmer 빛 스캔 */}
+              <div style={{
+                position: "absolute",
+                top: 0,
+                left: "-100%",
+                width: "100%",
+                height: "100%",
+                background: "linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%)",
+                animation: "landingShimmer 5s ease-in-out infinite",
+                pointerEvents: "none",
+                mixBlendMode: "overlay",
+              }} />
+            </div>
+          </div>
         ) : (
           <strong style={styles.defaultLogo}>BANADA</strong>
         )}
@@ -385,7 +478,7 @@ export default function LandingPage({
 
       {/* ===== 메인 콘텐츠 ===== */}
       <div style={{ ...styles.mainContent, paddingTop: "28vh" }}>
-        {/* ★ [신규] 스피너 CSS + 부드러운 감성 애니메이션 */}
+        {/* ★ [신규] 스피너 CSS + 프리미엄 애니메이션 */}
         <style>{`
           @keyframes lp-spin {
             0% { transform: rotate(0deg); }
@@ -400,7 +493,8 @@ export default function LandingPage({
             animation: lp-spin 0.7s linear infinite;
             display: inline-block;
           }
-          /* ★★★ [신규] 로고 은은한 맥동 (숨쉬듯 부드럽게) */
+          
+          /* ★★★ 로고 심장 박동 */
           @keyframes logoBreathe {
             0%, 100% {
               transform: scale(1);
@@ -411,50 +505,137 @@ export default function LandingPage({
               opacity: 0.95;
             }
           }
-          /* ★★★ [신규] 눈송이 낙하 애니메이션 */
-          @keyframes snowFall {
+          
+          /* ★★★ 로고 외곽 발광 */
+          @keyframes logoOuterGlow {
+            0%, 100% {
+              transform: scale(1);
+              opacity: 0.4;
+            }
+            50% {
+              transform: scale(1.15);
+              opacity: 0.8;
+            }
+          }
+          
+          /* ★★★ 로고 shimmer 스캔 */
+          @keyframes landingShimmer {
+            0% { left: -100%; }
+            60%, 100% { left: 200%; }
+          }
+          
+          /* ★★★ 슬로건 글자 stagger 등장 */
+          @keyframes slogancharFade {
+            0% { 
+              opacity: 0; 
+              transform: translateY(15px);
+              filter: blur(4px);
+            }
+            100% { 
+              opacity: 1; 
+              transform: translateY(0);
+              filter: blur(0);
+            }
+          }
+          
+          /* ★★★ 라인 확장 */
+          @keyframes lineExpand {
+            0% { width: 0; }
+            100% { width: 50px; }
+          }
+          
+          /* ★★★ 원거리 별 반짝임 */
+          @keyframes landingStarTwinkle {
+            0%, 100% { 
+              opacity: 0.2; 
+              transform: scale(1);
+            }
+            50% { 
+              opacity: 1; 
+              transform: scale(1.5); 
+            }
+          }
+          
+          /* ★★★ 중거리 눈송이 낙하 */
+          @keyframes landingMidSnow {
+            0% {
+              transform: translateY(0) translateX(0) rotate(0deg);
+              opacity: 0;
+            }
+            10% { opacity: 0.9; }
+            90% { opacity: 0.9; }
+            100% {
+              transform: translateY(110vh) translateX(30px) rotate(360deg);
+              opacity: 0;
+            }
+          }
+          
+          /* ★★★ 근거리 큰 눈송이 낙하 */
+          @keyframes landingNearSnow {
             0% {
               transform: translateY(0) translateX(0);
               opacity: 0;
             }
-            10% {
-              opacity: 0.7;
-            }
-            90% {
-              opacity: 0.7;
-            }
+            15% { opacity: 1; }
+            85% { opacity: 1; }
             100% {
-              transform: translateY(100vh) translateX(30px);
+              transform: translateY(110vh) translateX(-20px);
               opacity: 0;
             }
           }
         `}</style>
 
-        {/* ★ [수정] 부드러운 감성 슬로건 - 양옆 화이트 라인 */}
+        {/* ★ [수정] 럭셔리 슬로건 - 글자 stagger 등장 */}
         <div style={landingStyles.heroSection}>
           <div style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            gap: 15,
+            gap: 18,
             marginBottom: 14,
           }}>
             <div style={{
-              width: 40,
+              width: 50,
               height: 1,
-              background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.6))",
+              background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.7))",
+              animation: "lineExpand 1.5s ease-out 0.3s both",
             }} />
-            <p style={landingStyles.subText}>
-              {isKo ? "시간이 멈추는 곳" : "Where time slows"}
+            <p style={{
+              ...landingStyles.subText,
+              display: "flex",
+              gap: "0.05em",
+            }}>
+              {(isKo ? "시간이 멈추는 곳" : "Where time slows").split("").map((char, idx) => (
+                <span 
+                  key={idx}
+                  style={{
+                    display: "inline-block",
+                    animation: `slogancharFade 0.6s ease ${idx * 0.06 + 0.5}s both`,
+                  }}
+                >
+                  {char === ' ' ? '\u00A0' : char}
+                </span>
+              ))}
             </p>
             <div style={{
-              width: 40,
+              width: 50,
               height: 1,
-              background: "linear-gradient(90deg, rgba(255,255,255,0.6), transparent)",
+              background: "linear-gradient(90deg, rgba(255,255,255,0.7), transparent)",
+              animation: "lineExpand 1.5s ease-out 0.3s both",
             }} />
           </div>
           <h1 style={landingStyles.mainText}>
-            {isKo ? "BANADA에 오신 것을 환영합니다" : "Welcome to BANADA"}
+            {(isKo ? "BANADA에 오신 것을 환영합니다" : "Welcome to BANADA").split("").map((char, idx) => (
+              <span 
+                key={idx}
+                style={{
+                  display: "inline-block",
+                  animation: `slogancharFade 0.5s ease ${idx * 0.04 + 1.5}s both`,
+                }}
+              >
+                {char === ' ' ? '\u00A0' : char}
+              </span>
+            ))}
           </h1>
         </div>
 
