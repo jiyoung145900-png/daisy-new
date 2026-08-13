@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import LandingPage from "./LandingPage";
 import IntroAnimation from "./IntroAnimation"; // ★ [신규] 시네마틱 인트로 애니메이션
+import WelcomeAnimation from "./WelcomeAnimation"; // ★ [신규] 로그인 후 웰컴 애니메이션
 import Dashboard from "./Dashboard";
 import { validateUserId, validatePassword, validateNickname, sanitizeText } from "./validation";
 
@@ -68,6 +69,8 @@ export default function App() {
   const [videos, setVideos] = useState(() => load("videos", []));
   // ★★★ [신규] 인트로 애니메이션 표시 여부 (매번 접속 시 4초)
   const [showIntro, setShowIntro] = useState(true);
+  // ★★★ [신규] 웰컴 애니메이션 표시 여부 (로그인 성공 시 1.5초)
+  const [showWelcome, setShowWelcome] = useState(false);
   const [logo, setLogo] = useState(() => load("logo", null));
   const [logoSize, setLogoSize] = useState(() => load("logoSize", 140));
   const [logoPos, setLogoPos] = useState(() => load("logoPos", { x: 0, y: 0 }));
@@ -249,6 +252,8 @@ export default function App() {
           setCurrentUser(userData);
           setLoggedIn(true);
           setIsGuest(false);
+          // ★★★ [신규] 로그인 성공 → 웰컴 애니메이션 표시 (1.5초)
+          setShowWelcome(true);
           
           // ★ [신규+확장] 로그인 시 접속 이력 저장 (관리자 모니터링용)
           //   - IP + 국가 + 지역 + UserAgent + 시각 저장
@@ -333,6 +338,8 @@ export default function App() {
           setCurrentUser(localUser);
           setLoggedIn(true);
           setIsGuest(false);
+          // ★★★ [신규] 로그인 성공 → 웰컴 애니메이션 표시
+          setShowWelcome(true);
         } else {
           alert(t.login_fail || "존재하지 않는 아이디입니다.");
         }
@@ -417,6 +424,14 @@ export default function App() {
         <IntroAnimation 
           logo={logo} 
           onComplete={() => setShowIntro(false)} 
+        />
+      )}
+
+      {/* ★★★ [신규] 로그인 후 웰컴 애니메이션 (1.5초 개인화 인사말) */}
+      {showWelcome && (
+        <WelcomeAnimation 
+          user={currentUser} 
+          onComplete={() => setShowWelcome(false)} 
         />
       )}
 
