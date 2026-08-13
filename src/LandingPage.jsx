@@ -53,6 +53,8 @@ export default function LandingPage({
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [ref, setRef] = useState("");
+  // ★★★ [신규] 텔레그램 아이디 (선택 필드)
+  const [tele, setTele] = useState("");
   const [isExpanded, setIsExpanded] = useState(false); // ★ [신규] 로그인 카드 접힘/펼침 상태
   const [isLoading, setIsLoading] = useState(false); // ★ [신규] 로그인/회원가입 처리 중 상태
 
@@ -174,6 +176,11 @@ export default function LandingPage({
         signupIp: signupIp,
         signupUA: userAgent.substring(0, 200),
         signupAt: new Date().toISOString(),
+        // ★★★ [신규] 텔레그램 아이디 (선택 - 있으면 저장, 없으면 빈 문자열)
+        //   - @ 없이 입력해도 자동으로 붙여줌 (관리자가 링크로 열기 편하게)
+        telegram: tele.trim() 
+          ? (tele.trim().startsWith('@') ? tele.trim() : '@' + tele.trim())
+          : "",
       };
 
       const updatedUsers = [...users, newUser];
@@ -197,6 +204,7 @@ export default function LandingPage({
       setId("");
       setPw("");
       setRef("");
+      setTele("");
       setMode("login");
     } finally {
       setIsLoading(false); // ★ [신규] 성공/실패 상관없이 로딩 해제
@@ -679,6 +687,7 @@ export default function LandingPage({
                       setId("");
                       setPw("");
                       setRef("");
+                      setTele("");
                     }}
                     style={landingStyles.closeBtn}
                     aria-label="close"
@@ -742,6 +751,36 @@ export default function LandingPage({
                     />
                   )}
 
+                  {/* ★★★ [신규] 텔레그램 아이디 (선택) + 부드러운 안내 */}
+                  {mode === "signup" && (
+                    <div style={{ marginBottom: "15px" }}>
+                      <input
+                        style={{
+                          ...styles.authInput,
+                          height: "55px",
+                          fontSize: "16px",
+                          marginBottom: "6px",
+                        }}
+                        placeholder={isKo ? "📱 텔레그램 아이디 (선택)" : "📱 Telegram ID (Optional)"}
+                        value={tele}
+                        onChange={(e) => setTele(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                      />
+                      <div style={{
+                        fontSize: "11.5px",
+                        color: "rgba(255,255,255,0.55)",
+                        padding: "0 4px",
+                        lineHeight: 1.5,
+                        letterSpacing: "0.02em",
+                        fontFamily: '"Cormorant Garamond", "Noto Serif KR", serif',
+                      }}>
+                        💡 {isKo 
+                          ? "신규 이벤트, 프로모션 소식을 가장 먼저 안내받으실 수 있어요"
+                          : "Be the first to hear about new events and promotions"}
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     style={{
                       ...styles.primaryBtn,
@@ -779,6 +818,7 @@ export default function LandingPage({
                       setId("");
                       setPw("");
                       setRef("");
+                      setTele("");
                     }}
                     disabled={isLoading}
                   >
