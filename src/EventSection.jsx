@@ -7,9 +7,17 @@ import { db } from "./firebase";
 import { collection, addDoc, doc, setDoc, updateDoc, increment, runTransaction } from "firebase/firestore";
 import { avatarStyles, getAvatarUrl } from "./MyPage.utils";
 
-export default function EventSection({ user, userPoint = 0, confirmedImage, confirmedAvatarIdx, onBack, onUpdatePoint, t },
-  onBettingStateChange  // ★ [신규] 베팅 상태 변화 알림 (하단 바 숨김용)
-) {
+export default function EventSection({ 
+  user, 
+  userPoint = 0, 
+  confirmedImage, 
+  confirmedAvatarIdx, 
+  onBack, 
+  onUpdatePoint, 
+  t,
+  onBettingStateChange, // ★ [기존] 베팅 상태 변화 알림 (하단 바 숨김용)
+  backHandlerRef // ★★★ [신규] Dashboard의 로컬 뒤로가기 핸들러 ref
+}) {
   const pointControls = useAnimation();
   const [displayPoint, setDisplayPoint] = useState(userPoint);
   const scrollRef = useRef(null); 
@@ -137,6 +145,32 @@ export default function EventSection({ user, userPoint = 0, confirmedImage, conf
       if (onBettingStateChange) onBettingStateChange(false);
     };
   }, [selectedItems.length, pendingCount, onBettingStateChange]);
+  
+  // ★★★ [신규] 로컬 뒤로가기 핸들러 등록 - showResult 모달 or 선택된 아이템 취소
+  useEffect(() => {
+    if (!backHandlerRef) return;
+    
+    backHandlerRef.current = () => {
+      // 우선순위 1: 결과 모달 열려있으면 닫기
+      if (showResult) {
+        setShowResult(null);
+        return true;
+      }
+      // 우선순위 2: 아이템 선택 상태면 취소
+      if (selectedItems.length > 0) {
+        setSelectedItems([]);
+        return true;
+      }
+      return false; // 로컬 뒤로갈 것 없음 - Dashboard가 탭 pop
+    };
+    
+    return () => {
+      if (backHandlerRef.current) {
+        backHandlerRef.current = null;
+      }
+    };
+  }, [showResult, selectedItems.length, backHandlerRef, setShowResult]);
+  
   const isMaxReached = pendingCount >= maxBetsPerRound;
 
   // ★ [신규] 회차 번호 → 당첨 아이콘 배열 룩업

@@ -8,7 +8,8 @@ export default function ManagerSection({
   setSelectedRegion,
   initialMember,       
   onCloseDetail,
-  t // ★ Dashboard에서 전달받은 번역 객체
+  t,
+  backHandlerRef // ★★★ [신규] Dashboard의 로컬 뒤로가기 핸들러 ref
 }) {
   const [selectedMember, setSelectedMember] = useState(null);
   const [fullScreenMedia, setFullScreenMedia] = useState(null);
@@ -17,22 +18,35 @@ export default function ManagerSection({
   useEffect(() => {
     if (initialMember) {
       setSelectedMember(initialMember);
-      window.history.pushState({ isDetail: true }, ''); 
     }
   }, [initialMember]);
 
-  // [기존 유지] 2. 뒤로가기 감지
+  // ★★★ [수정] 자체 popstate 대신 Dashboard의 backHandlerRef에 로컬 뒤로가기 등록
+  //   자체 popstate 리스너는 Dashboard 리스너와 충돌하므로 제거
+  //   대신 Dashboard가 이 함수를 먼저 호출해서 로컬 뒤로가기 처리
   useEffect(() => {
-    const handlePop = () => {
+    if (!backHandlerRef) return;
+    
+    backHandlerRef.current = () => {
+      // 우선순위 1: 전체화면 미디어 닫기
       if (fullScreenMedia) {
         setFullScreenMedia(null);
-      } else if (selectedMember) {
+        return true; // 처리 완료
+      }
+      // 우선순위 2: 매니저 상세 모달 닫기
+      if (selectedMember) {
         handleClose();
+        return true; // 처리 완료
+      }
+      return false; // 로컬 뒤로갈 것 없음 - Dashboard가 탭 pop
+    };
+    
+    return () => {
+      if (backHandlerRef.current) {
+        backHandlerRef.current = null;
       }
     };
-    window.addEventListener('popstate', handlePop);
-    return () => window.removeEventListener('popstate', handlePop);
-  }, [fullScreenMedia, selectedMember]);
+  }, [fullScreenMedia, selectedMember, backHandlerRef]);
 
   // [기존 유지] 3. 풀스크린 열기
   const openFull = (type, url) => {

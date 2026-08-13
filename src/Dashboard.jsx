@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import HomeSection from "./HomeSection";
 import ManagerSection from "./ManagerSection";
 import VideoSection from "./VideoSection";
@@ -45,6 +45,14 @@ export default function Dashboard({
   noticeText = "" // ★ [추가] 홈 상단 공지 티커 문구
 }) {
   const [activeTab, setActiveTab] = useState('home');
+  
+  // ★★★ [신규] 트렌디한 뒤로가기 시스템
+  //   1. 탭 히스토리 스택 - 어느 탭을 방문했는지 순서대로 저장
+  //   2. localBackHandlerRef - 각 섹션의 로컬 뒤로가기 처리 (우선순위 높음)
+  //   3. 브라우저 popstate 리스너 - 브라우저/폰 뒤로가기 지원
+  const [tabHistory, setTabHistory] = useState(['home']);
+  const localBackHandlerRef = useRef(null);
+  const backTriggerCount = useRef(0);
   // ★ [신규] 베팅 UI 활성 여부 - EventSection이 알려줌 → 하단 바 숨김 트리거
   const [isBettingActive, setIsBettingActive] = useState(false);
   const [selectedM, setSelectedM] = useState(null);
@@ -166,13 +174,57 @@ export default function Dashboard({
     return () => clearInterval(timer);
   }, []);
 
+  // ★★★ [수정] 트렌디한 뒤로가기 시스템
+  //   우선순위: 1) 자식 섹션 로컬 뒤로가기 → 2) 탭 히스토리 pop → 3) 로그아웃 확인
   const handlePopState = useCallback(() => {
-    if (document.getElementById('full-screen-view')) return; 
-    if (selectedM || document.getElementById('manager-detail-view')) return;
-    if (activeTab !== 'home') { setActiveTab('home'); } 
-    else { setShowLogoutConfirm(true); }
+    if (document.getElementById('full-screen-view')) return;
+    
+    // 1️⃣ 자식 섹션의 로컬 뒤로가기 시도 (매니저 상세, 마이페이지 서브뷰 등)
+    if (localBackHandlerRef.current) {
+      const handled = localBackHandlerRef.current();
+      if (handled) {
+        // 자식이 처리했으면 브라우저 히스토리에 다시 push해서 사용자가 또 뒤로 갈 수 있게
+        window.history.pushState(null, '');
+        return;
+      }
+    }
+    
+    // 2️⃣ 탭 히스토리 스택 pop (이전 방문 탭으로)
+    if (tabHistory.length > 1) {
+      const newHistory = tabHistory.slice(0, -1);
+      const prevTab = newHistory[newHistory.length - 1];
+      setTabHistory(newHistory);
+      setActiveTab(prevTab);
+      window.history.pushState(null, '');
+      return;
+    }
+    
+    // 3️⃣ 홈에서 뒤로가기 → 로그아웃 확인
+    setShowLogoutConfirm(true);
     window.history.pushState(null, '');
-  }, [selectedM, activeTab]);
+  }, [tabHistory]);
+
+  // ★★★ [신규] Dashboard 레벨의 goBack 함수 - 각 섹션에 전달
+  //   각 섹션에서 뒤로가기 버튼 클릭 시 호출
+  const goBack = useCallback(() => {
+    // 1️⃣ 자식 로컬 뒤로가기 시도
+    if (localBackHandlerRef.current) {
+      const handled = localBackHandlerRef.current();
+      if (handled) return;
+    }
+    
+    // 2️⃣ 탭 히스토리 pop
+    if (tabHistory.length > 1) {
+      const newHistory = tabHistory.slice(0, -1);
+      const prevTab = newHistory[newHistory.length - 1];
+      setTabHistory(newHistory);
+      setActiveTab(prevTab);
+      return;
+    }
+    
+    // 3️⃣ 홈에서 뒤로가기 = 홈으로 (이미 있음)
+    setActiveTab('home');
+  }, [tabHistory]);
 
   useEffect(() => {
     window.history.pushState(null, '');
@@ -180,20 +232,37 @@ export default function Dashboard({
     return () => window.removeEventListener('popstate', handlePopState);
   }, [handlePopState]);
 
+  // ★★★ [수정] 탭 클릭 시 히스토리 스택에 추가 (트렌디한 뒤로가기 지원)
   const handleTabClick = (key) => {
     if (isGuest && (key === 'event' || key === 'mypage')) {
       alert(lang === "ko" ? "승인된 회원 전용 구역입니다." : "Authorized Members Only.");
       return;
     }
+    // 이미 같은 탭이면 아무것도 안 함
+    if (activeTab === key) return;
+    
+    // 탭 히스토리에 추가 (홈으로 가는 건 스택 초기화, 나머지는 push)
+    if (key === 'home') {
+      setTabHistory(['home']); // 홈으로 가면 스택 리셋
+    } else {
+      setTabHistory(prev => [...prev, key]);
+    }
+    
     if (key === 'event') {
       setIsEventLoading(true);
       setActiveTab(key);
       setTimeout(() => setIsEventLoading(false), 800);
-    } else { setActiveTab(key); }
+    } else { 
+      setActiveTab(key); 
+    }
   };
 
   const openDetail = (m) => {
     setSelectedM(m);
+    // 매니저 탭으로 이동하면서 히스토리에 추가
+    if (activeTab !== 'manager') {
+      setTabHistory(prev => [...prev, 'manager']);
+    }
     setActiveTab('manager');
     window.history.pushState({ isDetail: true }, ''); 
   };
@@ -346,6 +415,8 @@ export default function Dashboard({
             t={t} regions={regions} selectedRegion={selectedRegion} setSelectedRegion={setSelectedRegion} 
             filteredMembers={filteredMembers} initialMember={selectedM} 
             onCloseDetail={() => setSelectedM(null)}
+            // ★★★ [신규] 로컬 뒤로가기 핸들러 등록용 ref (매니저 상세 모달)
+            backHandlerRef={localBackHandlerRef}
           />
         );
       case 'event':
@@ -357,12 +428,13 @@ export default function Dashboard({
         ) : (
           <EventSection 
             t={t} 
-            user={user} // ★ safeUser 대신 상위 props user를 직접 전달 (실시간 반영)
-            userPoint={user?.diamond || 0} // ★ 실시간 포인트 직접 전달
+            user={user}
+            userPoint={user?.diamond || 0}
             onUpdatePoint={onUpdatePoint}
-            onBack={() => setActiveTab('home')} confirmedImage={appAvatarImage} confirmedAvatarIdx={appAvatarIdx}
-            // ★ [신규] 베팅 상태 변화를 Dashboard에 알림 → 하단 바 자동 숨김
+            onBack={goBack} confirmedImage={appAvatarImage} confirmedAvatarIdx={appAvatarIdx}
             onBettingStateChange={setIsBettingActive}
+            // ★★★ [신규] 로컬 뒤로가기 핸들러 등록용 ref (베팅 결과 모달 등)
+            backHandlerRef={localBackHandlerRef}
           />
         );
       case 'video':
@@ -375,11 +447,12 @@ export default function Dashboard({
       case 'mypage':
         return (
           <MyPageSection 
-            t={t} user={user} onBack={() => setActiveTab('home')} onLogout={() => setShowLogoutConfirm(true)} 
+            t={t} user={user} onBack={goBack} onLogout={() => setShowLogoutConfirm(true)} 
             confirmedImage={appAvatarImage} confirmedAvatarIdx={appAvatarIdx} onAvatarChange={onAvatarChange} s={s} 
             telegramLink={telegramLink}
-            // ★ [신규] 마이페이지 → 이벤트 참여 클릭 시 완전히 이벤트 탭으로 이동
             setActiveTab={setActiveTab}
+            // ★★★ [신규] 로컬 뒤로가기 핸들러 등록용 ref (서브뷰 처리)
+            backHandlerRef={localBackHandlerRef}
           />
         );
       default: return null;

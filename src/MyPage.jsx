@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import AvatarEditorModal from "./AvatarEditorModal";
 import { myStyles } from "./MyPage.styles";
 // ★ [수정] getCreditInfo 추가 임포트
@@ -15,18 +15,57 @@ import {
 // ★ [수정완료] telegramLink 와 t 등 모든 인자(props)를 빠짐없이 받도록 세팅
 export default function MyPage({ 
   user, 
-  telegramLink, // <- Dashboard.jsx에서 넘어온 텔레그램 전체 링크
+  telegramLink,
   onBack, 
   onLogout, 
   confirmedImage, 
   confirmedAvatarIdx, 
   onAvatarChange, 
   onUpdatePoint, 
-  t,            // <- 빠지면 에러나는 번역 함수 (복구 완료)
-  setActiveTab  // ★ [신규] 이벤트 참여 시 완전히 이벤트 탭으로 이동하기 위해
+  t,
+  setActiveTab,
+  backHandlerRef // ★★★ [신규] Dashboard의 로컬 뒤로가기 핸들러 ref
 }) {
   const [view, setView] = useState("main");
   const isKo = t.home === "홈페이지";
+  
+  // ★★★ [신규] 서브뷰 → main 뒤로가기 로직을 Dashboard의 backHandlerRef에 등록
+  //   Dashboard의 popstate 감지 or goBack 호출 시 이 함수가 먼저 실행됨
+  //   반환값 true = 처리 완료 (Dashboard는 아무 것도 안 함)
+  //   반환값 false = 처리 안 함 (Dashboard가 탭 스택 pop)
+  useEffect(() => {
+    if (!backHandlerRef) return;
+    
+    backHandlerRef.current = () => {
+      if (view === "main") {
+        return false; // main에서는 상위 뒤로가기 (Dashboard가 처리)
+      }
+      
+      // 이력 관련 서브뷰는 상세 뷰로 돌아가기
+      if (view === "deposit_history") {
+        setView("deposit");
+        return true;
+      }
+      if (view === "withdraw_history") {
+        setView("withdraw");
+        return true;
+      }
+      if (view === "profile") {
+        setView("settings");
+        return true;
+      }
+      
+      // 나머지 서브뷰는 main으로
+      setView("main");
+      return true;
+    };
+    
+    return () => {
+      if (backHandlerRef.current) {
+        backHandlerRef.current = null;
+      }
+    };
+  }, [view, backHandlerRef]);
   
   // ★ [수정] myDeposits, myWithdraws (내역 데이터) 받아오기 / 데일리 보너스 관련 값 제거
  const { 
