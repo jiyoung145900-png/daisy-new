@@ -46,11 +46,14 @@ export default function Dashboard({
 }) {
   const [activeTab, setActiveTab] = useState('home');
   
-  // ★★★ [신규] 트렌디한 뒤로가기 시스템
-  //   1. 탭 히스토리 스택 - 어느 탭을 방문했는지 순서대로 저장
+  // ★★★ [수정] 트렌디한 뒤로가기 시스템 - 필터까지 완벽 복원
+  //   1. 탭 히스토리 스택 - {tab, region, category} 객체로 저장
   //   2. localBackHandlerRef - 각 섹션의 로컬 뒤로가기 처리 (우선순위 높음)
   //   3. 브라우저 popstate 리스너 - 브라우저/폰 뒤로가기 지원
-  const [tabHistory, setTabHistory] = useState(['home']);
+  //   4. 필터 변경(지역/카테고리)도 히스토리에 저장 → 뒤로가기 시 이전 필터로 복원
+  const [tabHistory, setTabHistory] = useState([
+    { tab: 'home', region: '전체', category: '한국' }
+  ]);
   const localBackHandlerRef = useRef(null);
   const backTriggerCount = useRef(0);
   // ★ [신규] 베팅 UI 활성 여부 - EventSection이 알려줌 → 하단 바 숨김 트리거
@@ -174,8 +177,8 @@ export default function Dashboard({
     return () => clearInterval(timer);
   }, []);
 
-  // ★★★ [수정] 트렌디한 뒤로가기 시스템
-  //   우선순위: 1) 자식 섹션 로컬 뒤로가기 → 2) 탭 히스토리 pop → 3) 로그아웃 확인
+  // ★★★ [수정] 트렌디한 뒤로가기 시스템 - 필터까지 완벽 복원
+  //   우선순위: 1) 자식 섹션 로컬 뒤로가기 → 2) 탭 히스토리 pop + 필터 복원 → 3) 로그아웃 확인
   const handlePopState = useCallback(() => {
     if (document.getElementById('full-screen-view')) return;
     
@@ -183,18 +186,20 @@ export default function Dashboard({
     if (localBackHandlerRef.current) {
       const handled = localBackHandlerRef.current();
       if (handled) {
-        // 자식이 처리했으면 브라우저 히스토리에 다시 push해서 사용자가 또 뒤로 갈 수 있게
         window.history.pushState(null, '');
         return;
       }
     }
     
-    // 2️⃣ 탭 히스토리 스택 pop (이전 방문 탭으로)
+    // 2️⃣ 탭 히스토리 스택 pop (이전 방문 탭 + 필터 복원)
     if (tabHistory.length > 1) {
       const newHistory = tabHistory.slice(0, -1);
-      const prevTab = newHistory[newHistory.length - 1];
+      const prev = newHistory[newHistory.length - 1];
       setTabHistory(newHistory);
-      setActiveTab(prevTab);
+      setActiveTab(prev.tab);
+      // ★ 이전 필터로 자동 복원 (지역, 카테고리)
+      if (prev.region !== undefined) setSelectedRegion(prev.region);
+      if (prev.category !== undefined) setSelectedCategory(prev.category);
       window.history.pushState(null, '');
       return;
     }
@@ -204,8 +209,7 @@ export default function Dashboard({
     window.history.pushState(null, '');
   }, [tabHistory]);
 
-  // ★★★ [신규] Dashboard 레벨의 goBack 함수 - 각 섹션에 전달
-  //   각 섹션에서 뒤로가기 버튼 클릭 시 호출
+  // ★★★ [수정] Dashboard 레벨의 goBack 함수 - 각 섹션에 전달
   const goBack = useCallback(() => {
     // 1️⃣ 자식 로컬 뒤로가기 시도
     if (localBackHandlerRef.current) {
@@ -213,16 +217,19 @@ export default function Dashboard({
       if (handled) return;
     }
     
-    // 2️⃣ 탭 히스토리 pop
+    // 2️⃣ 탭 히스토리 pop + 필터 복원
     if (tabHistory.length > 1) {
       const newHistory = tabHistory.slice(0, -1);
-      const prevTab = newHistory[newHistory.length - 1];
+      const prev = newHistory[newHistory.length - 1];
       setTabHistory(newHistory);
-      setActiveTab(prevTab);
+      setActiveTab(prev.tab);
+      // ★ 이전 필터로 자동 복원
+      if (prev.region !== undefined) setSelectedRegion(prev.region);
+      if (prev.category !== undefined) setSelectedCategory(prev.category);
       return;
     }
     
-    // 3️⃣ 홈에서 뒤로가기 = 홈으로 (이미 있음)
+    // 3️⃣ 홈에서 뒤로가기 = 홈으로
     setActiveTab('home');
   }, [tabHistory]);
 
@@ -232,7 +239,7 @@ export default function Dashboard({
     return () => window.removeEventListener('popstate', handlePopState);
   }, [handlePopState]);
 
-  // ★★★ [수정] 탭 클릭 시 히스토리 스택에 추가 (트렌디한 뒤로가기 지원)
+  // ★★★ [수정] 탭 클릭 시 히스토리 스택에 추가 (필터 정보 포함)
   const handleTabClick = (key) => {
     if (isGuest && (key === 'event' || key === 'mypage')) {
       alert(lang === "ko" ? "승인된 회원 전용 구역입니다." : "Authorized Members Only.");
@@ -243,9 +250,9 @@ export default function Dashboard({
     
     // 탭 히스토리에 추가 (홈으로 가는 건 스택 초기화, 나머지는 push)
     if (key === 'home') {
-      setTabHistory(['home']); // 홈으로 가면 스택 리셋
+      setTabHistory([{ tab: 'home', region: selectedRegion, category: selectedCategory }]);
     } else {
-      setTabHistory(prev => [...prev, key]);
+      setTabHistory(prev => [...prev, { tab: key, region: selectedRegion, category: selectedCategory }]);
     }
     
     if (key === 'event') {
@@ -257,11 +264,28 @@ export default function Dashboard({
     }
   };
 
+  // ★★★ [신규] 매니저 지역 필터 wrapper - 지역 변경도 히스토리에 저장
+  //   지역 바꾼 뒤 뒤로가기 → 이전 지역으로 자동 복원
+  const handleRegionChange = useCallback((region) => {
+    // 이미 같은 지역이면 무시
+    if (region === selectedRegion) return;
+    setTabHistory(prev => [...prev, { tab: 'manager', region, category: selectedCategory }]);
+    setSelectedRegion(region);
+  }, [selectedRegion, selectedCategory]);
+
+  // ★★★ [신규] 비디오 카테고리(나라별) wrapper - 카테고리 변경도 히스토리에 저장
+  //   나라 바꾼 뒤 뒤로가기 → 이전 나라로 자동 복원
+  const handleCategoryChange = useCallback((category) => {
+    if (category === selectedCategory) return;
+    setTabHistory(prev => [...prev, { tab: 'video', region: selectedRegion, category }]);
+    setSelectedCategory(category);
+  }, [selectedRegion, selectedCategory]);
+
   const openDetail = (m) => {
     setSelectedM(m);
     // 매니저 탭으로 이동하면서 히스토리에 추가
     if (activeTab !== 'manager') {
-      setTabHistory(prev => [...prev, 'manager']);
+      setTabHistory(prev => [...prev, { tab: 'manager', region: selectedRegion, category: selectedCategory }]);
     }
     setActiveTab('manager');
     window.history.pushState({ isDetail: true }, ''); 
@@ -279,16 +303,24 @@ export default function Dashboard({
     if (activeTab !== 'event') setIsBettingActive(false);
   }, [activeTab]);
 
-  // ★★★ [신규] CustomEvent 리스너 - MyPage에서 이벤트 참여 클릭 시 이벤트 탭으로 이동
-  //   props chain 없이 window 이벤트로 직접 통신 → 캐시/전달 실패 문제 원천 차단
+  // ★★★ [수정] CustomEvent 리스너 - MyPage에서 이벤트 참여 클릭 시 이벤트 탭으로 이동
+  //   중요: 마이페이지에서 이벤트로 이동 시 tabHistory에 event를 push 해야
+  //         뒤로가기 시 마이페이지로 돌아갈 수 있음!
   useEffect(() => {
     const handleNavigateToEvent = () => {
       console.log('📢 navigate-to-event 이벤트 수신 → 이벤트 탭으로 이동');
+      // ★ tabHistory에 event 추가 (현재 필터 상태 유지)
+      //   예: [home, mypage] → [home, mypage, event]
+      //   뒤로가기 시 → [home, mypage]로 pop → 마이페이지로 돌아감!
+      setTabHistory(prev => {
+        const current = prev[prev.length - 1];
+        return [...prev, { tab: 'event', region: current?.region || selectedRegion, category: current?.category || selectedCategory }];
+      });
       setActiveTab('event');
     };
     window.addEventListener('navigate-to-event', handleNavigateToEvent);
     return () => window.removeEventListener('navigate-to-event', handleNavigateToEvent);
-  }, []);
+  }, [selectedRegion, selectedCategory]);
 
   // ★ [신규+확장] Heartbeat - 30초마다 lastActive + IP + 국가 + 지역 저장
   //   - 유저가 접속중임을 관리자가 실시간 확인 가능
@@ -412,10 +444,9 @@ export default function Dashboard({
       case 'manager':
         return (
           <ManagerSection 
-            t={t} regions={regions} selectedRegion={selectedRegion} setSelectedRegion={setSelectedRegion} 
+            t={t} regions={regions} selectedRegion={selectedRegion} setSelectedRegion={handleRegionChange} 
             filteredMembers={filteredMembers} initialMember={selectedM} 
             onCloseDetail={() => setSelectedM(null)}
-            // ★★★ [신규] 로컬 뒤로가기 핸들러 등록용 ref (매니저 상세 모달)
             backHandlerRef={localBackHandlerRef}
           />
         );
@@ -441,7 +472,7 @@ export default function Dashboard({
         return (
           <VideoSection 
             t={t} videoCategories={videoCategories} selectedCategory={selectedCategory} 
-            setSelectedCategory={setSelectedCategory} filteredVideos={filteredVideos} 
+            setSelectedCategory={handleCategoryChange} filteredVideos={filteredVideos} 
           />
         );
       case 'mypage':
