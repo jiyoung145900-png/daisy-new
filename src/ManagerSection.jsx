@@ -1,5 +1,82 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { optimizeImage, optimizeVideo, videoThumbnail } from "./CloudinaryUrl";
+
+// ★★★ [신규] 애플급 3D 틸트 카드 컴포넌트
+//   - 마우스 위치에 따라 3D 회전 (rotateX, rotateY)
+//   - 광택 반사 효과 (glare)
+//   - 부드러운 이징 (mouseleave 시 원위치)
+function TiltCard({ children, onClick, style }) {
+  const cardRef = useRef(null);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const [glarePos, setGlarePos] = useState({ x: 50, y: 50 });
+  const [isHovered, setIsHovered] = useState(false);
+
+  const handleMouseMove = (e) => {
+    const card = cardRef.current;
+    if (!card) return;
+
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    // 최대 12도 기울기
+    const rotateY = ((x - centerX) / centerX) * 12;
+    const rotateX = -((y - centerY) / centerY) * 12;
+
+    setTilt({ x: rotateX, y: rotateY });
+    setGlarePos({
+      x: (x / rect.width) * 100,
+      y: (y / rect.height) * 100,
+    });
+  };
+
+  const handleMouseEnter = () => setIsHovered(true);
+  const handleMouseLeave = () => {
+    setIsHovered(false);
+    setTilt({ x: 0, y: 0 });
+    setGlarePos({ x: 50, y: 50 });
+  };
+
+  return (
+    <div
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onClick={onClick}
+      style={{
+        ...style,
+        position: 'relative',
+        transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale3d(${isHovered ? 1.03 : 1}, ${isHovered ? 1.03 : 1}, 1)`,
+        transition: isHovered
+          ? 'transform 0.1s ease-out'
+          : 'transform 0.5s cubic-bezier(0.19, 1, 0.22, 1)',
+        transformStyle: 'preserve-3d',
+        willChange: 'transform',
+        boxShadow: isHovered
+          ? `${-tilt.y * 2}px ${tilt.x * 2}px 30px rgba(255, 215, 0, 0.2), 0 20px 40px rgba(0,0,0,0.6)`
+          : '0 4px 15px rgba(0,0,0,0.3)',
+      }}
+    >
+      {children}
+      {/* 광택 반사 오버레이 */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: `radial-gradient(circle at ${glarePos.x}% ${glarePos.y}%, rgba(255,255,255,0.15), transparent 60%)`,
+          pointerEvents: 'none',
+          borderRadius: 'inherit',
+          opacity: isHovered ? 1 : 0,
+          transition: 'opacity 0.3s ease',
+          mixBlendMode: 'overlay',
+        }}
+      />
+    </div>
+  );
+}
 
 export default function ManagerSection({ 
   filteredMembers, 
@@ -121,13 +198,17 @@ export default function ManagerSection({
         </div>
       </div>
 
-      {/* ===== 2. 매니저 그리드 (썸네일 사이즈 최적화) ===== */}
+      {/* ===== 2. 매니저 그리드 (3D 틸트 효과) ===== */}
       <div style={m.grid}>
         {filteredMembers.map((member, idx) => (
-          <div key={idx} style={m.card} onClick={() => {
-            setSelectedMember(member);
-            window.history.pushState({ isDetail: true }, ''); 
-          }}>
+          <TiltCard 
+            key={idx} 
+            style={m.card} 
+            onClick={() => {
+              setSelectedMember(member);
+              window.history.pushState({ isDetail: true }, ''); 
+            }}
+          >
             <div style={m.cardImgWrap}>
               {/* ★ 카드 썸네일 - 최적화 파라미터 자동 추가 */}
               <img 
@@ -148,7 +229,7 @@ export default function ManagerSection({
                 {member.height ? member.height + 'cm' : 'cm'} · {member.bust || member.size || "Size"}
               </div>
             </div>
-          </div>
+          </TiltCard>
         ))}
       </div>
 
