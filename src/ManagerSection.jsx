@@ -5,11 +5,19 @@ import { optimizeImage, optimizeVideo, videoThumbnail } from "./CloudinaryUrl";
 //   - 마우스 위치에 따라 3D 회전 (rotateX, rotateY)
 //   - 광택 반사 효과 (glare)
 //   - 부드러운 이징 (mouseleave 시 원위치)
-function TiltCard({ children, onClick, style }) {
+function TiltCard({ children, onClick, style, index = 0 }) {
   const cardRef = useRef(null);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const [glarePos, setGlarePos] = useState({ x: 50, y: 50 });
   const [isHovered, setIsHovered] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  // ★★★ [신규] Stagger 등장 - 순차적으로 페이드인 + 슬라이드업
+  useEffect(() => {
+    const delay = Math.min(index * 60, 800); // 최대 800ms까지만 (성능)
+    const timer = setTimeout(() => setIsVisible(true), delay);
+    return () => clearTimeout(timer);
+  }, [index]);
 
   const handleMouseMove = (e) => {
     const card = cardRef.current;
@@ -49,12 +57,14 @@ function TiltCard({ children, onClick, style }) {
       style={{
         ...style,
         position: 'relative',
-        transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale3d(${isHovered ? 1.03 : 1}, ${isHovered ? 1.03 : 1}, 1)`,
+        // ★★★ [수정] Stagger 등장 효과 + 3D 틸트
+        opacity: isVisible ? 1 : 0,
+        transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale3d(${isHovered ? 1.03 : 1}, ${isHovered ? 1.03 : 1}, 1) translateY(${isVisible ? 0 : 30}px)`,
         transition: isHovered
           ? 'transform 0.1s ease-out'
-          : 'transform 0.5s cubic-bezier(0.19, 1, 0.22, 1)',
+          : `opacity 0.6s cubic-bezier(0.19, 1, 0.22, 1), transform 0.7s cubic-bezier(0.19, 1, 0.22, 1)`,
         transformStyle: 'preserve-3d',
-        willChange: 'transform',
+        willChange: 'transform, opacity',
         boxShadow: isHovered
           ? `${-tilt.y * 2}px ${tilt.x * 2}px 30px rgba(255, 215, 0, 0.2), 0 20px 40px rgba(0,0,0,0.6)`
           : '0 4px 15px rgba(0,0,0,0.3)',
@@ -203,6 +213,7 @@ export default function ManagerSection({
         {filteredMembers.map((member, idx) => (
           <TiltCard 
             key={idx} 
+            index={idx}
             style={m.card} 
             onClick={() => {
               setSelectedMember(member);
