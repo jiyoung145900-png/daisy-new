@@ -409,9 +409,37 @@ export default function App() {
     setCurrentUser(null);
   };
 
+  // ★★★ [수정] 아바타 변경 시 currentUser와 localStorage도 함께 업데이트
+  //   기존: setAppAvatarImage, setAppAvatarIdx만 업데이트 
+  //   → 문제: 새로고침 시 currentUser의 옛날 avatar가 다시 로드됨
+  //   해결: currentUser의 avatar 필드도 동기화 → 새로고침해도 유지!
   const refreshAvatar = (newImg, newIdx) => {
-    setAppAvatarImage(newImg); setAppAvatarIdx(newIdx);
+    setAppAvatarImage(newImg); 
+    setAppAvatarIdx(newIdx);
+    
+    // ★ currentUser의 avatar 필드도 함께 업데이트
+    setCurrentUser(prev => {
+      if (!prev) return prev;
+      const updated = { 
+        ...prev, 
+        avatar: { image: newImg, idx: newIdx } 
+      };
+      // localStorage에도 반영 (새로고침 시 유지)
+      save("currentUser", updated);
+      return updated;
+    });
   };
+
+  // ★★★ [신규] 로그인 후 저장된 avatar 자동 로드
+  //   currentUser에 avatar 필드가 있으면 앱 아바타 state에 반영
+  //   → 재로그인/새로고침 시 저장된 아바타 자동 표시!
+  useEffect(() => {
+    if (currentUser?.avatar) {
+      const { image, idx } = currentUser.avatar;
+      if (image !== undefined) setAppAvatarImage(image);
+      if (idx !== undefined && idx !== null) setAppAvatarIdx(idx);
+    }
+  }, [currentUser?.id, currentUser?.avatar]);
 
   const actualLoggedIn = loggedIn && currentUser;
   const showLanding = !actualLoggedIn;
