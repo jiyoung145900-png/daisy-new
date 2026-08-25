@@ -62,6 +62,113 @@ export const PasswordView = ({ onBack, isKo, onSubmit, userInfo }) => {
 // --- 2. PIN 설정 화면 완전 삭제 ---
 // (PinView 컴포넌트 제거됨)
 
+// --- ★ [신규] 닉네임 변경 화면 ---
+//   - 2~10자, 한글/영문/숫자만 허용
+//   - 현재 닉네임/아이디를 보여주고 새 닉네임 입력받음
+//   - 실시간 유효성 검사 + 저장 버튼 자동 비활성화
+export const NicknameView = ({ onBack, isKo, onSubmit, userInfo }) => {
+  const [nickname, setNickname] = useState(userInfo?.nickname || "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 실시간 유효성 검사
+  const trimmed = nickname.trim();
+  const isEmpty = trimmed.length === 0;
+  const isTooShort = trimmed.length > 0 && trimmed.length < 2;
+  const isTooLong = trimmed.length > 10;
+  const hasInvalidChar = trimmed.length > 0 && !/^[가-힣a-zA-Z0-9]+$/.test(trimmed);
+  const isSame = trimmed && trimmed === (userInfo?.nickname || "");
+  const isValid = !isEmpty && !isTooShort && !isTooLong && !hasInvalidChar && !isSame;
+
+  // 에러 메시지
+  let errorMsg = "";
+  if (isTooShort) errorMsg = isKo ? "2자 이상 입력해주세요." : "At least 2 characters.";
+  else if (isTooLong) errorMsg = isKo ? "10자 이하로 입력해주세요." : "Maximum 10 characters.";
+  else if (hasInvalidChar) errorMsg = isKo ? "한글, 영문, 숫자만 사용 가능합니다." : "Only Korean, English and numbers.";
+  else if (isSame) errorMsg = isKo ? "현재 닉네임과 동일합니다." : "Same as current nickname.";
+
+  const handleSave = async () => {
+    if (!isValid || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const success = await onSubmit(trimmed);
+      if (success) onBack();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={myStyles.container}>
+      <SpinnerStyle />
+      <SubHeader title={isKo ? "닉네임 변경" : "Change Nickname"} onBack={onBack} />
+      <div style={myStyles.formArea}>
+        <div style={myStyles.inputGroup}>
+          <label style={myStyles.inputLabel}>ID</label>
+          <input style={myStyles.inputDisabled} value={userInfo.id} disabled />
+        </div>
+
+        <div style={myStyles.inputGroup}>
+          <label style={myStyles.inputLabel}>{isKo ? "현재 닉네임" : "Current Nickname"}</label>
+          <input
+            style={myStyles.inputDisabled}
+            value={userInfo.nickname || (isKo ? "(미설정)" : "(Not set)")}
+            disabled
+          />
+        </div>
+
+        <div style={{height: 10}} />
+
+        <div style={myStyles.inputGroup}>
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10, paddingLeft:5}}>
+            <label style={{...myStyles.inputLabel, marginBottom:0}}>{isKo ? "새 닉네임" : "New Nickname"}</label>
+            <span style={{
+              fontSize: 11,
+              color: trimmed.length > 10 ? '#ef4444' : '#888',
+              fontWeight: 600,
+            }}>
+              {trimmed.length} / 10
+            </span>
+          </div>
+          <input
+            style={myStyles.input}
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            disabled={isSubmitting}
+            placeholder={isKo ? "2~10자, 한글/영문/숫자" : "2–10 chars"}
+            maxLength={20}
+          />
+          {errorMsg && (
+            <div style={{color:'#ef4444', fontSize:11, marginTop:6, paddingLeft:5, fontWeight:600}}>
+              ⚠️ {errorMsg}
+            </div>
+          )}
+          {!errorMsg && trimmed.length >= 2 && (
+            <div style={{color:'#4cd137', fontSize:11, marginTop:6, paddingLeft:5, fontWeight:600}}>
+              ✓ {isKo ? "사용 가능한 닉네임입니다." : "Available nickname."}
+            </div>
+          )}
+        </div>
+
+        <button
+          style={{
+            ...myStyles.saveBtn,
+            opacity: (!isValid || isSubmitting) ? 0.4 : 1,
+            cursor: (!isValid || isSubmitting) ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+          }}
+          onClick={handleSave}
+          disabled={!isValid || isSubmitting}
+        >
+          {isSubmitting && <span className="mp-spinner" />}
+          {isSubmitting
+            ? (isKo ? "저장 중..." : "Saving...")
+            : (isKo ? "저장" : "Save")}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // --- 3. 입금 화면 (기존 유지) ---
 export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
   const [name, setName] = useState("");
@@ -391,6 +498,10 @@ export const SettingsView = ({ onBack, isKo, onChangeView, telegramLink }) => (
   <div style={myStyles.container}>
     <SubHeader title={isKo ? "시스템 설정" : "Settings"} onBack={onBack} />
     <div style={myStyles.settingList}>
+      {/* ★ [신규] 닉네임 변경 메뉴 */}
+      <div style={myStyles.settingItem} onClick={() => onChangeView("nickname")}>
+        <span style={myStyles.settingText}>{isKo ? "닉네임 변경" : "Change Nickname"}</span><span style={myStyles.arrow}>❯</span>
+      </div>
       <div style={myStyles.settingItem} onClick={() => onChangeView("profile")}>
         <span style={myStyles.settingText}>{isKo ? "로그인 비밀번호 변경" : "Change Password"}</span><span style={myStyles.arrow}>❯</span>
       </div>

@@ -9,7 +9,8 @@ import { useMyPageLogic } from "./useMyPageLogic.js";
 
 // ★ 뷰 파일 임포트 (.jsx) - TransactionHistoryView 추가됨
 import { 
-  PasswordView, DepositView, WithdrawView, HistoryView, SettingsView, TransactionHistoryView 
+  PasswordView, DepositView, WithdrawView, HistoryView, SettingsView, TransactionHistoryView,
+  NicknameView // ★ [신규] 닉네임 변경 뷰
 } from "./MyPageViews.jsx";
 
 // ★ [수정완료] telegramLink 와 t 등 모든 인자(props)를 빠짐없이 받도록 세팅
@@ -54,6 +55,11 @@ export default function MyPage({
         setView("settings");
         return true;
       }
+      // ★ [신규] 닉네임 변경 화면도 설정으로 돌아가기
+      if (view === "nickname") {
+        setView("settings");
+        return true;
+      }
       
       // 나머지 서브뷰는 main으로
       setView("main");
@@ -70,7 +76,8 @@ export default function MyPage({
   // ★ [수정] myDeposits, myWithdraws (내역 데이터) 받아오기 / 데일리 보너스 관련 값 제거
  const { 
     userInfo, myDeposits, myWithdraws,
-    requestDeposit, requestWithdraw, updatePassword, updateAvatar 
+    requestDeposit, requestWithdraw, updatePassword, updateAvatar,
+    updateNickname // ★ [신규] 닉네임 변경 함수
   } = useMyPageLogic(user, onUpdatePoint, isKo);
 
   const [tempSelectedIdx, setTempSelectedIdx] = useState(confirmedAvatarIdx || 0);
@@ -87,6 +94,9 @@ export default function MyPage({
 
   // --- 화면 라우팅 ---
   if (view === "profile") return <PasswordView onBack={()=>setView("settings")} isKo={isKo} onSubmit={updatePassword} userInfo={userInfo} />;
+  
+  // ★ [신규] 닉네임 변경 화면
+  if (view === "nickname") return <NicknameView onBack={()=>setView("settings")} isKo={isKo} onSubmit={updateNickname} userInfo={userInfo} />;
   
   // ★ [수정] 입금 화면: 내역 버튼 누르면 'deposit_history'로 이동
   if (view === "deposit") return <DepositView onBack={()=>setView("main")} isKo={isKo} onSubmit={requestDeposit} onViewHistory={()=>setView("deposit_history")} />;
@@ -125,7 +135,8 @@ if (view === "settings") return <SettingsView onBack={()=>setView("main")} isKo=
           </div>
           <div style={myStyles.userTextMain}>
             <div style={myStyles.userIdMain}>
-              {userInfo.name || userInfo.id}
+              {/* ★ [수정] 표시 우선순위: nickname > name > id */}
+              {userInfo.nickname || userInfo.name || userInfo.id}
               <span style={{...myStyles.vipBadge, background: tier.color, color:'#000'}}>{tier.name}</span>
             </div>
 

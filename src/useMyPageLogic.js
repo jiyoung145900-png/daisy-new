@@ -331,6 +331,39 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     }
   };
 
+  // ★ [신규] 닉네임 변경 (users/{id}.nickname)
+  //   - 2~10자, 한글/영문/숫자만 허용 (공백/특수문자 불가)
+  //   - 중복 체크는 하지 않음 (동일 닉네임 허용)
+  const updateNickname = async (newNickname) => {
+    const nick = (newNickname || "").trim();
+
+    if (!nick) {
+      alert(isKo ? "닉네임을 입력해주세요." : "Please enter a nickname.");
+      return false;
+    }
+    if (nick.length < 2 || nick.length > 10) {
+      alert(isKo ? "닉네임은 2자 이상 10자 이하여야 합니다." : "Nickname must be 2–10 characters.");
+      return false;
+    }
+    // 한글/영문/숫자만 허용 (공백/특수문자 불가)
+    if (!/^[가-힣a-zA-Z0-9]+$/.test(nick)) {
+      alert(isKo
+        ? "닉네임은 한글, 영문, 숫자만 사용 가능합니다."
+        : "Only Korean, English letters and numbers are allowed.");
+      return false;
+    }
+
+    try {
+      const userRef = doc(db, "users", userInfo.id);
+      await updateDoc(userRef, { nickname: nick, updatedAt: serverTimestamp() });
+      alert(isKo ? "닉네임이 변경되었습니다." : "Nickname updated.");
+      return true;
+    } catch (e) {
+      alert("Error: " + e.message);
+      return false;
+    }
+  };
+
   // Update Password (users/{id}) - 이전 비밀번호 체크 제거됨
   const updatePassword = async (newPw, confirmPw) => {
     if (!newPw || newPw !== confirmPw)
@@ -386,5 +419,6 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     requestWithdraw,
     updatePassword,
     updateAvatar,
+    updateNickname, // ★ [신규] 닉네임 변경 함수
   };
 };
