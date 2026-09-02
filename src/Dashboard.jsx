@@ -336,12 +336,12 @@ export default function Dashboard({
       // 탭이 백그라운드면 스킵 (배터리/네트워크 절약)
       if (document.visibilityState !== 'visible') return;
       try {
-        const updates = { 
+        // ★ [수정] lastActive만 업데이트 - 베팅 트랜잭션과 충돌 방지
+        //   currentUA도 제거: 30초마다 updateDoc이 발생하면 베팅 정산 트랜잭션과
+        //   경합 상태(race condition)가 생겨 두 번째 베팅 정산이 실패할 수 있음
+        await updateDoc(doc(db, "users", user.id), { 
           lastActive: Date.now(),
-          currentUA: (navigator.userAgent || "").substring(0, 200),
-        };
-        
-        await updateDoc(doc(db, "users", user.id), updates);
+        });
       } catch (e) {
         // 조용히 실패 (오프라인 등)
       }

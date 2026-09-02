@@ -258,14 +258,12 @@ export default function App() {
           // ★ [수정] IP/위치 저장 로직 제거 - 유저 프라이버시 보호
           //   - lastActive(마지막 접속 시각)만 갱신
           //   - loginHistory 배열도 저장 안 함 (IP 없이 의미 없음)
+          //   - currentUA도 제거: 30초마다 Dashboard가 updateDoc 호출하면
+          //     베팅 트랜잭션과 경합 상태가 생겨 정산 실패할 수 있음
           try {
-            updateDoc(userRef, { 
-              lastActive: Date.now(),
-              currentUA: (navigator.userAgent || "").substring(0, 200),
-            });
-          } catch (histErr) {
-            // 이력 저장 실패해도 로그인은 성공시킴
             updateDoc(userRef, { lastActive: Date.now() });
+          } catch (histErr) {
+            // 조용히 실패
           }
         } else {
           alert(t.login_fail || "비밀번호가 일치하지 않습니다.");
