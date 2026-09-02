@@ -322,86 +322,24 @@ export default function Dashboard({
     return () => window.removeEventListener('navigate-to-event', handleNavigateToEvent);
   }, [selectedRegion, selectedCategory]);
 
-  // ★ [신규+확장] Heartbeat - 30초마다 lastActive + IP + 국가 + 지역 저장
-  //   - 유저가 접속중임을 관리자가 실시간 확인 가능
-  //   - IP는 5분에 한 번씩만 조회 (부담 줄이기)
-  //   - 국가/지역 정보 함께 저장 (ipapi.co, HTTPS 무료)
+  // ★ [수정] Heartbeat - 30초마다 lastActive만 저장 (IP 저장 안 함)
+  //   - 유저가 접속중임을 관리자가 실시간 확인 가능 (lastActive 시각만)
+  //   - IP/국가/지역 조회 및 저장 로직 제거 - 유저 프라이버시 보호
   //   - 브라우저 탭이 활성 상태일 때만 갱신
   //   - 게스트는 갱신 안 함 (유저 문서 없음)
   useEffect(() => {
     if (!user?.id || isGuest) return;
     
     let interval = null;
-    let cachedIpData = null;
-    let lastIpFetch = 0;
-    
-    const fetchIpWithLocation = async () => {
-      // 5분 캐시
-      if (cachedIpData && Date.now() - lastIpFetch < 300000) return cachedIpData;
-      try {
-        // ★ [교체] ipinfo.io: 무료 5만회/월, 도시 정확도 훨씬 우수
-        //   반환 형태: { ip, city, region, country(2자리코드), loc, org, timezone }
-        const res = await fetch('https://ipinfo.io/json');
-        if (res.ok) {
-          const data = await res.json();
-          cachedIpData = {
-            ip: data.ip || "",
-            country: data.country || "",  // 2자리 코드 (KR)
-            countryCode: data.country || "",
-            region: data.region || "",     // 예: "Seoul"
-            city: data.city || "",         // 예: "Seoul"
-          };
-          lastIpFetch = Date.now();
-        }
-      } catch (e) {
-        // Fallback 1: ipapi.co
-        try {
-          const res = await fetch('https://ipapi.co/json/');
-          if (res.ok) {
-            const data = await res.json();
-            cachedIpData = {
-              ip: data.ip || "",
-              country: data.country_name || "",
-              countryCode: data.country_code || "",
-              region: data.region || "",
-              city: data.city || "",
-            };
-            lastIpFetch = Date.now();
-          }
-        } catch (e2) {
-          // Fallback 2: ipify (IP만)
-          try {
-            const res = await fetch('https://api.ipify.org?format=json');
-            if (res.ok) {
-              const data = await res.json();
-              cachedIpData = {
-                ip: data.ip || "",
-                country: "", countryCode: "", region: "", city: "",
-              };
-              lastIpFetch = Date.now();
-            }
-          } catch (e3) {}
-        }
-      }
-      return cachedIpData;
-    };
     
     const updateLastActive = async () => {
       // 탭이 백그라운드면 스킵 (배터리/네트워크 절약)
       if (document.visibilityState !== 'visible') return;
       try {
-        const ipData = await fetchIpWithLocation();
         const updates = { 
           lastActive: Date.now(),
           currentUA: (navigator.userAgent || "").substring(0, 200),
         };
-        if (ipData?.ip) {
-          updates.currentIp = ipData.ip;
-          updates.currentCountry = ipData.country;
-          updates.currentCountryCode = ipData.countryCode;
-          updates.currentRegion = ipData.region;
-          updates.currentCity = ipData.city;
-        }
         
         await updateDoc(doc(db, "users", user.id), updates);
       } catch (e) {

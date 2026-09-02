@@ -255,74 +255,13 @@ export default function App() {
           // ★★★ [신규] 로그인 성공 → 웰컴 애니메이션 표시 (1.5초)
           setShowWelcome(true);
           
-          // ★ [신규+확장] 로그인 시 접속 이력 저장 (관리자 모니터링용)
-          //   - IP + 국가 + 지역 + UserAgent + 시각 저장
-          //   - loginHistory 배열에 append (최근 20개만 유지)
-          //   - IP 조회 실패해도 lastActive는 갱신됨
+          // ★ [수정] IP/위치 저장 로직 제거 - 유저 프라이버시 보호
+          //   - lastActive(마지막 접속 시각)만 갱신
+          //   - loginHistory 배열도 저장 안 함 (IP 없이 의미 없음)
           try {
-            let ip = "";
-            let country = "";
-            let countryCode = "";
-            let region = "";
-            let city = "";
-            
-            // ★ [교체] ipinfo.io로 IP + 위치 조회 (도시 정확도 우수, 무료 5만회/월)
-            try {
-              const ipRes = await fetch('https://ipinfo.io/json');
-              if (ipRes.ok) {
-                const d = await ipRes.json();
-                ip = d.ip || "";
-                country = d.country || "";
-                countryCode = d.country || "";
-                region = d.region || "";
-                city = d.city || "";
-              }
-            } catch (e) {
-              // Fallback 1: ipapi.co
-              try {
-                const ipRes = await fetch('https://ipapi.co/json/');
-                if (ipRes.ok) {
-                  const d = await ipRes.json();
-                  ip = d.ip || "";
-                  country = d.country_name || "";
-                  countryCode = d.country_code || "";
-                  region = d.region || "";
-                  city = d.city || "";
-                }
-              } catch (e2) {
-                // Fallback 2: ipify (IP만)
-                try {
-                  const ipRes = await fetch('https://api.ipify.org?format=json');
-                  if (ipRes.ok) {
-                    const d = await ipRes.json();
-                    ip = d.ip || "";
-                  }
-                } catch (e3) {}
-              }
-            }
-            
-            const historyEntry = { 
-              at: Date.now(), 
-              ip: ip,
-              country: country,
-              countryCode: countryCode,
-              region: region,
-              city: city,
-              ua: (navigator.userAgent || "").substring(0, 100)
-            };
-            
-            const currentHistory = userData.loginHistory || [];
-            const newHistory = [...currentHistory, historyEntry].slice(-20); // 최근 20개
-            
             updateDoc(userRef, { 
               lastActive: Date.now(),
-              currentIp: ip,
-              currentCountry: country,
-              currentCountryCode: countryCode,
-              currentRegion: region,
-              currentCity: city,
               currentUA: (navigator.userAgent || "").substring(0, 200),
-              loginHistory: newHistory,
             });
           } catch (histErr) {
             // 이력 저장 실패해도 로그인은 성공시킴

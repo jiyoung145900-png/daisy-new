@@ -145,20 +145,9 @@ export default function LandingPage({
       const startNo = 2783982189;
       const generatedNo = (startNo + users.length).toString();
 
-      // ★ [신규] 회원가입 시 IP + 브라우저 정보 자동 조회
-      //   - 봇/멀티계정 감지용 (관리자가 조회 가능)
-      //   - IP 조회 실패해도 가입은 정상 진행 (fallback)
-      let signupIp = "";
+      // ★ [수정] IP 저장 로직 제거 - 유저 프라이버시 보호
+      //   - 브라우저 정보(UA)만 저장 (선택사항, 필요없으면 이것도 제거 가능)
       let userAgent = "";
-      try {
-        const ipRes = await fetch('https://api.ipify.org?format=json');
-        if (ipRes.ok) {
-          const ipData = await ipRes.json();
-          signupIp = ipData.ip || "";
-        }
-      } catch (ipErr) {
-        console.warn("IP 조회 실패:", ipErr);
-      }
       try {
         userAgent = navigator.userAgent || "";
       } catch (uaErr) {}
@@ -172,8 +161,7 @@ export default function LandingPage({
         refCode: cleanId,
         agentName,
         joinedAt: new Date().toISOString(),
-        // ★ [신규] 봇/멀티계정 방지용 메타 데이터
-        signupIp: signupIp,
+        // ★ [수정] signupIp 제거 - IP 저장 안 함
         signupUA: userAgent.substring(0, 200),
         signupAt: new Date().toISOString(),
         // ★★★ [신규] 텔레그램 아이디 (선택 - 있으면 저장, 없으면 빈 문자열)
