@@ -512,7 +512,11 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
   const addPendingBet = useCallback((bet) => {
     if (!bet) return false;
     const current = betsRef.current || [];
-    if (current.length >= MAX_BETS_PER_ROUND) {
+    // ★ [버그 수정] 전체 배열이 아닌 해당 라운드의 베팅 수만 체크
+    //   surviving 로직으로 이전 라운드 베팅이 남아있을 수 있어서
+    //   전체 length로 체크하면 새 라운드 베팅이 막힐 수 있음
+    const currentRoundBets = current.filter(b => b.round === bet.round);
+    if (currentRoundBets.length >= MAX_BETS_PER_ROUND) {
       console.warn("MAX_BETS_PER_ROUND 초과 - 추가 안 됨");
       return false;
     }
@@ -742,7 +746,11 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       }
 
       setTimeout(() => {
-        handleSetMyPendingBets([]);
+        // ★ [버그 수정] 정산 완료된 라운드의 베팅만 제거, 다음 라운드 베팅은 유지
+        //   기존: handleSetMyPendingBets([]) → 전체 삭제 → 정산 중 넣은 다음 라운드 베팅도 소실!
+        //   수정: targetRound 이하 베팅만 제거, 이후 라운드 베팅은 보존
+        const surviving = (betsRef.current || []).filter(b => b.round > targetRound);
+        handleSetMyPendingBets(surviving);
         isProcessingRef.current = false;
       }, 2600);
 
