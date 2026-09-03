@@ -702,9 +702,20 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
             soundManager.play("lose");
           }
 
-          const newPoint = pointRef.current + totalWinAmount;
+          // ★ [버그 수정] pointRef.current는 베팅 차감을 반영하지 못함
+          //   (베팅 차감은 EventSection의 트랜잭션에서 Firebase에만 반영됨)
+          //   따라서 로컬 표시값 계산 시 베팅액(totalBetCost)을 빼줘야 정확함
+          //
+          //   예: 시작 3만 → 1만 베팅(Firebase 2만) → 승리 2만 지급
+          //     - 올바른 잔액: 3만 - 1만 + 2만 = 4만
+          //     - 기존 버그: pointRef(3만) + 2만 = 5만 ❌
+          //
+          //   ※ syncDiamondDelta는 그대로 totalWinAmount만 반영!
+          //     Firebase는 이미 베팅 시 -totalBetCost 됐으므로 여기선 +승리액만 하면 됨
+          const newPoint = pointRef.current - totalBetCost + totalWinAmount;
           updatePointWithAnim(newPoint);
           // ★ [수정] 절대값 대신 delta(=totalWinAmount)로 증감 - 관리자 편집과 충돌 방지
+          //   Firebase는 베팅 시 이미 차감됐으므로 승리액만 더함 (건드리지 말 것!)
           syncDiamondDelta(totalWinAmount);
           pointRef.current = newPoint;
 
@@ -715,7 +726,9 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
           //
           //   중요: 각 베팅의 balanceAtEnd = 그 베팅 정산 이후 유저의 잔액
           //   여러 개 베팅이면 순차적으로 누적 계산
-          let runningBalance = pointRef.current - totalWinAmount; // 이 라운드 정산 전 잔액
+          //   ★ [수정] pointRef.current가 이제 정확한 최종 잔액이므로,
+          //     역산 시작점 = 최종잔액 - 총승리액 = 이 라운드 정산 직전(베팅 차감 후) 잔액
+          let runningBalance = pointRef.current - totalWinAmount; // 정산 전(베팅 차감 후) 잔액
           const nowIso = new Date().toISOString();
           for (const bet of activeBets) {
             if (!bet.docId) continue;
