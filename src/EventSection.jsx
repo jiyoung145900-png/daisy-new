@@ -292,7 +292,10 @@ export default function EventSection({
 
           tx.update(userDocRef, { diamond: increment(-totalCost) });
           tx.set(betDocRef, {
-            round: round, userId: user.id, betAmount: totalCost, items: [...selectedItems], win: null, timestamp: new Date().toISOString()
+            round: round, userId: user.id, betAmount: totalCost, items: [...selectedItems], win: null, timestamp: new Date().toISOString(),
+            // ★ [신규] 베팅 시점 잔액 저장 - 관리자가 각 베팅별 실시간 잔액 정확히 볼 수 있음
+            balanceBeforeBet: currentDiamond,           // 베팅 직전 잔액
+            balanceAtBet: currentDiamond - totalCost,   // 베팅 직후 잔액 (= 현재 잔액에서 이 베팅 차감)
           });
         });
       } else {
