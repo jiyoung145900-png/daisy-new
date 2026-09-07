@@ -137,7 +137,8 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
   const syncDiamondDelta = useCallback(async (delta) => {
     if (!user?.id || !delta) return;
     // ★ [재시도 추가] 인터넷 끊김 등으로 실패해도 자동 재시도
-    //   1초 → 2초 → 4초 간격으로 최대 4번 시도 (지수 백오프)
+    //   빠른 재시도: 200ms → 200ms → 200ms 간격으로 최대 4번 시도
+    //   (기존: 1초 → 2초 → 4초 지수 백오프 → 유저 대기 시간 길어서 UX 나쁨)
     //   유저 다이아 지급이 "가끔 실패"하던 문제 해결
     const maxRetries = 4;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -147,8 +148,8 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       } catch (err) {
         console.warn(`💎 잔액 증감 실패 (시도 ${attempt + 1}/${maxRetries}):`, err.message);
         if (attempt < maxRetries - 1) {
-          // 다음 시도까지 대기 (1초, 2초, 4초)
-          await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+          // ★ [수정] 짧은 딜레이로 즉시 재시도 (200ms)
+          await new Promise(r => setTimeout(r, 200));
         } else {
           console.error("💎 잔액 증감 최종 실패 (Worker/어드민이 백업 처리 예정):", err);
         }
@@ -746,7 +747,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
 
           // ★ [재시도 헬퍼] event_bets win 저장이 실패하면 "(추정)" 딱지가 남음
           //   → 인터넷 끊김 등으로 실패해도 자동 재시도해서 확실히 저장
-          //   → 1초 → 2초 → 4초 간격, 최대 4번
+          //   → 200ms 간격으로 빠르게 최대 4번 재시도 (기존: 1-2-4초 지수 백오프)
           const saveBetWithRetry = async (docId, data) => {
             const maxRetries = 4;
             for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -756,7 +757,8 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
               } catch (err) {
                 console.warn(`event_bets 저장 실패 (${docId}, 시도 ${attempt + 1}/${maxRetries}):`, err.message);
                 if (attempt < maxRetries - 1) {
-                  await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+                  // ★ [수정] 200ms 짧은 딜레이로 즉시 재시도
+                  await new Promise(r => setTimeout(r, 200));
                 } else {
                   console.error(`event_bets 최종 실패 (${docId}) - Worker가 백업 정산 예정:`, err);
                 }
@@ -788,7 +790,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
             details,
             betCount: activeBets.length,
           });
-        }, 800);
+        }, 100); // ★ [수정] 800 → 100ms (사운드 딜레이 최소화)
       }
 
       setTimeout(() => {
@@ -798,9 +800,9 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
         const surviving = (betsRef.current || []).filter(b => b.round > targetRound);
         handleSetMyPendingBets(surviving);
         isProcessingRef.current = false;
-      }, 2600);
+      }, 400); // ★ [수정] 2600 → 400ms (정산 후 정리 딜레이 대폭 축소)
 
-    }, 3000); 
+    }, 300); // ★ [수정] 3000 → 300ms (셔플 애니메이션 대폭 축소, 결과 즉시 표시)
   }, [user?.id, updatePointWithAnim, syncDiamondToFirestore, syncDiamondDelta]);
 
   // --- 시간 동기화 루프 ---
