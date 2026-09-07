@@ -23,7 +23,7 @@ export const ITEM_CONFIG = [
   { 
     name: "유튜브", nameEn: "YouTube", 
     icon: "/icons/youtube.png", isImage: true,
-    color: "#CC0000", label: "x2.0 / x4.0", 
+    color: "#FF0000", label: "x2.0 / x4.0", 
     desc: "인기 배당", descEn: "Popular Payout" 
   },
 ];
@@ -238,16 +238,34 @@ export const EventService = {
         return queue[round].map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
       }
 
-      // Firestore: winner 필드 우선, 구버전 items 필드 fallback (관리자 연동 유지)
+      // ★★★ [수정] getDoc → getDocFromServer
+      // getDoc은 Firestore 캐시를 먼저 확인해서 관리자가 나중에 예약해도
+      // 유저 브라우저가 이미 "없음"을 캐시했으면 옛 값을 리턴해버림.
+      // getDocFromServer는 항상 서버에서 최신 값을 가져오므로 예약이 확실히 반영됨.
       const docRef = doc(db, "event_manipulation", String(round));
-      const docSnap = await getDoc(docRef);
+      const docSnap = await getDocFromServer(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
         const targetNames = data.winner || data.items;
         if (!targetNames || targetNames.length === 0) return null;
         return targetNames.map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
       }
-    } catch (e) { console.error("Result Fetch Error:", e); }
+    } catch (e) { 
+      console.error("Result Fetch Error:", e);
+      // ★ getDocFromServer 실패 시(오프라인 등) 캐시로 fallback
+      try {
+        const docRef = doc(db, "event_manipulation", String(round));
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const targetNames = data.winner || data.items;
+          if (!targetNames || targetNames.length === 0) return null;
+          return targetNames.map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
+        }
+      } catch (fallbackErr) {
+        console.error("Fallback getDoc도 실패:", fallbackErr);
+      }
+    }
     return null;
   },
 
