@@ -638,7 +638,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
     // ★ winNames로부터 winObjs 재구성 (아이콘, 색상 등 UI 정보 포함)
     const winObjs = winNames.map(name => ITEM_CONFIG.find(i => i.name === name)).filter(Boolean);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       clearInterval(shuffleInterval);
       
       const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
