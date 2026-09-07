@@ -136,10 +136,23 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
   //   호환: 기존 syncDiamondToFirestore(newPoint) 호출도 계속 지원 (내부에서 delta 계산)
   const syncDiamondDelta = useCallback(async (delta) => {
     if (!user?.id || !delta) return;
-    try {
-      await updateDoc(doc(db, "users", user.id), { diamond: increment(delta) });
-    } catch (err) {
-      console.error("💎 잔액 증감 실패:", err);
+    // ★ [재시도 추가] 인터넷 끊김 등으로 실패해도 자동 재시도
+    //   1초 → 2초 → 4초 간격으로 최대 4번 시도 (지수 백오프)
+    //   유저 다이아 지급이 "가끔 실패"하던 문제 해결
+    const maxRetries = 4;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        await updateDoc(doc(db, "users", user.id), { diamond: increment(delta) });
+        return; // 성공하면 즉시 종료
+      } catch (err) {
+        console.warn(`💎 잔액 증감 실패 (시도 ${attempt + 1}/${maxRetries}):`, err.message);
+        if (attempt < maxRetries - 1) {
+          // 다음 시도까지 대기 (1초, 2초, 4초)
+          await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+        } else {
+          console.error("💎 잔액 증감 최종 실패 (Worker/어드민이 백업 처리 예정):", err);
+        }
+      }
     }
   }, [user?.id]);
 
@@ -730,6 +743,27 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
           //     역산 시작점 = 최종잔액 - 총승리액 = 이 라운드 정산 직전(베팅 차감 후) 잔액
           let runningBalance = pointRef.current - totalWinAmount; // 정산 전(베팅 차감 후) 잔액
           const nowIso = new Date().toISOString();
+
+          // ★ [재시도 헬퍼] event_bets win 저장이 실패하면 "(추정)" 딱지가 남음
+          //   → 인터넷 끊김 등으로 실패해도 자동 재시도해서 확실히 저장
+          //   → 1초 → 2초 → 4초 간격, 최대 4번
+          const saveBetWithRetry = async (docId, data) => {
+            const maxRetries = 4;
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+              try {
+                await updateDoc(doc(db, "event_bets", docId), data);
+                return; // 성공
+              } catch (err) {
+                console.warn(`event_bets 저장 실패 (${docId}, 시도 ${attempt + 1}/${maxRetries}):`, err.message);
+                if (attempt < maxRetries - 1) {
+                  await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+                } else {
+                  console.error(`event_bets 최종 실패 (${docId}) - Worker가 백업 정산 예정:`, err);
+                }
+              }
+            }
+          };
+
           for (const bet of activeBets) {
             if (!bet.docId) continue;
             const betItems = bet.items || [];
@@ -737,12 +771,11 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
             const winAmount = calcWinAmount(betItems, matchedCount, bet.totalCost || 0);
             runningBalance += winAmount; // 이 베팅 지급액 반영
             const isWin = winAmount > 0;
-            updateDoc(doc(db, "event_bets", bet.docId), {
+            // ★ 재시도 로직으로 저장 (await 안 하고 백그라운드 실행 - UI 안 막음)
+            saveBetWithRetry(bet.docId, {
               win: isWin,
               balanceAtEnd: runningBalance,
               balanceAtEndAt: nowIso,
-            }).catch(err => {
-              console.error(`event_bets 정산 저장 실패 (${bet.docId}):`, err);
             });
           }
           
