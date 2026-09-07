@@ -708,7 +708,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
         // ★ 총합 기준 승/패 판정 (총 지급액 > 0 이면 승리)
         const isSuccess = totalWinAmount > 0;
 
-        setTimeout(() => {
+        setTimeout(async () => {
           if (isSuccess) { 
             soundManager.play("win");
             if (navigator.vibrate) navigator.vibrate([100, 50, 150]); 
