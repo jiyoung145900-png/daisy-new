@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { EventService, soundManager, ITEM_CONFIG, syncServerClock } from "./EventService"; 
 import { db } from "./firebase";
-import { collection, onSnapshot, query, where, doc, getDoc, setDoc, updateDoc, increment, addDoc, getDocs, orderBy, limit, runTransaction } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, getDoc, getDocFromServer, setDoc, updateDoc, increment, addDoc, getDocs, orderBy, limit, runTransaction } from "firebase/firestore";
 
 export { ITEM_CONFIG as allItems }; 
 
@@ -716,33 +716,40 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
             soundManager.play("lose");
           }
 
-          // ★ [버그 수정] pointRef.current는 베팅 차감을 반영하지 못함
-          //   (베팅 차감은 EventSection의 트랜잭션에서 Firebase에만 반영됨)
-          //   따라서 로컬 표시값 계산 시 베팅액(totalBetCost)을 빼줘야 정확함
+          // ★★★ [핵심 수정] pointRef.current는 로컬 값이라 Firebase와 어긋날 수 있음
+          //   → 정산 도중 다른 베팅/충전이 있으면 balanceAtEnd가 잘못 계산됨
+          //   → Firebase에서 실제 최신 잔액을 서버에서 직접 조회 (캐시 우회)
           //
-          //   예: 시작 3만 → 1만 베팅(Firebase 2만) → 승리 2만 지급
-          //     - 올바른 잔액: 3만 - 1만 + 2만 = 4만
-          //     - 기존 버그: pointRef(3만) + 2만 = 5만 ❌
-          //
-          //   ※ syncDiamondDelta는 그대로 totalWinAmount만 반영!
-          //     Firebase는 이미 베팅 시 -totalBetCost 됐으므로 여기선 +승리액만 하면 됨
-          const newPoint = pointRef.current - totalBetCost + totalWinAmount;
+          //   시나리오 (버그 재현):
+          //     Firebase 실제 잔액 = 173,556
+          //     pointRef.current = 73,556 (동기화 지연으로 100,000 안 반영)
+          //     newPoint = 73,556 - 160,000 + 0 = -86,444 ❌ (실제: 13,556)
+          //   → Firebase에서 실제 잔액 173,556 조회 → newPoint = 13,556 ✅
+          let actualBalance;
+          try {
+            const userSnap = await getDocFromServer(doc(db, "users", user.id));
+            actualBalance = (userSnap.data()?.diamond ?? pointRef.current) + 0;
+            // Firebase의 diamond는 베팅 시 이미 차감된 값 (트랜잭션 반영됨)
+          } catch (e) {
+            console.warn("정산 시점 실제 잔액 조회 실패, pointRef로 폴백:", e);
+            actualBalance = pointRef.current - totalBetCost; // 폴백: 로컬 계산
+          }
+          
+          // ★ [수정] Firebase 실제 잔액 + 승리액 = 최종 잔액
+          //   Firebase는 베팅 시 이미 차감됐으므로 승리액만 더함
+          const newPoint = actualBalance + totalWinAmount;
           updatePointWithAnim(newPoint);
-          // ★ [수정] 절대값 대신 delta(=totalWinAmount)로 증감 - 관리자 편집과 충돌 방지
-          //   Firebase는 베팅 시 이미 차감됐으므로 승리액만 더함 (건드리지 말 것!)
           syncDiamondDelta(totalWinAmount);
           pointRef.current = newPoint;
 
           // ★ [신규] 각 event_bets 문서에 win + balanceAtEnd 기록
           //   자연 종료 정산도 관리자 SponsorshipsView와 같은 데이터 형식으로 남게 됨
           //   → 관리자 모니터링에서 "진행중"이 아닌 "승리/패배"로 올바르게 표시
-          //   → balanceAtEnd 스냅샷을 기준으로 이후 관리자가 재정산할 때 정확한 기준값이 확보됨
           //
           //   중요: 각 베팅의 balanceAtEnd = 그 베팅 정산 이후 유저의 잔액
           //   여러 개 베팅이면 순차적으로 누적 계산
-          //   ★ [수정] pointRef.current가 이제 정확한 최종 잔액이므로,
-          //     역산 시작점 = 최종잔액 - 총승리액 = 이 라운드 정산 직전(베팅 차감 후) 잔액
-          let runningBalance = pointRef.current - totalWinAmount; // 정산 전(베팅 차감 후) 잔액
+          //   ★ [수정] Firebase 실제 잔액(actualBalance) 기준으로 정확한 balanceAtEnd 계산
+          let runningBalance = actualBalance; // 정산 전(베팅 차감 후) Firebase 실제 잔액
           const nowIso = new Date().toISOString();
 
           // ★ [재시도 헬퍼] event_bets win 저장이 실패하면 "(추정)" 딱지가 남음
