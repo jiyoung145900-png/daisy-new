@@ -415,10 +415,11 @@ export default function LandingPage({
             position: "relative",
             display: "inline-block",
           }}>
-            {/* 이중 발광 링 */}
+            {/* ★ [수정] 이중 발광 링 - 로고 크기에 비례해서 자동 확장 */}
+            {/* logoSize가 커지면 후광도 커짐 → 로고 잘림 방지 */}
             <div style={{
               position: "absolute",
-              inset: -30,
+              inset: `-${Math.round((logoSize || 140) * 0.25)}px`,
               background: "radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 60%)",
               borderRadius: "50%",
               animation: "logoOuterGlow 4s ease-in-out infinite",
@@ -426,7 +427,7 @@ export default function LandingPage({
             }} />
             <div style={{
               position: "absolute",
-              inset: -50,
+              inset: `-${Math.round((logoSize || 140) * 0.4)}px`,
               background: "radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, transparent 70%)",
               borderRadius: "50%",
               animation: "logoOuterGlow 5s ease-in-out infinite reverse",
@@ -434,12 +435,10 @@ export default function LandingPage({
             }} />
 
             {/* 로고 이미지 (shimmer 포함) */}
+            {/* ★ [수정] borderRadius: 50% + overflow: hidden 제거 - 로고 원형 크롭 되어 BANADA 글자 잘림 방지 */}
             <div style={{
               position: "relative",
-              height: `${logoSize || 140}px`,
               display: "inline-block",
-              borderRadius: "50%",
-              overflow: "hidden",
             }}>
               <img
                 src={optimizeImage(logo, { width: 500 })}
@@ -453,17 +452,18 @@ export default function LandingPage({
                   display: "block",
                 }}
               />
-              {/* Shimmer 빛 스캔 */}
+              {/* Shimmer 빛 스캔 - 로고 전체 영역 커버 */}
               <div style={{
                 position: "absolute",
                 top: 0,
-                left: "-100%",
+                left: 0,
                 width: "100%",
                 height: "100%",
                 background: "linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.35) 50%, transparent 70%)",
                 animation: "landingShimmer 5s ease-in-out infinite",
                 pointerEvents: "none",
                 mixBlendMode: "overlay",
+                borderRadius: "12px",
               }} />
             </div>
           </div>
