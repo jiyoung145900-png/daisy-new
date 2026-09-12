@@ -21,17 +21,19 @@ export default function VideoSection({
   const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
 
   const catTranslation = {
-    "ALL": "ALL",
-    "한국": "KOREA",
-    "일본": "JAPAN",
-    "중국": "CHINA",
-    "동남아": "S.E ASIA",
-    "서양": "WESTERN"
+    "ALL":  { ja: "全て", en: "ALL" },
+    "한국": { ja: "韓国", en: "KOREA" },
+    "일본": { ja: "日本", en: "JAPAN" },
+    "중국": { ja: "中国", en: "CHINA" },
+    "동남아": { ja: "東南アジア", en: "S.E ASIA" },
+    "서양": { ja: "西洋", en: "WESTERN" },
   };
 
   const getCatName = (name) => {
     if (isKo) return name;
-    return catTranslation[name] || name;
+    const mapped = catTranslation[name];
+    if (!mapped) return name;
+    return isJa ? mapped.ja : mapped.en;
   };
 
   useEffect(() => {
@@ -142,7 +144,11 @@ export default function VideoSection({
               <div style={s.videoDesc}>
                 <span style={s.descBadge}>EXCLUSIVE</span>
                 <p style={s.descText}>
-                  {vid.description || (isKo ? `프리미엄 ${vid.category} 쇼` : isJa ? `プレミアム ${getCatName(vid.category)} ショー` : `PREMIUM ${getCatName(vid.category)} SHOW`)}
+                  {vid.description || tr(
+                    `프리미엄 ${vid.category} 쇼`,
+                    `プレミアム ${getCatName(vid.category)} ショー`,
+                    `PREMIUM ${getCatName(vid.category)} SHOW`
+                  )}
                 </p>
               </div>
             </div>
