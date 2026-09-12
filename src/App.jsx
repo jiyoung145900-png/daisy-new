@@ -66,6 +66,8 @@ export default function App() {
   const [hero, setHero] = useState(() => load("hero", { mode: "image", imageSrc: null, title: { ko: "", en: "" }, desc: { ko: "", en: "" } }));
   const [members, setMembers] = useState(() => load("members", []));
   const [slideImages, setSlideImages] = useState(() => load("slideImages", []));
+  const [slideImagesJa, setSlideImagesJa] = useState(() => load("slideImages_ja", []));
+  const [slideImagesEn, setSlideImagesEn] = useState(() => load("slideImages_en", []));
   const [videoURL, setVideoURL] = useState(() => load("videoURL", null));
   const [videos, setVideos] = useState(() => load("videos", []));
   // ★★★ [신규] 인트로 애니메이션 표시 여부 (매번 접속 시 4초)
@@ -78,6 +80,10 @@ export default function App() {
   const [innerLogo, setInnerLogo] = useState(() => load("innerLogo", null));
   const [topAdImage, setTopAdImage] = useState(() => load("topAdImage", null));
   const [topAdImage2, setTopAdImage2] = useState(() => load("topAdImage2", null));
+  const [topAdImageJa, setTopAdImageJa] = useState(() => load("topAdImage_ja", null));
+  const [topAdImage2Ja, setTopAdImage2Ja] = useState(() => load("topAdImage2_ja", null));
+  const [topAdImageEn, setTopAdImageEn] = useState(() => load("topAdImage_en", null));
+  const [topAdImage2En, setTopAdImage2En] = useState(() => load("topAdImage2_en", null));
 
   const [noticeText, setNoticeText] = useState(() => load("noticeText", "📢 BANADA에 오신 것을 환영합니다!"));
 
@@ -164,10 +170,16 @@ export default function App() {
           if (data.logoPos) setLogoPos(data.logoPos);
           if (data.members) setMembers(data.members);
           if (data.slideImages) setSlideImages(data.slideImages);
+          if (data.slideImages_ja) setSlideImagesJa(data.slideImages_ja);
+          if (data.slideImages_en) setSlideImagesEn(data.slideImages_en);
           if (data.videos) setVideos(data.videos);
           if (data.innerLogo !== undefined) setInnerLogo(data.innerLogo);
           if (data.topAdImage !== undefined) setTopAdImage(data.topAdImage);
           if (data.topAdImage2 !== undefined) setTopAdImage2(data.topAdImage2);
+          if (data.topAdImage_ja !== undefined) setTopAdImageJa(data.topAdImage_ja);
+          if (data.topAdImage2_ja !== undefined) setTopAdImage2Ja(data.topAdImage2_ja);
+          if (data.topAdImage_en !== undefined) setTopAdImageEn(data.topAdImage_en);
+          if (data.topAdImage2_en !== undefined) setTopAdImage2En(data.topAdImage2_en);
           if (data.telegramLink) setTelegramLink(data.telegramLink);
           if (data.noticeText !== undefined) setNoticeText(data.noticeText);
         }
@@ -464,8 +476,12 @@ export default function App() {
           user={currentUser}
           onUpdatePoint={(newVal) => syncUpdate(currentUser.id, newVal, currentUser.refCode, currentUser.referral)}
           appAvatarImage={appAvatarImage} appAvatarIdx={appAvatarIdx} onAvatarChange={refreshAvatar}
-          t={t} lang={lang} isGuest={isGuest} members={members} regions={REGIONS} slideImages={slideImages}
-          videos={videos} videoCategories={VIDEO_CATS} innerLogo={innerLogo} topAdImage={topAdImage} topAdImage2={topAdImage2} telegramLink={telegramLink}
+          t={t} lang={lang} isGuest={isGuest} members={members} regions={REGIONS}
+          slideImages={lang === 'ja' && slideImagesJa?.length ? slideImagesJa : lang === 'en' && slideImagesEn?.length ? slideImagesEn : slideImages}
+          videos={videos} videoCategories={VIDEO_CATS} innerLogo={innerLogo}
+          topAdImage={lang === 'ja' && topAdImageJa ? topAdImageJa : lang === 'en' && topAdImageEn ? topAdImageEn : topAdImage}
+          topAdImage2={lang === 'ja' && topAdImage2Ja ? topAdImage2Ja : lang === 'en' && topAdImage2En ? topAdImage2En : topAdImage2}
+          telegramLink={telegramLink}
           noticeText={noticeText}
           onLogout={handleLogout} dashStyles={dashStyles}
         />
