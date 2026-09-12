@@ -152,27 +152,70 @@ export default function ManagerSection({
     return url && (url.includes('/video/upload/') || url.match(/\.(mp4|webm|mov|avi)$/i));
   };
 
-  // ★ [핵심 추가] 지역명 번역 매핑 데이터
+  // ★ [수정] 지역 필터 탭 번역 (광역 - 3개 언어)
   const regionTranslation = {
-    "전체": "ALL",
-    "서울": "SEOUL",
-    "경기 북부": "Gyeonggi N.",
-    "경기 남부": "Gyeonggi S.",
-    "인천": "INCHEON",
-    "충청": "CHUNGCHEONG",
-    "강원": "GANGWON",
-    "전라": "JEONLA",
-    "경북·대구": "DAEGU/GB",
-    "부산·울산·경남": "BUSAN/GN",
-    "제주": "JEJU"
+    "전체":         { ja: "全体", en: "ALL" },
+    "서울":         { ja: "ソウル", en: "SEOUL" },
+    "경기 북부":    { ja: "京畿北部", en: "Gyeonggi N." },
+    "경기 남부":    { ja: "京畿南部", en: "Gyeonggi S." },
+    "인천":         { ja: "仁川", en: "INCHEON" },
+    "충청":         { ja: "忠清", en: "CHUNGCHEONG" },
+    "강원":         { ja: "江原", en: "GANGWON" },
+    "전라":         { ja: "全羅", en: "JEONLA" },
+    "경북·대구":    { ja: "慶北·大邱", en: "DAEGU/GB" },
+    "부산·울산·경남": { ja: "釜山·蔚山·慶南", en: "BUSAN/GN" },
+    "제주":         { ja: "済州", en: "JEJU" },
+  };
+
+  // ★ [신규] 시군구 번역 (매니저 카드의 loc 필드)
+  const LOC_MAP = {
+    "강남/서초/송파": { ja: "江南/瑞草/松坡", en: "Gangnam/Seocho/Songpa" },
+    "강동/광진/성동": { ja: "江東/広津/城東", en: "Gangdong/Gwangjin/Seongdong" },
+    "마포/강서/양천": { ja: "麻浦/江西/陽川", en: "Mapo/Gangseo/Yangcheon" },
+    "영등포/구로/금천": { ja: "永登浦/九老/衿川", en: "Yeongdeungpo/Guro/Geumcheon" },
+    "종로/중구/용산": { ja: "鍾路/中区/龍山", en: "Jongno/Jung-gu/Yongsan" },
+    "동대문/중랑/노원": { ja: "東大門/中浪/蘆原", en: "Dongdaemun/Jungnang/Nowon" },
+    "일산/파주/고양": { ja: "一山/坡州/高陽", en: "Ilsan/Paju/Goyang" },
+    "의정부/양주/동두천": { ja: "議政府/楊州/東豆川", en: "Uijeongbu/Yangju/Dongducheon" },
+    "남양주/구리/포천": { ja: "南楊州/九里/抱川", en: "Namyangju/Guri/Pocheon" },
+    "수원/용인/화성": { ja: "水原/龍仁/華城", en: "Suwon/Yongin/Hwaseong" },
+    "분당/판교/성남": { ja: "盆唐/板橋/城南", en: "Bundang/Pangyo/Seongnam" },
+    "안양/군포/의왕": { ja: "安養/軍浦/義王", en: "Anyang/Gunpo/Uiwang" },
+    "안산/시흥/광명": { ja: "安山/始興/光明", en: "Ansan/Siheung/Gwangmyeong" },
+    "부천/김포": { ja: "富川/金浦", en: "Bucheon/Gimpo" },
+    "평택/안성/오산": { ja: "平澤/安城/烏山", en: "Pyeongtaek/Anseong/Osan" },
+    "부평/계양": { ja: "富平/桂陽", en: "Bupyeong/Gyeyang" },
+    "미추홀/연수/남동": { ja: "弥鄒忽/延寿/南洞", en: "Michuhol/Yeonsu/Namdong" },
+    "서구/강화/옹진": { ja: "西区/江華/甕津", en: "Seo-gu/Ganghwa/Ongjin" },
+    "천안/아산/당진": { ja: "天安/牙山/唐津", en: "Cheonan/Asan/Dangjin" },
+    "대전/세종/공주": { ja: "大田/世宗/公州", en: "Daejeon/Sejong/Gongju" },
+    "청주/충주/음성": { ja: "清州/忠州/陰城", en: "Cheongju/Chungju/Eumseong" },
+    "춘천/홍천/철원": { ja: "春川/洪川/鉄原", en: "Chuncheon/Hongcheon/Cheorwon" },
+    "원주/횡성/평창": { ja: "原州/横城/平昌", en: "Wonju/Hoengseong/Pyeongchang" },
+    "강릉/속초/동해": { ja: "江陵/束草/東海", en: "Gangneung/Sokcho/Donghae" },
+    "광주/나주/담양": { ja: "光州/羅州/潭陽", en: "Gwangju/Naju/Damyang" },
+    "전주/익산/군산": { ja: "全州/益山/群山", en: "Jeonju/Iksan/Gunsan" },
+    "목포/무안/영암": { ja: "木浦/務安/霊岩", en: "Mokpo/Muan/Yeongam" },
+    "순천/여수/광양": { ja: "順天/麗水/光陽", en: "Suncheon/Yeosu/Gwangyang" },
+    "대구 시내/수성/동구": { ja: "大邱市内/寿城/東区", en: "Daegu/Suseong/Dong-gu" },
+    "대구 서구/남구/달서": { ja: "大邱西区/南区/達西", en: "Daegu Seo/Nam/Dalseo" },
+    "포항/경주/영덕": { ja: "浦項/慶州/盈徳", en: "Pohang/Gyeongju/Yeongdeok" },
+    "구미/김천/상주": { ja: "亀尾/金泉/尚州", en: "Gumi/Gimcheon/Sangju" },
+    "안동/영주/경산": { ja: "安東/栄州/慶山", en: "Andong/Yeongju/Gyeongsan" },
+    "부산 서면/동래/연제": { ja: "釜山西面/東莱/蓮堤", en: "Busan Seomyeon/Dongnae/Yeonje" },
+    "부산 해운대/수영/기장": { ja: "海雲台/水営/機張", en: "Haeundae/Suyeong/Gijang" },
+    "부산 사하/강서/사상": { ja: "沙下/江西/沙上", en: "Saha/Gangseo/Sasang" },
+    "울산/양산": { ja: "蔚山/梁山", en: "Ulsan/Yangsan" },
+    "창원/김해/거제": { ja: "昌原/金海/巨済", en: "Changwon/Gimhae/Geoje" },
+    "제주시 권역": { ja: "済州市エリア", en: "Jeju City Area" },
+    "서귀포시 권역": { ja: "西帰浦市エリア", en: "Seogwipo Area" },
   };
 
   const isKo = t.home === "홈페이지";
   const isJa = t.home === "ホーム";
-  // 3개 언어 helper
   const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
   
-  // ★ [신규] 매니저 이름/소개 - 언어별 자동 선택 (fallback: 없으면 한국어)
+  // ★ 매니저 이름/소개 - 언어별 자동 선택
   const getMemberName = (member) => {
     if (!member) return "";
     if (isJa) return member.name_ja || member.name;
@@ -186,10 +229,17 @@ export default function ManagerSection({
     return member.desc_ko || member.desc;
   };
 
-  // 지역 이름을 현재 언어에 맞춰 반환하는 함수
+  // ★ [수정] 지역명 번역 - 필터 탭 + 시군구 카드 모두 커버
   const getRegionName = (name) => {
+    if (!name) return "";
     if (isKo) return name;
-    return regionTranslation[name] || name;
+    // 필터 탭 (광역) 먼저 체크
+    const region = regionTranslation[name];
+    if (region) return isJa ? region.ja : region.en;
+    // 시군구 (loc) 체크
+    const loc = LOC_MAP[name];
+    if (loc) return isJa ? loc.ja : loc.en;
+    return name;
   };
 
   const generateIntro = (name) => {
