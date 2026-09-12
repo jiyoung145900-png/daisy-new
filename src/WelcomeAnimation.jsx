@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
  * [1.2초] 페이드아웃 시작
  * [1.5초] 완료 → Dashboard 진입
  */
-export default function WelcomeAnimation({ user, onComplete }) {
+export default function WelcomeAnimation({ user, onComplete, lang = "ko" }) {
   const [stage, setStage] = useState(0);
 
   useEffect(() => {
@@ -31,19 +31,19 @@ export default function WelcomeAnimation({ user, onComplete }) {
 
   if (stage === 5) return null;
 
-  // 시간대별 인사말
+  // 시간대별 인사말 - 3개 언어 지원
   const getTimeGreeting = () => {
     const hour = new Date().getHours();
     if (hour >= 0 && hour < 6) {
-      return { korean: "시간이 멈춘 새벽입니다", english: "In the Silent Dawn" };
+      return { korean: "시간이 멈춘 새벽입니다", japanese: "時が止まった夜明けに", english: "In the Silent Dawn" };
     } else if (hour >= 6 && hour < 12) {
-      return { korean: "우아한 아침이 시작됩니다", english: "An Elegant Morning Begins" };
+      return { korean: "우아한 아침이 시작됩니다", japanese: "優雅な朝が始まります", english: "An Elegant Morning Begins" };
     } else if (hour >= 12 && hour < 18) {
-      return { korean: "특별한 오후를 준비했어요", english: "A Special Afternoon Awaits" };
+      return { korean: "특별한 오후를 준비했어요", japanese: "特別な午後をご用意しました", english: "A Special Afternoon Awaits" };
     } else if (hour >= 18 && hour < 22) {
-      return { korean: "감성적인 저녁이네요", english: "An Enchanting Evening" };
+      return { korean: "감성적인 저녁이네요", japanese: "情感あふれる夜ですね", english: "An Enchanting Evening" };
     } else {
-      return { korean: "시간이 멈추는 밤입니다", english: "Where Time Stops Tonight" };
+      return { korean: "시간이 멈추는 밤입니다", japanese: "時が溶ける夜に", english: "Where Time Stops Tonight" };
     }
   };
 
@@ -209,10 +209,10 @@ export default function WelcomeAnimation({ user, onComplete }) {
         zIndex: 10,
         textAlign: 'center',
       }}>
-        {greeting.korean}
+        {lang === "ja" ? greeting.japanese : lang === "en" ? greeting.english : greeting.korean}
       </div>
 
-      {/* 영문 인사말 */}
+      {/* 영문 인사말 (부제) */}
       <div style={{
         fontFamily: 'Italiana, serif',
         fontSize: 'min(11px, 2.5vw)',

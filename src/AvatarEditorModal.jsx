@@ -12,11 +12,17 @@ const AvatarEditorModal = ({
   setTempUploadedImg, 
   onClose, 
   onApply, 
-  onRandom 
+  onRandom,
+  t = {} 
 }) => {
   const fileInputRef = useRef(null);
   // ★ [신규] 업로드 진행 상태 - 사용자에게 로딩 표시하고 중복 클릭 방지
   const [uploading, setUploading] = useState(false);
+  
+  // 언어 판별
+  const isKo = t.home === "홈페이지";
+  const isJa = t.home === "ホーム";
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
 
   // ★ [수정] 파일 업로드 처리
   // 기존: FileReader로 Base64 dataURL 변환 → Firestore에 그대로 저장
@@ -29,7 +35,7 @@ const AvatarEditorModal = ({
 
     // 파일 크기 사전 체크 (Cloudinary 무료 플랜 안전 마진: 10MB)
     if (file.size > 10 * 1024 * 1024) {
-      alert("이미지 크기는 10MB 이하여야 합니다.");
+      alert(tr("이미지 크기는 10MB 이하여야 합니다.", "画像サイズは10MB以下でお願いします。", "Image size must be under 10MB."));
       // input value 초기화 (같은 파일 다시 선택 가능하게)
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
@@ -37,7 +43,7 @@ const AvatarEditorModal = ({
 
     // 이미지 파일 타입인지 한번 더 체크 (accept="image/*" 우회 방지)
     if (!file.type.startsWith("image/")) {
-      alert("이미지 파일만 업로드 가능합니다.");
+      alert(tr("이미지 파일만 업로드 가능합니다.", "画像ファイルのみアップロード可能です。", "Only image files allowed."));
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
@@ -50,7 +56,7 @@ const AvatarEditorModal = ({
       setTempSelectedIdx(-1); // 캐릭터 선택은 해제 (사진이 우선)
     } catch (err) {
       console.error("Cloudinary 업로드 실패:", err);
-      alert("이미지 업로드 실패: " + err.message);
+      alert(tr("이미지 업로드 실패: ", "アップロード失敗: ", "Upload failed: ") + err.message);
     } finally {
       setUploading(false);
       // input value 초기화 - 같은 파일을 다시 선택했을 때도 onChange가 발생하도록
@@ -61,7 +67,7 @@ const AvatarEditorModal = ({
   return (
     <div style={myStyles.avatarPicker}>
       <div style={myStyles.pickerHeader}>
-        <span style={{color: '#fff', fontWeight: '800', fontSize: '18px'}}>아바타 에디터</span>
+        <span style={{color: '#fff', fontWeight: '800', fontSize: '18px'}}>{tr("아바타 에디터", "アバターエディター", "Avatar Editor")}</span>
         <div style={{display:'flex', gap: '10px'}}>
           <button onClick={onRandom} style={myStyles.randomBtn} disabled={uploading}>🎲 랜덤</button>
           <button onClick={onClose} style={myStyles.closeBtn} disabled={uploading}>×</button>
@@ -137,7 +143,7 @@ const AvatarEditorModal = ({
         }}
         disabled={uploading}
       >
-        {uploading ? "⏳ 업로드 중..." : "📷 커스텀 사진 업로드"}
+        {uploading ? tr("⏳ 업로드 중...", "⏳ アップロード中...", "⏳ Uploading...") : tr("📷 커스텀 사진 업로드", "📷 カスタム写真アップロード", "📷 Upload Custom Photo")}
       </button>
 
       <button 
@@ -149,7 +155,7 @@ const AvatarEditorModal = ({
         }}
         disabled={uploading}
       >
-        {uploading ? "잠시만요..." : "완료"}
+        {uploading ? tr("잠시만요...", "少々お待ちを...", "Please wait...") : tr("완료", "完了", "Done")}
       </button>
     </div>
   );

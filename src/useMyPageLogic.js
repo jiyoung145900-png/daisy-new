@@ -15,7 +15,8 @@ import {
 
 const broadcast = new BroadcastChannel("daisy_global_channel");
 
-export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
+export const useMyPageLogic = (user, onUpdatePoint, isKo, isJa = false) => {
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
   const [userInfo, setUserInfo] = useState(user || null);
   const [globalSettings, setGlobalSettings] = useState({}); // ✅ [추가됨] 시스템 전역 설정(텔레그램 등)을 담을 상태
 
@@ -228,7 +229,7 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
         voices.find((v) => v.lang.includes("ko"));
 
       if (femaleVoice) utterance.voice = femaleVoice;
-      utterance.lang = isKo ? "ko-KR" : "en-US";
+      utterance.lang = isKo ? "ko-KR" : isJa ? "ja-JP" : "en-US";
       utterance.rate = 1.1;
       utterance.pitch = 1.0;
 
@@ -240,7 +241,7 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
   // Deposit Request
   const requestDeposit = async (name, amount) => {
     if (!name.trim() || !amount)
-      return alert(isKo ? "정보를 입력해주세요." : "Enter info.");
+      return alert(tr("정보를 입력해주세요.", "情報を入力してください。", "Enter info."));
     try {
       await addDoc(collection(db, "deposit_requests"), {
         userId: userInfo.id,
@@ -250,8 +251,8 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
         status: "pending",
         timestamp: new Date().toISOString(),
       });
-      playFemaleVoice(isKo ? "입금이 신청되었습니다." : "Deposit requested.");
-      alert(isKo ? "신청 완료!" : "Done!");
+      playFemaleVoice(tr("입금이 신청되었습니다.", "入金申請が完了しました。", "Deposit requested."));
+      alert(tr("신청 완료!", "申請完了!", "Done!"));
       return true;
     } catch (e) {
       alert("Error: " + e.message);
@@ -268,13 +269,13 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
 
     // 프론트 1차 검증 (트랜잭션에서 다시 재검증)
     if (!withdrawAmount || withdrawAmount <= 0)
-      return alert(isKo ? "올바른 금액을 입력해주세요." : "Enter valid amount");
+      return alert(tr("올바른 금액을 입력해주세요.", "正しい金額を入力してください。", "Enter valid amount"));
     if (withdrawAmount > (userInfo.diamond || 0))
-      return alert(isKo ? "잔액 부족" : "Not enough balance");
+      return alert(tr("잔액 부족", "残高不足", "Not enough balance"));
 
     // 은행 정보 유효성 체크
     if (!bankInfo?.bank?.trim() || !bankInfo?.account?.trim() || !bankInfo?.holder?.trim()) {
-      return alert(isKo ? "은행 정보를 모두 입력해주세요." : "Please fill in all bank info.");
+      return alert(tr("은행 정보를 모두 입력해주세요.", "銀行情報をすべて入力してください。", "Please fill in all bank info."));
     }
 
     try {
@@ -316,14 +317,14 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
         });
       });
 
-      playFemaleVoice(isKo ? "출금이 신청되었습니다." : "Withdrawal requested.");
-      alert(isKo ? "신청 완료! 신청 금액은 심사 완료까지 홀딩됩니다." : "Done! Amount held until reviewed.");
+      playFemaleVoice(tr("출금이 신청되었습니다.", "出金申請が完了しました。", "Withdrawal requested."));
+      alert(tr("신청 완료! 신청 금액은 심사 완료까지 홀딩됩니다.", "申請完了!審査完了までホールドされます。", "Done! Amount held until reviewed."));
       return true;
     } catch (e) {
       if (e.message === "INSUFFICIENT_BALANCE") {
-        alert(isKo ? "잔액 부족" : "Not enough balance");
+        alert(tr("잔액 부족", "残高不足", "Not enough balance"));
       } else if (e.message === "USER_NOT_FOUND") {
-        alert(isKo ? "회원 정보를 찾을 수 없습니다." : "User not found");
+        alert(tr("회원 정보를 찾을 수 없습니다.", "会員情報が見つかりません。", "User not found"));
       } else {
         alert("Error: " + e.message);
       }
@@ -338,25 +339,23 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
     const nick = (newNickname || "").trim();
 
     if (!nick) {
-      alert(isKo ? "닉네임을 입력해주세요." : "Please enter a nickname.");
+      alert(tr("닉네임을 입력해주세요.", "ニックネームを入力してください。", "Please enter a nickname."));
       return false;
     }
     if (nick.length < 2 || nick.length > 10) {
-      alert(isKo ? "닉네임은 2자 이상 10자 이하여야 합니다." : "Nickname must be 2–10 characters.");
+      alert(tr("닉네임은 2자 이상 10자 이하여야 합니다.", "ニックネームは2〜10文字で入力してください。", "Nickname must be 2–10 characters."));
       return false;
     }
     // 한글/영문/숫자만 허용 (공백/특수문자 불가)
     if (!/^[가-힣a-zA-Z0-9]+$/.test(nick)) {
-      alert(isKo
-        ? "닉네임은 한글, 영문, 숫자만 사용 가능합니다."
-        : "Only Korean, English letters and numbers are allowed.");
+      alert(tr("닉네임은 한글, 영문, 숫자만 사용 가능합니다.", "ニックネームは韓国語、英語、数字のみ使用可能です。", "Only Korean, English letters and numbers are allowed."));
       return false;
     }
 
     try {
       const userRef = doc(db, "users", userInfo.id);
       await updateDoc(userRef, { nickname: nick, updatedAt: serverTimestamp() });
-      alert(isKo ? "닉네임이 변경되었습니다." : "Nickname updated.");
+      alert(tr("닉네임이 변경되었습니다.", "ニックネームを変更しました。", "Nickname updated."));
       return true;
     } catch (e) {
       alert("Error: " + e.message);
@@ -367,14 +366,14 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
   // Update Password (users/{id}) - 이전 비밀번호 체크 제거됨
   const updatePassword = async (newPw, confirmPw) => {
     if (!newPw || newPw !== confirmPw)
-      return alert(isKo ? "입력 정보를 확인해주세요." : "Check inputs.");
+      return alert(tr("입력 정보를 확인해주세요.", "入力情報をご確認ください。", "Check inputs."));
     if (newPw.length < 4)
-      return alert(isKo ? "비밀번호는 4자 이상이어야 합니다." : "Password must be at least 4 characters.");
+      return alert(tr("비밀번호는 4자 이상이어야 합니다.", "パスワードは4文字以上でお願いします。", "Password must be at least 4 characters."));
     try {
       const userRef = doc(db, "users", userInfo.id);
       await updateDoc(userRef, { password: newPw, updatedAt: serverTimestamp() });
 
-      alert(isKo ? "비밀번호 변경 완료" : "Success");
+      alert(tr("비밀번호 변경 완료", "パスワード変更完了", "Success"));
       return true;
     } catch (e) {
       alert("Error: " + e.message);
@@ -399,7 +398,7 @@ export const useMyPageLogic = (user, onUpdatePoint, isKo) => {
 
       if (onLocalUpdate) onLocalUpdate(img, idx);
 
-      alert(isKo ? "프로필 변경 완료" : "Updated");
+      alert(tr("프로필 변경 완료", "プロフィール変更完了", "Updated"));
       return true;
     } catch (e) {
       alert("Error: " + e.message);

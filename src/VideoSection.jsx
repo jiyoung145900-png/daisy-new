@@ -17,6 +17,8 @@ export default function VideoSection({
   const timerRef = useRef(null);
 
   const isKo = t.home === "홈페이지";
+  const isJa = t.home === "ホーム";
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
 
   const catTranslation = {
     "ALL": "ALL",
@@ -99,13 +101,13 @@ export default function VideoSection({
         : `https://t.me/${telegramLink.replace(/^@/, "")}`;
       window.open(url, "_blank");
     } else {
-      alert(isKo ? "관리자에게 문의해주세요." : "Please contact the administrator.");
+      alert(tr("관리자에게 문의해주세요.", "管理者にお問い合わせください。", "Please contact the administrator."));
     }
   };
 
   return (
     <div style={s.pagePadding}>
-      <h2 style={s.tabDisplayTitle}>{isKo ? "프리미엄 갤러리" : "PREMIUM GALLERY"}</h2>
+      <h2 style={s.tabDisplayTitle}>{tr("프리미엄 갤러리", "プレミアムギャラリー", "PREMIUM GALLERY")}</h2>
 
       {/* 카테고리 바 */}
       <div style={s.videoCategoryBar}>
@@ -134,19 +136,19 @@ export default function VideoSection({
                 />
                 <div style={s.playOverlay}>
                   <div style={s.playIcon}>▶</div>
-                  <div style={s.playText}>{isKo ? "재생" : "PLAY"}</div>
+                  <div style={s.playText}>{tr("재생", "再生", "PLAY")}</div>
                 </div>
               </div>
               <div style={s.videoDesc}>
                 <span style={s.descBadge}>EXCLUSIVE</span>
                 <p style={s.descText}>
-                  {vid.description || (isKo ? `프리미엄 ${vid.category} 쇼` : `PREMIUM ${getCatName(vid.category)} SHOW`)}
+                  {vid.description || (isKo ? `프리미엄 ${vid.category} 쇼` : isJa ? `プレミアム ${getCatName(vid.category)} ショー` : `PREMIUM ${getCatName(vid.category)} SHOW`)}
                 </p>
               </div>
             </div>
           ))
         ) : (
-          <div style={s.noData}>{isKo ? "해당 카테고리의 영상이 준비 중입니다." : "Videos in this category are coming soon."}</div>
+          <div style={s.noData}>{tr("해당 카테고리의 영상이 준비 중입니다.", "このカテゴリの動画は準備中です。", "Videos in this category are coming soon.")}</div>
         )}
       </div>
 
@@ -168,7 +170,7 @@ export default function VideoSection({
           style={s.fullOverlay} 
           onClick={closeFull}
         >
-          <button style={s.closeFull} onClick={closeFull}>✕ {isKo ? "닫기" : "CLOSE"}</button>
+          <button style={s.closeFull} onClick={closeFull}>✕ {tr("닫기", "閉じる", "CLOSE")}</button>
           <div style={s.fullContent} onClick={e => e.stopPropagation()}>
             <video 
               ref={videoRef}
@@ -186,18 +188,20 @@ export default function VideoSection({
                 <div style={s.contactBox}>
                   <div style={s.contactIcon}>🔒</div>
                   <h3 style={s.contactTitle}>
-                    {isKo ? "미리보기 종료" : "PREVIEW ENDED"}
+                    {tr("미리보기 종료", "プレビュー終了", "PREVIEW ENDED")}
                   </h3>
                   <p style={s.contactText}>
                     {isKo 
                       ? "전체 영상은 관리자에게 문의해주세요." 
+                      : isJa
+                      ? "全編動画は管理者へお問い合わせください。"
                       : "For full video access, please contact the administrator."}
                   </p>
                   <button style={s.contactBtn} onClick={handleContactClick}>
-                    {isKo ? "관리자 문의" : "CONTACT ADMIN"}
+                    {tr("관리자 문의", "管理者へ問い合わせ", "CONTACT ADMIN")}
                   </button>
                   <button style={s.contactCloseBtn} onClick={closeFull}>
-                    {isKo ? "닫기" : "CLOSE"}
+                    {tr("닫기", "閉じる", "CLOSE")}
                   </button>
                 </div>
               </div>

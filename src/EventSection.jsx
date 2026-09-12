@@ -23,6 +23,9 @@ export default function EventSection({
   const scrollRef = useRef(null); 
 
   const isKo = t && t.home === "홈페이지";
+  const isJa = t && t.home === "ホーム";
+  // ★ [신규] 3개 언어 helper - lang(ko, ja, en) 자동 판별
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
 
   // ★ [헬퍼] 아이템 표시 컴포넌트 - 이미지 아이콘 + 텍스트
   //   winItems 같은 문자열 "/icons/instagram.png 인스타" 형태 파싱해서 이미지+텍스트 렌더링
@@ -39,7 +42,7 @@ export default function EventSection({
     }
 
     const targetItem = allItems.find(item => item.name === namePart);
-    const displayName = targetItem ? (isKo ? targetItem.name : targetItem.nameEn) : namePart;
+    const displayName = targetItem ? (isKo ? targetItem.name : (isJa ? (targetItem.nameJa || targetItem.nameEn) : targetItem.nameEn)) : namePart;
     const iconSrc = targetItem?.icon || iconPart;
     const isImage = targetItem?.isImage || iconPart.startsWith("/") || iconPart.startsWith("http");
 
@@ -70,7 +73,7 @@ export default function EventSection({
     }
     const targetItem = allItems.find(item => item.name === pureName);
     if (targetItem) {
-      const localizedName = isKo ? targetItem.name : targetItem.nameEn;
+      const localizedName = isKo ? targetItem.name : (isJa ? (targetItem.nameJa || targetItem.nameEn) : targetItem.nameEn);
       return icon + localizedName;
     }
     return inputName;
@@ -260,9 +263,9 @@ export default function EventSection({
 
     const perAmount = parseInt(betAmount);
     const totalCost = perAmount * selectedItems.length;
-    if (selectedItems.length === 0) return alert(isKo ? "아이템을 선택해주세요." : "Please select items.");
-    if (!perAmount || perAmount <= 0) return alert(isKo ? "금액을 입력해주세요." : "Please enter amount.");
-    if (totalCost > displayPoint) return alert(isKo ? "보유 다이아를 확인해주세요." : "Check your diamond balance.");
+    if (selectedItems.length === 0) return alert(tr("아이템을 선택해주세요.", "アイテムを選択してください。", "Please select items."));
+    if (!perAmount || perAmount <= 0) return alert(tr("금액을 입력해주세요.", "金額を入力してください。", "Please enter amount."));
+    if (totalCost > displayPoint) return alert(tr("보유 다이아를 확인해주세요.", "所持ダイヤをご確認ください。", "Check your diamond balance."));
 
     // ★ 처리 시작 락 - 이후 클릭은 위 if (isDonating) return에서 차단됨
     setIsDonating(true);
@@ -321,8 +324,8 @@ export default function EventSection({
       console.error("베팅 처리 실패 (다이아 변동 없음):", e); 
       alert(
         e?.code === "INSUFFICIENT_BALANCE"
-          ? (isKo ? "보유 다이아를 확인해주세요." : "Check your diamond balance.")
-          : (isKo ? "베팅 처리 중 오류가 발생했습니다. 다이아는 차감되지 않았습니다." : "Error processing bet. Your diamonds were not deducted.")
+          ? tr("보유 다이아를 확인해주세요.", "所持ダイヤをご確認ください。", "Check your diamond balance.")
+          : tr("베팅 처리 중 오류가 발생했습니다. 다이아는 차감되지 않았습니다.", "ベット処理中にエラーが発生しました。ダイヤは差し引かれていません。", "Error processing bet. Your diamonds were not deducted.")
       );
       // ★ 트랜잭션이 실패하면 Firestore에는 애초에 아무 변화가 없으므로
       //   화면 값도 안전하게 베팅 시도 전 값으로 되돌릴 수 있음 (실제 잔액과 항상 일치)
@@ -388,8 +391,8 @@ export default function EventSection({
 
         {/* 아이템 그리드 */}
         <div style={localDs.sectionLabel}>
-          <span style={localDs.labelBar} /> {isKo ? "아이템 선택" : "Select Item"} 
-          <small style={localDs.subLabel}>{isKo ? `최근 ${totalHistory.length}회 통계` : `Last ${totalHistory.length} Stats`}</small>
+          <span style={localDs.labelBar} /> {tr("아이템 선택", "アイテム選択", "Select Item")} 
+          <small style={localDs.subLabel}>{tr(`최근 ${totalHistory.length}회 통계`, `直近 ${totalHistory.length}回の統計`, `Last ${totalHistory.length} Stats`)}</small>
         </div>
         <div style={localDs.grid}>
           {allItems.map((item) => {
@@ -410,8 +413,8 @@ export default function EventSection({
                   )}
                 </div>
                 <div style={localDs.itemInfoText}>
-                  <span style={localDs.itemName}>{isKo ? item.name : item.nameEn}</span>
-                  <span style={localDs.itemDesc}>{isKo ? item.desc : item.descEn}</span>
+                  <span style={localDs.itemName}>{isKo ? item.name : (isJa ? (item.nameJa || item.nameEn) : item.nameEn)}</span>
+                  <span style={localDs.itemDesc}>{isKo ? item.desc : (isJa ? (item.descJa || item.descEn) : item.descEn)}</span>
                 </div>
                 {isSelected && <div style={{...localDs.checkBadge, background: item.color}}>✓</div>}
               </motion.div>
@@ -423,10 +426,10 @@ export default function EventSection({
         <div style={localDs.tabSection}>
           <div style={localDs.tabHeader}>
             <button style={{...localDs.tabBtn, color: activeTab === 'mine' ? '#fff' : '#666', borderBottom: activeTab === 'mine' ? '2px solid #ffb347' : '2px solid transparent'}} onClick={() => setActiveTab('mine')}>
-              {isKo ? "내 후원 기록" : "My History"}
+              {tr("내 후원 기록", "応援履歴", "My History")}
             </button>
             <button style={{...localDs.tabBtn, color: activeTab === 'total' ? '#fff' : '#666', borderBottom: activeTab === 'total' ? '2px solid #ffb347' : '2px solid transparent'}} onClick={() => setActiveTab('total')}>
-              {isKo ? "회차별 결과" : "All Results"}
+              {tr("회차별 결과", "回別結果", "All Results")}
             </button>
           </div>
           <div style={localDs.tabContent}>
@@ -437,7 +440,7 @@ export default function EventSection({
               .map((h, i) => (
               <div key={`${h.round}-${i}`} style={localDs.histItem}>
                 <div style={localDs.histLeft}>
-                  <div style={localDs.histRound}>{h.round}{isKo ? "회차" : " Rd"}</div>
+                  <div style={localDs.histRound}>{h.round}{tr("회차", "回", " Rd")}</div>
                   <div style={localDs.histDetail}>{h.date}</div>
                 </div>
 
@@ -456,14 +459,14 @@ return (
           color: isWin ? '#34D399' : '#FB7185',
           background: isWin ? 'rgba(52,211,153,0.12)' : 'rgba(251,113,133,0.12)'
         }}>
-          {isWin ? (isKo ? "👑 승리" : "👑 WIN") : (isKo ? "💔 패배" : "💔 LOSE")}
+          {isWin ? tr("👑 승리", "👑 勝利", "👑 WIN") : tr("💔 패배", "💔 敗北", "💔 LOSE")}
         </span>
 
         {/* 내 선택과 당첨 결과를 가로로 나란히 정렬하는 컨테이너 */}
         <div style={localDs.histRowContainer}>
           {h.selected && h.selected.length > 0 && (
             <div style={localDs.histMyPick}>
-              <span style={localDs.histSubLabel}>{isKo ? "내 선택" : "My pick"}</span>
+              <span style={localDs.histSubLabel}>{tr("내 선택", "自分の選択", "My pick")}</span>
               <span style={localDs.histItemText}>
                 {h.selected.map((name, idx) => (
                   <React.Fragment key={idx}>
@@ -475,7 +478,7 @@ return (
             </div>
           )}
           <div style={localDs.histWinIcons}>
-            <span style={localDs.histSubLabel}>{isKo ? "당첨" : "Winner"}</span>
+            <span style={localDs.histSubLabel}>{tr("당첨", "当選", "Winner")}</span>
             <span style={localDs.histItemText}>
               {roundWinItems.map((str, idx) => (
                 <React.Fragment key={idx}>
@@ -489,7 +492,7 @@ return (
       </>
     ) : (
       <span style={localDs.histNoData}>
-        {isKo ? "결과 없음" : "No result"}
+        {tr("결과 없음", "結果なし", "No result")}
       </span>
     )}
   </div>
@@ -520,8 +523,8 @@ return (
             {(activeTab === 'mine' ? myHistory : totalHistory).length === 0 && (
               <div style={localDs.emptyText}>
                 {activeTab === 'total'
-                  ? (isKo ? "기록 불러오는 중..." : "Loading records...")
-                  : (isKo ? "기록이 없습니다." : "No records found.")}
+                  ? tr("기록 불러오는 중...", "履歴を読み込み中...", "Loading records...")
+                  : tr("기록이 없습니다.", "履歴がありません。", "No records found.")}
               </div>
             )}
           </div>
@@ -538,7 +541,7 @@ return (
               <div style={localDs.pendingBox}>
                 <div style={localDs.pendingHeader}>
                   <span style={{color:'#ffb347', fontWeight:900}}>
-                    {round}{isKo ? "회차 참여 중" : " Round Joined"}
+                    {round}{tr("회차 참여 중", "回参加中", " Round Joined")}
                   </span>
                   <span style={localDs.pendingCounter}>
                     {pendingCount}/{maxBetsPerRound}
@@ -576,12 +579,12 @@ return (
                 {selectedItems.length > 0 && (
                   <div style={localDs.panelTop}>
                     <span style={localDs.selectionText}>
-                      {isKo ? "선택됨:" : "Selected:"} <b style={{color: '#ffb347'}}>
+                      {tr("선택됨:", "選択:", "Selected:")} <b style={{color: '#ffb347'}}>
                         {selectedItems.map(name => getLocalizedText(name)).join(", ")}
                       </b>
                     </span>
                     <button style={localDs.clearBtn} onClick={() => { setSelectedItems([]); setBetAmount(""); }}>
-                      {isKo ? "초기화" : "Reset"}
+                      {tr("초기화", "リセット", "Reset")}
                     </button>
                   </div>
                 )}
@@ -597,8 +600,8 @@ return (
                         style={localDs.mainInput}
                         placeholder={
                           selectedItems.length === 0
-                            ? (isKo ? "아이템 선택 후 금액 입력" : "Select item first")
-                            : (isKo ? "금액 입력" : "Enter amount")
+                            ? tr("아이템 선택 후 금액 입력", "アイテム選択後、金額入力", "Select item first")
+                            : tr("금액 입력", "金額入力", "Enter amount")
                         }
                         disabled={selectedItems.length === 0}
                       />
@@ -612,7 +615,7 @@ return (
                         disabled={isDonating || !betAmount || selectedItems.length === 0}
                       >
                         {isDonating
-                          ? (isKo ? "처리 중..." : "PROCESSING...")
+                          ? tr("처리 중...", "処理中...", "PROCESSING...")
                           : (isKo 
                               ? (pendingCount === 0 ? "베팅" : "추가베팅") 
                               : (pendingCount === 0 ? "BET" : "ADD BET"))}
@@ -622,9 +625,8 @@ return (
                     {/* 예상 순수익 표시 (2배 지급 = 순수익 = 베팅액 그대로) */}
                     {currentTotalCost > 0 && (
                       <div style={localDs.totalCostBar}>
-                        {isKo ? "베팅 합계:" : "Total Bet:"} <b style={{color: '#888'}}>{currentTotalCost.toLocaleString()} DIA</b>
+                        {tr("베팅 합계:", "ベット合計:", "Total Bet:")} <b style={{color: '#888'}}>{currentTotalCost.toLocaleString()} DIA</b>
                         <span style={{marginLeft: 10, color: '#888'}}>
-                          → {isKo ? "당첨시 순수익" : "Net Profit"}: +{currentTotalCost.toLocaleString()}
                         </span>
                       </div>
                     )}
@@ -686,8 +688,8 @@ return (
                 transition={{ duration: 0.45, delay: 0.1 }}
               >
                 {showResult.isWin
-                  ? (isKo ? "🎉 당첨 성공!" : "🎉 YOU WIN!")
-                  : (isKo ? "😢 아쉬워요" : "😢 YOU LOSE")}
+                  ? tr("🎉 당첨 성공!", "🎉 当選成功!", "🎉 YOU WIN!")
+                  : tr("😢 아쉬워요", "😢 残念...", "😢 YOU LOSE")}
               </motion.div>
 
               <div style={{fontSize: '50px', margin: '20px 0', display: 'flex', justifyContent: 'center', gap: '12px', alignItems: 'center'}}>
@@ -762,16 +764,16 @@ return (
 
               {/* 참고 정보 (총 베팅액만 표시 - 총 지급액은 혼란 방지를 위해 숨김) */}
               <div style={localDs.modalHint}>
-                {isKo ? "총 베팅:" : "Total Bet:"} {showResult.betTotal.toLocaleString()} DIA
+                {tr("총 베팅:", "総ベット:", "Total Bet:")} {showResult.betTotal.toLocaleString()} DIA
                 {showResult.betCount > 1 && (
                   <span style={{marginLeft: 8, color: '#666'}}>
-                    ({showResult.betCount}{isKo ? "회 베팅" : " bets"})
+                    ({showResult.betCount}{tr("회 베팅", "回ベット", " bets")})
                   </span>
                 )}
               </div>
 
               <button style={localDs.modalCloseBtn} onClick={() => setShowResult(null)}>
-                {isKo ? "확인" : "CLOSE"}
+                {tr("확인", "確認", "CLOSE")}
               </button>
             </motion.div>
           </motion.div>

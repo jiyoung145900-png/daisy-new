@@ -58,37 +58,57 @@ export default function LandingPage({
   const [isExpanded, setIsExpanded] = useState(false); // ★ [신규] 로그인 카드 접힘/펼침 상태
   const [isLoading, setIsLoading] = useState(false); // ★ [신규] 로그인/회원가입 처리 중 상태
 
-  // 언어 판별 (t.home이 "홈페이지"면 한국어)
-  const isKo = t && t.home === "홈페이지";
+  // ★ [수정] App.jsx의 lang props를 직접 사용 (LandingPage 자체 lang state 제거)
+  //   → App.jsx의 국기 스위처와 완벽 연동
+  const currentLang = lang || "ko";
+  const isKo = currentLang === "ko";
+  const isJa = currentLang === "ja";
+  const isEn = currentLang === "en";
 
-  // ★ [수정] 한글/영어 자동 전환 - isKo 값에 따라 문구 자동 변경
+  // ★ [수정] 3개 언어 텍스트 - lang 변수로 자동 전환
   const texts = useMemo(
-    () => (isKo ? {
-      // 한글 버전
-      fillAll: "모든 정보를 입력해주세요.",
-      idExists: "이미 존재하는 아이디입니다.",
-      invalidInvite: "잘못된 초대 코드입니다.",
-      needIdPw: "아이디와 비밀번호를 입력하세요.",
-      wrongPw: "비밀번호가 일치하지 않습니다.",
-      idNotFound: "존재하지 않는 아이디입니다.",
-      signupOk: "가입 완료! 로그인해주세요.",
-      enterInvite: "초대 코드 입력",
-      newHere: "처음이신가요? 회원가입",
-      haveAccount: "계정이 있으신가요? 로그인",
-    } : {
-      // 영어 버전
-      fillAll: "Please fill all info.",
-      idExists: "ID already exists.",
-      invalidInvite: "Invalid invitation code.",
-      needIdPw: "Enter ID & Password.",
-      wrongPw: "Wrong Password.",
-      idNotFound: "ID not found.",
-      signupOk: "Signup Success! Please Login.",
-      enterInvite: "Enter Invitation Code",
-      newHere: "New here? Sign Up",
-      haveAccount: "Have an account? Login",
-    }),
-    [isKo]
+    () => {
+      const dict = {
+        ko: {
+          fillAll: "모든 정보를 입력해주세요.",
+          idExists: "이미 존재하는 아이디입니다.",
+          invalidInvite: "잘못된 초대 코드입니다.",
+          needIdPw: "아이디와 비밀번호를 입력하세요.",
+          wrongPw: "비밀번호가 일치하지 않습니다.",
+          idNotFound: "존재하지 않는 아이디입니다.",
+          signupOk: "가입 완료! 로그인해주세요.",
+          enterInvite: "초대 코드 입력",
+          newHere: "처음이신가요? 회원가입",
+          haveAccount: "계정이 있으신가요? 로그인",
+        },
+        en: {
+          fillAll: "Please fill all info.",
+          idExists: "ID already exists.",
+          invalidInvite: "Invalid invitation code.",
+          needIdPw: "Enter ID & Password.",
+          wrongPw: "Wrong Password.",
+          idNotFound: "ID not found.",
+          signupOk: "Signup Success! Please Login.",
+          enterInvite: "Enter Invitation Code",
+          newHere: "New here? Sign Up",
+          haveAccount: "Have an account? Login",
+        },
+        ja: {
+          fillAll: "すべての情報を入力してください。",
+          idExists: "既に存在するIDです。",
+          invalidInvite: "無効な招待コードです。",
+          needIdPw: "IDとパスワードを入力してください。",
+          wrongPw: "パスワードが一致しません。",
+          idNotFound: "存在しないIDです。",
+          signupOk: "登録完了！ログインしてください。",
+          enterInvite: "招待コードを入力",
+          newHere: "初めての方はこちら",
+          haveAccount: "アカウントをお持ちの方はログイン",
+        }
+      };
+      return dict[currentLang] || dict.en;
+    },
+    [currentLang]
   );
 
   const signup = async () => {
@@ -601,7 +621,7 @@ export default function LandingPage({
               display: "flex",
               gap: "0.05em",
             }}>
-              {(isKo ? "시간이 멈추는 곳" : "Where time slows").split("").map((char, idx) => (
+              {(isKo ? "시간이 멈추는 곳" : isJa ? "時が溶ける、あの場所へ" : "Where time slows").split("").map((char, idx) => (
                 <span 
                   key={idx}
                   style={{
@@ -621,7 +641,7 @@ export default function LandingPage({
             }} />
           </div>
           <h1 style={landingStyles.mainText}>
-            {(isKo ? "BANADA에 오신 것을 환영합니다" : "Welcome to BANADA").split("").map((char, idx) => (
+            {(isKo ? "BANADA에 오신 것을 환영합니다" : isJa ? "BANADAへようこそ" : "Welcome to BANADA").split("").map((char, idx) => (
               <span 
                 key={idx}
                 style={{
@@ -653,7 +673,7 @@ export default function LandingPage({
                 >
                   <span style={landingStyles.collapsedIcon}>🔒</span>
                   <span style={landingStyles.collapsedText}>
-                    {isKo ? "로그인 / 회원가입" : "LOGIN / SIGN UP"}
+                    {isKo ? "로그인 / 회원가입" : isJa ? "ログイン / 会員登録" : "LOGIN / SIGN UP"}
                   </span>
                   <span style={landingStyles.collapsedArrow}>▼</span>
                 </motion.button>
@@ -749,7 +769,7 @@ export default function LandingPage({
                           fontSize: "16px",
                           marginBottom: "6px",
                         }}
-                        placeholder={isKo ? "📱 텔레그램 아이디 (선택)" : "📱 Telegram ID (Optional)"}
+                        placeholder={isKo ? "📱 텔레그램 아이디 (선택)" : isJa ? "📱 テレグラムID (任意)" : "📱 Telegram ID (Optional)"}
                         value={tele}
                         onChange={(e) => setTele(e.target.value)}
                         onKeyDown={handleKeyDown}
@@ -764,6 +784,8 @@ export default function LandingPage({
                       }}>
                         💡 {isKo 
                           ? "신규 이벤트, 프로모션 소식을 가장 먼저 안내받으실 수 있어요"
+                          : isJa 
+                          ? "新規イベント、プロモーション情報をいち早くお知らせします"
                           : "Be the first to hear about new events and promotions"}
                       </div>
                     </div>
@@ -788,7 +810,7 @@ export default function LandingPage({
                   >
                     {isLoading && <span className="lp-spinner" />}
                     {isLoading 
-                      ? (isKo ? "처리 중..." : "Processing...")
+                      ? (isKo ? "처리 중..." : isJa ? "処理中..." : "Processing...")
                       : (mode === "login" ? t.login : t.signup)}
                   </button>
 

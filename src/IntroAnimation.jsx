@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
  * [3.5초] 페이드아웃 → 랜딩으로 자연스러운 전환
  * [4.0초] 완료
  */
-export default function IntroAnimation({ logo, onComplete }) {
+export default function IntroAnimation({ logo, onComplete, lang = "ko" }) {
   const [stage, setStage] = useState(0);
 
   useEffect(() => {
@@ -32,8 +32,13 @@ export default function IntroAnimation({ logo, onComplete }) {
 
   if (stage === 5) return null;
 
-  // "시간이 멈추는 곳" 글자 배열 (stagger 등장용)
-  const sloganChars = "시간이 멈추는 곳".split("");
+  // "시간이 멈추는 곳" 글자 배열 (stagger 등장용) - 3개 언어
+  const slogan = lang === "ja" 
+    ? "時が溶ける場所"
+    : lang === "en" 
+    ? "Where Time Slows"
+    : "시간이 멈추는 곳";
+  const sloganChars = slogan.split("");
 
   return (
     <div style={{

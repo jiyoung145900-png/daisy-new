@@ -30,7 +30,8 @@ const SubHeader = ({ title, onBack }) => (
 );
 
 // --- 1. 비밀번호 변경 화면 (이전 비밀번호 필드 제거) ---
-export const PasswordView = ({ onBack, isKo, onSubmit, userInfo }) => {
+export const PasswordView = ({ onBack, isKo, isJa, onSubmit, userInfo  }) => {
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
   const [newPw, setNewPw] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
 
@@ -41,19 +42,19 @@ export const PasswordView = ({ onBack, isKo, onSubmit, userInfo }) => {
 
   return (
     <div style={myStyles.container}>
-      <SubHeader title={isKo ? "비밀번호 변경" : "Change Password"} onBack={onBack} />
+      <SubHeader title={isKo ? "비밀번호 변경" : isJa ? "パスワード変更" : "Change Password"} onBack={onBack} />
       <div style={myStyles.formArea}>
         <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>ID</label>
           <input style={myStyles.inputDisabled} value={userInfo.id} disabled />
         </div>
         <div style={{height: 20}} />
-        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "새 비밀번호" : "New Password"}</label>
+        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "새 비밀번호" : isJa ? "新しいパスワード" : "New Password"}</label>
           <input type="password" style={myStyles.input} value={newPw} onChange={(e)=>setNewPw(e.target.value)} />
         </div>
-        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "확인" : "Confirm"}</label>
+        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "확인" : isJa ? "確認" : "Confirm"}</label>
           <input type="password" style={myStyles.input} value={confirmPw} onChange={(e)=>setConfirmPw(e.target.value)} />
         </div>
-        <button style={myStyles.saveBtn} onClick={handleSave}>{isKo ? "저장" : "Save"}</button>
+        <button style={myStyles.saveBtn} onClick={handleSave}>{isKo ? "저장" : isJa ? "保存" : "Save"}</button>
       </div>
     </div>
   );
@@ -66,7 +67,8 @@ export const PasswordView = ({ onBack, isKo, onSubmit, userInfo }) => {
 //   - 2~10자, 한글/영문/숫자만 허용
 //   - 현재 닉네임/아이디를 보여주고 새 닉네임 입력받음
 //   - 실시간 유효성 검사 + 저장 버튼 자동 비활성화
-export const NicknameView = ({ onBack, isKo, onSubmit, userInfo }) => {
+export const NicknameView = ({ onBack, isKo, isJa, onSubmit, userInfo  }) => {
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
   const [nickname, setNickname] = useState(userInfo?.nickname || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -81,10 +83,10 @@ export const NicknameView = ({ onBack, isKo, onSubmit, userInfo }) => {
 
   // 에러 메시지
   let errorMsg = "";
-  if (isTooShort) errorMsg = isKo ? "2자 이상 입력해주세요." : "At least 2 characters.";
-  else if (isTooLong) errorMsg = isKo ? "10자 이하로 입력해주세요." : "Maximum 10 characters.";
-  else if (hasInvalidChar) errorMsg = isKo ? "한글, 영문, 숫자만 사용 가능합니다." : "Only Korean, English and numbers.";
-  else if (isSame) errorMsg = isKo ? "현재 닉네임과 동일합니다." : "Same as current nickname.";
+  if (isTooShort) errorMsg = isKo ? "2자 이상 입력해주세요." : isJa ? "2文字以上入力してください。" : "At least 2 characters.";
+  else if (isTooLong) errorMsg = isKo ? "10자 이하로 입력해주세요." : isJa ? "10文字以下で入力してください。" : "Maximum 10 characters.";
+  else if (hasInvalidChar) errorMsg = isKo ? "한글, 영문, 숫자만 사용 가능합니다." : isJa ? "韓国語、英語、数字のみ使用可能です。" : "Only Korean, English and numbers.";
+  else if (isSame) errorMsg = isKo ? "현재 닉네임과 동일합니다." : isJa ? "現在のニックネームと同じです。" : "Same as current nickname.";
 
   const handleSave = async () => {
     if (!isValid || isSubmitting) return;
@@ -100,7 +102,7 @@ export const NicknameView = ({ onBack, isKo, onSubmit, userInfo }) => {
   return (
     <div style={myStyles.container}>
       <SpinnerStyle />
-      <SubHeader title={isKo ? "닉네임 변경" : "Change Nickname"} onBack={onBack} />
+      <SubHeader title={isKo ? "닉네임 변경" : isJa ? "ニックネーム変更" : "Change Nickname"} onBack={onBack} />
       <div style={myStyles.formArea}>
         <div style={myStyles.inputGroup}>
           <label style={myStyles.inputLabel}>ID</label>
@@ -108,10 +110,10 @@ export const NicknameView = ({ onBack, isKo, onSubmit, userInfo }) => {
         </div>
 
         <div style={myStyles.inputGroup}>
-          <label style={myStyles.inputLabel}>{isKo ? "현재 닉네임" : "Current Nickname"}</label>
+          <label style={myStyles.inputLabel}>{isKo ? "현재 닉네임" : isJa ? "現在のニックネーム" : "Current Nickname"}</label>
           <input
             style={myStyles.inputDisabled}
-            value={userInfo.nickname || (isKo ? "(미설정)" : "(Not set)")}
+            value={userInfo.nickname || (isKo ? "(미설정)" : isJa ? "(未設定)" : "(Not set)")}
             disabled
           />
         </div>
@@ -120,7 +122,7 @@ export const NicknameView = ({ onBack, isKo, onSubmit, userInfo }) => {
 
         <div style={myStyles.inputGroup}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10, paddingLeft:5}}>
-            <label style={{...myStyles.inputLabel, marginBottom:0}}>{isKo ? "새 닉네임" : "New Nickname"}</label>
+            <label style={{...myStyles.inputLabel, marginBottom:0}}>{isKo ? "새 닉네임" : isJa ? "新しいニックネーム" : "New Nickname"}</label>
             <span style={{
               fontSize: 11,
               color: trimmed.length > 10 ? '#ef4444' : '#888',
@@ -134,7 +136,7 @@ export const NicknameView = ({ onBack, isKo, onSubmit, userInfo }) => {
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             disabled={isSubmitting}
-            placeholder={isKo ? "2~10자, 한글/영문/숫자" : "2–10 chars"}
+            placeholder={isKo ? "2~10자, 한글/영문/숫자" : isJa ? "2〜10文字" : "2–10 chars"}
             maxLength={20}
           />
           {errorMsg && (
@@ -144,7 +146,7 @@ export const NicknameView = ({ onBack, isKo, onSubmit, userInfo }) => {
           )}
           {!errorMsg && trimmed.length >= 2 && (
             <div style={{color:'#4cd137', fontSize:11, marginTop:6, paddingLeft:5, fontWeight:600}}>
-              ✓ {isKo ? "사용 가능한 닉네임입니다." : "Available nickname."}
+              ✓ {isKo ? "사용 가능한 닉네임입니다." : isJa ? "使用可能なニックネームです。" : "Available nickname."}
             </div>
           )}
         </div>
@@ -161,8 +163,8 @@ export const NicknameView = ({ onBack, isKo, onSubmit, userInfo }) => {
         >
           {isSubmitting && <span className="mp-spinner" />}
           {isSubmitting
-            ? (isKo ? "저장 중..." : "Saving...")
-            : (isKo ? "저장" : "Save")}
+            ? (isKo ? "저장 중..." : isJa ? "保存中..." : "Saving...")
+            : (isKo ? "저장" : isJa ? "保存" : "Save")}
         </button>
       </div>
     </div>
@@ -170,7 +172,8 @@ export const NicknameView = ({ onBack, isKo, onSubmit, userInfo }) => {
 };
 
 // --- 3. 입금 화면 (기존 유지) ---
-export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
+export const DepositView = ({ onBack, isKo, isJa, onSubmit, onViewHistory  }) => {
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false); // ★ [신규] 신청 처리 중
@@ -189,18 +192,18 @@ export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
   return (
     <div style={myStyles.container}>
       <SpinnerStyle />
-      <SubHeader title={isKo ? "입금 신청" : "Deposit"} onBack={onBack} />
+      <SubHeader title={isKo ? "입금 신청" : isJa ? "入金申請" : "Deposit"} onBack={onBack} />
       <div style={myStyles.formArea}>
         <div style={{display:'flex', justifyContent:'flex-end', marginBottom:20}}>
             <button onClick={onViewHistory} style={{background:'#222', color:'#aaa', border:'1px solid #444', padding:'8px 12px', borderRadius:8, fontSize:13, cursor:'pointer'}}>
-                📄 {isKo ? "나의 입금 신청 내역" : "My History"}
+                📄 {isKo ? "나의 입금 신청 내역" : isJa ? "入金申請履歴" : "My History"}
             </button>
         </div>
 
-        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "입금자명" : "Name"}</label>
+        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "입금자명" : isJa ? "入金者名" : "Name"}</label>
           <input style={myStyles.input} value={name} onChange={(e)=>setName(e.target.value)} disabled={isSubmitting} />
         </div>
-        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "금액" : "Amount"}</label>
+        <div style={myStyles.inputGroup}><label style={myStyles.inputLabel}>{isKo ? "금액" : isJa ? "金額" : "Amount"}</label>
           <input type="number" style={myStyles.input} value={amount} onChange={(e)=>setAmount(e.target.value)} disabled={isSubmitting} />
         </div>
         <button 
@@ -215,8 +218,8 @@ export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
         >
           {isSubmitting && <span className="mp-spinner" />}
           {isSubmitting 
-            ? (isKo ? "신청 중..." : "Submitting...")
-            : (isKo ? "신청하기" : "Request")}
+            ? (isKo ? "신청 중..." : isJa ? "申請中..." : "Submitting...")
+            : (isKo ? "신청하기" : isJa ? "申請する" : "Request")}
         </button>
       </div>
     </div>
@@ -224,7 +227,8 @@ export const DepositView = ({ onBack, isKo, onSubmit, onViewHistory }) => {
 };
 
 // --- 4. 출금 화면 (PIN 필드 삭제) ---
-export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }) => {
+export const WithdrawView = ({ onBack, isKo, isJa, onSubmit, onViewHistory, userInfo  }) => {
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
   const [amount, setAmount] = useState("");
   const [bank, setBank] = useState("");
   const [account, setAccount] = useState("");
@@ -262,18 +266,18 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
   return (
     <div style={myStyles.container}>
       <SpinnerStyle />
-      <SubHeader title={isKo ? "출금 신청" : "Withdraw"} onBack={onBack} />
+      <SubHeader title={isKo ? "출금 신청" : isJa ? "出金申請" : "Withdraw"} onBack={onBack} />
       <div style={myStyles.formArea}>
         <div style={{display:'flex', justifyContent:'flex-end', marginBottom:20}}>
             <button onClick={onViewHistory} style={{background:'#222', color:'#aaa', border:'1px solid #444', padding:'8px 12px', borderRadius:8, fontSize:13, cursor:'pointer'}}>
-                📄 {isKo ? "나의 출금 신청 내역" : "My History"}
+                📄 {isKo ? "나의 출금 신청 내역" : isJa ? "出金申請履歴" : "My History"}
             </button>
         </div>
 
         {/* ★ [신규] 금액 입력 + 보유 다이아 실시간 표시 + 전액 버튼 */}
         <div style={myStyles.inputGroup}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10, paddingLeft:5}}>
-            <label style={{...myStyles.inputLabel, marginBottom:0}}>{isKo ? "금액" : "Amount"}</label>
+            <label style={{...myStyles.inputLabel, marginBottom:0}}>{isKo ? "금액" : isJa ? "金額" : "Amount"}</label>
             <div style={{display:'flex', alignItems:'center', gap:8}}>
               <span style={{fontSize:12, color:'#D4AF37', fontWeight:600}}>
                 💎 {(userInfo?.diamond || 0).toLocaleString()}
@@ -295,7 +299,7 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
                   opacity: (isSubmitting || !userInfo?.diamond) ? 0.4 : 1,
                 }}
               >
-                {isKo ? "전액" : "MAX"}
+                {isKo ? "전액" : isJa ? "全額" : "MAX"}
               </button>
             </div>
           </div>
@@ -305,22 +309,22 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
             value={amount}
             onChange={(e)=>setAmount(e.target.value)}
             disabled={isSubmitting}
-            placeholder={isKo ? "출금할 금액 입력" : "Enter amount"}
+            placeholder={isKo ? "출금할 금액 입력" : isJa ? "出金する金額を入力" : "Enter amount"}
           />
           {amount && Number(amount) > (userInfo?.diamond || 0) && (
             <div style={{color:'#ef4444', fontSize:11, marginTop:6, paddingLeft:5, fontWeight:600}}>
-              ⚠️ {isKo ? "보유 다이아를 초과했습니다" : "Exceeds your balance"}
+              ⚠️ {isKo ? "보유 다이아를 초과했습니다" : isJa ? "所持ダイヤを超えています" : "Exceeds your balance"}
             </div>
           )}
         </div>
 
         <div style={myStyles.inputGroup}>
           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10, paddingLeft:5}}>
-            <label style={{...myStyles.inputLabel, marginBottom:0}}>{isKo ? "은행 정보" : "Bank Info"}</label>
+            <label style={{...myStyles.inputLabel, marginBottom:0}}>{isKo ? "은행 정보" : isJa ? "銀行情報" : "Bank Info"}</label>
             {hasSavedBankInfo && (
               <div style={{display:'flex', alignItems:'center', gap:8}}>
                 <span style={{fontSize:11, color:'#4cd137', fontWeight:'700'}}>
-                  ✓ {isKo ? "저장된 계좌 불러옴" : "Auto-filled"}
+                  ✓ {isKo ? "저장된 계좌 불러옴" : isJa ? "保存済み口座を読込" : "Auto-filled"}
                 </span>
                 <button
                   type="button"
@@ -328,14 +332,14 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
                   disabled={isSubmitting}
                   style={{background:'transparent', border:'1px solid #444', color:'#888', padding:'3px 8px', borderRadius:6, fontSize:11, cursor:'pointer'}}
                 >
-                  {isKo ? "다시 입력" : "Clear"}
+                  {isKo ? "다시 입력" : isJa ? "再入力" : "Clear"}
                 </button>
               </div>
             )}
           </div>
-          <input style={{...myStyles.input, marginBottom:5}} placeholder={isKo ? "은행명" : "Bank Name"} value={bank} onChange={(e)=>setBank(e.target.value)} disabled={isSubmitting}/>
-          <input style={{...myStyles.input, marginBottom:5}} placeholder={isKo ? "계좌번호" : "Account No"} value={account} onChange={(e)=>setAccount(e.target.value)} disabled={isSubmitting}/>
-          <input style={myStyles.input} placeholder={isKo ? "예금주" : "Holder"} value={holder} onChange={(e)=>setHolder(e.target.value)} disabled={isSubmitting}/>
+          <input style={{...myStyles.input, marginBottom:5}} placeholder={isKo ? "은행명" : isJa ? "銀行名" : "Bank Name"} value={bank} onChange={(e)=>setBank(e.target.value)} disabled={isSubmitting}/>
+          <input style={{...myStyles.input, marginBottom:5}} placeholder={isKo ? "계좌번호" : isJa ? "口座番号" : "Account No"} value={account} onChange={(e)=>setAccount(e.target.value)} disabled={isSubmitting}/>
+          <input style={myStyles.input} placeholder={isKo ? "예금주" : isJa ? "口座名義" : "Holder"} value={holder} onChange={(e)=>setHolder(e.target.value)} disabled={isSubmitting}/>
         </div>
 
         {/* ★ [수정] 잔액 초과 or 0 이하 시 신청 버튼 자동 비활성화 */}
@@ -353,8 +357,8 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
         >
           {isSubmitting && <span className="mp-spinner" />}
           {isSubmitting
-            ? (isKo ? "신청 중..." : "Submitting...")
-            : (isKo ? "신청하기" : "Request")}
+            ? (isKo ? "신청 중..." : isJa ? "申請中..." : "Submitting...")
+            : (isKo ? "신청하기" : isJa ? "申請する" : "Request")}
         </button>
       </div>
     </div>
@@ -362,18 +366,19 @@ export const WithdrawView = ({ onBack, isKo, onSubmit, onViewHistory, userInfo }
 };
 
 // --- 5. 입/출금 신청 내역 화면 (기존 유지) ---
-export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
+export const TransactionHistoryView = ({ onBack, isKo, isJa, title, data  }) => {
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
     return (
       <div style={myStyles.container}>
         <SubHeader title={title} onBack={onBack} />
         <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
-          {data.length === 0 ? <div style={{ textAlign: 'center', color: '#666', marginTop: '50px' }}>{isKo ? "내역이 없습니다." : "No records."}</div> :
+          {data.length === 0 ? <div style={{ textAlign: 'center', color: '#666', marginTop: '50px' }}>{isKo ? "내역이 없습니다." : isJa ? "履歴がありません。" : "No records."}</div> :
             data.map((h, i) => {
               const isDone = h.status === '완료';
               const isRejected = h.status === '거절';
               const statusColor = isRejected ? '#ef4444' : isDone ? '#4cd137' : '#fbc531';
               const statusBg = isRejected ? 'rgba(239, 68, 68, 0.1)' : isDone ? 'rgba(76, 209, 55, 0.1)' : 'rgba(251, 197, 49, 0.1)';
-              const statusText = isRejected ? (isKo ? '거절됨' : 'Rejected') : isDone ? (isKo ? '처리완료' : 'Done') : (isKo ? '심사중' : 'Pending');
+              const statusText = isRejected ? (isKo ? '거절됨' : isJa ? '却下' : 'Rejected') : isDone ? (isKo ? '처리완료' : isJa ? '処理完了' : 'Done') : (isKo ? '심사중' : isJa ? '審査中' : 'Pending');
 
               const hasApproveReason = isDone && h.approveReason && h.approveReason.trim() !== "";
 
@@ -388,7 +393,7 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
                             {h.amount?.toLocaleString()} DIA
                         </div>
                         <div style={{color: '#666', fontSize:'13px', marginTop:4}}>
-                            {h.depositName ? (isKo ? `입금자: ${h.depositName}` : `Name: ${h.depositName}`) : 
+                            {h.depositName ? (isKo ? `입금자: ${h.depositName}` : isJa ? `入金者: ${h.depositName}` : `Name: ${h.depositName}`) : 
                              (h.bankInfo ? `${h.bankInfo.bank} ${h.bankInfo.holder}` : '')}
                         </div>
                     </div>
@@ -403,7 +408,7 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
                   {hasApproveReason && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(76, 209, 55, 0.2)' }}>
                       <div style={{ color: '#4cd137', fontSize: '11px', fontWeight: 'bold', marginBottom: 4 }}>
-                        {isKo ? '✓ 승인 사유' : '✓ Approval Note'}
+                        {isKo ? '✓ 승인 사유' : isJa ? '✓ 承認理由' : '✓ Approval Note'}
                       </div>
                       <div style={{ color: '#ccc', fontSize: '13px', lineHeight: 1.5 }}>
                         {h.approveReason}
@@ -414,7 +419,7 @@ export const TransactionHistoryView = ({ onBack, isKo, title, data }) => {
                   {isRejected && h.rejectReason && (
                     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(239,68,68,0.2)' }}>
                       <div style={{ color: '#ef4444', fontSize: '11px', fontWeight: 'bold', marginBottom: 4 }}>
-                        {isKo ? '거절 사유' : 'Rejection Reason'}
+                        {isKo ? '거절 사유' : isJa ? '却下理由' : 'Rejection Reason'}
                       </div>
                       <div style={{ color: '#ccc', fontSize: '13px', lineHeight: 1.5 }}>
                         {h.rejectReason}
@@ -438,7 +443,7 @@ import { ITEM_CONFIG } from "./EventService";
 const HistoryItemDisplay = ({ name, isKo, size = 18 }) => {
   const item = ITEM_CONFIG.find(it => it.name === name);
   if (!item) return <span>{name}</span>;
-  const displayName = isKo ? item.name : item.nameEn;
+  const displayName = isKo ? item.name : isJa ? (item.nameJa || item.nameEn) : item.nameEn;
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle' }}>
       {item.isImage ? (
@@ -451,7 +456,8 @@ const HistoryItemDisplay = ({ name, isKo, size = 18 }) => {
   );
 };
 
-export const HistoryView = ({ onBack, isKo, userId, myBetHistory }) => {
+export const HistoryView = ({ onBack, isKo, isJa, userId, myBetHistory  }) => {
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
   const donationHistory = useMemo(() => {
     if (Array.isArray(myBetHistory)) return myBetHistory;
     if (!userId) return [];
@@ -461,13 +467,13 @@ export const HistoryView = ({ onBack, isKo, userId, myBetHistory }) => {
 
   return (
     <div style={myStyles.container}>
-      <SubHeader title={isKo ? "이용 내역" : "History"} onBack={onBack} />
+      <SubHeader title={isKo ? "이용 내역" : isJa ? "利用履歴" : "History"} onBack={onBack} />
       <div style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
-        {donationHistory.length === 0 ? <div style={{ textAlign: 'center', color: '#666', marginTop: '50px' }}>{isKo ? "내역이 없습니다." : "No records."}</div> :
+        {donationHistory.length === 0 ? <div style={{ textAlign: 'center', color: '#666', marginTop: '50px' }}>{isKo ? "내역이 없습니다." : isJa ? "履歴がありません。" : "No records."}</div> :
           donationHistory.map((h, i) => (
             <div key={i} style={{ background: '#1a1a1a', padding: '15px', borderRadius: '10px', marginBottom: '10px', border: '1px solid #333' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#888', fontSize: '11px', marginBottom: '5px' }}>
-                <span>{h.round}{isKo ? "회차" : "R"}</span>
+                <span>{h.round}{isKo ? "회차" : isJa ? "回" : "R"}</span>
                 <span>{h.date}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -494,19 +500,19 @@ export const HistoryView = ({ onBack, isKo, userId, myBetHistory }) => {
 
 // --- 7. 설정 메뉴 화면 (재구성) ---
 // ★ 결제 PIN 삭제, 1:1 실시간 상담 추가
-export const SettingsView = ({ onBack, isKo, onChangeView, telegramLink }) => (
+export const SettingsView = ({ onBack, isKo, isJa, onChangeView, telegramLink  }) => (
   <div style={myStyles.container}>
-    <SubHeader title={isKo ? "시스템 설정" : "Settings"} onBack={onBack} />
+    <SubHeader title={isKo ? "시스템 설정" : isJa ? "システム設定" : "Settings"} onBack={onBack} />
     <div style={myStyles.settingList}>
       {/* ★ [신규] 닉네임 변경 메뉴 */}
       <div style={myStyles.settingItem} onClick={() => onChangeView("nickname")}>
-        <span style={myStyles.settingText}>{isKo ? "닉네임 변경" : "Change Nickname"}</span><span style={myStyles.arrow}>❯</span>
+        <span style={myStyles.settingText}>{isKo ? "닉네임 변경" : isJa ? "ニックネーム変更" : "Change Nickname"}</span><span style={myStyles.arrow}>❯</span>
       </div>
       <div style={myStyles.settingItem} onClick={() => onChangeView("profile")}>
-        <span style={myStyles.settingText}>{isKo ? "로그인 비밀번호 변경" : "Change Password"}</span><span style={myStyles.arrow}>❯</span>
+        <span style={myStyles.settingText}>{isKo ? "로그인 비밀번호 변경" : isJa ? "ログインパスワード変更" : "Change Password"}</span><span style={myStyles.arrow}>❯</span>
       </div>
       <div style={myStyles.settingItem} onClick={() => window.open(telegramLink || 'https://t.me/BANADA_support', '_blank')}>
-        <span style={myStyles.settingText}>{isKo ? "1:1 실시간 상담" : "1:1 Support"}</span><span style={myStyles.arrow}>❯</span>
+        <span style={myStyles.settingText}>{isKo ? "1:1 실시간 상담" : isJa ? "1:1リアルタイム相談" : "1:1 Support"}</span><span style={myStyles.arrow}>❯</span>
       </div>
     </div>
   </div>

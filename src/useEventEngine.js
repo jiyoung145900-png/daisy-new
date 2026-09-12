@@ -46,7 +46,7 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
   // ★ [변경] myPendingBet → myPendingBets (배열, 최대 MAX_BETS_PER_ROUND개)
   const [myPendingBets, setMyPendingBets] = useState([]);
   const [showResult, setShowResult] = useState(null);
-  const [liveNoti, setLiveNoti] = useState("이벤트가 활성화되었습니다!");
+  const [liveNoti, setLiveNoti] = useState("");
 
   const [impactTick, setImpactTick] = useState(0);
 
@@ -835,20 +835,43 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
 
   // --- 라이브 알림 생성기 ---
   useEffect(() => {
+    // 언어 감지 (localStorage)
+    const currentLang = (typeof window !== "undefined" && localStorage.getItem("lang")) || "ko";
+    
     const generateRandomUser = () => {
       const type = Math.random();
       if (type < 0.3) {
-        const f = ["김", "이", "박", "최", "정", "강", "조", "윤", "장", "임", "한", "오", "서", "신"];
-        const l = ["수", "진", "영", "호", "민", "훈", "우", "석", "준", "현", "철", "미"];
-        return `${f[Math.floor(Math.random()*f.length)]}*${l[Math.floor(Math.random()*l.length)]}`;
+        if (currentLang === "ja") {
+          // 일본 이름 (성+*+이름)
+          const f = ["田中", "佐藤", "鈴木", "高橋", "伊藤", "渡辺", "山本", "中村", "小林", "加藤", "吉田", "山田"];
+          const l = ["太", "健", "翔", "真", "大", "誠", "亮", "陽", "拓", "海", "光", "空"];
+          return `${f[Math.floor(Math.random()*f.length)]}*${l[Math.floor(Math.random()*l.length)]}`;
+        } else if (currentLang === "en") {
+          const f = ["Mr.", "Ms.", "Dr."];
+          const l = ["Kim", "Park", "Lee", "Choi", "Jung", "Ko", "Yoon", "Ha"];
+          return `${f[Math.floor(Math.random()*f.length)]}${l[Math.floor(Math.random()*l.length)]}`;
+        } else {
+          const f = ["김", "이", "박", "최", "정", "강", "조", "윤", "장", "임", "한", "오", "서", "신"];
+          const l = ["수", "진", "영", "호", "민", "훈", "우", "석", "준", "현", "철", "미"];
+          return `${f[Math.floor(Math.random()*f.length)]}*${l[Math.floor(Math.random()*l.length)]}`;
+        }
       } else if (type < 0.6) {
+        // 전화번호 - 언어별 형식
+        if (currentLang === "ja") return `090-****-${Math.floor(1000 + Math.random() * 8999)}`;
+        if (currentLang === "en") return `+82-1**-***-${Math.floor(1000 + Math.random() * 8999)}`;
         return `010-****-${Math.floor(1000 + Math.random() * 8999)}`;
       } else {
         const pre = ["Super", "King", "God", "Win", "Lucky"];
         return `${pre[Math.floor(Math.random()*pre.length)]}${Math.floor(Math.random()*999)}`;
       }
     };
-    const messages = ["대박 당첨!", "적중 성공!", "수익 실현!", "축하합니다!", "배당금 획득!"];
+    // 3개 언어 지원 - 위에서 선언한 currentLang 재사용
+    const messagesByLang = {
+      ko: ["대박 당첨!", "적중 성공!", "수익 실현!", "축하합니다!", "배당금 획득!"],
+      ja: ["大当たり!", "的中成功!", "収益実現!", "おめでとう!", "配当金獲得!"],
+      en: ["JACKPOT!", "WINNER!", "PROFIT!", "CONGRATS!", "PAYOUT WIN!"]
+    };
+    const messages = messagesByLang[currentLang] || messagesByLang.ko;
     // ★ [수정] 티커 알림에 이미지 경로 대신 이모지 사용
     //   기존: `${rItem.icon}` → "/icons/kakao.png" 이 그대로 문자열로 뿌려짐
     //   수정: 아이템 이름별로 브랜드 이모지 매핑
@@ -863,7 +886,10 @@ export function useEventEngine(user, userPoint, onUpdatePoint, pointControls) {
       const rItem = ITEM_CONFIG[Math.floor(Math.random() * ITEM_CONFIG.length)];
       const rMsg = messages[Math.floor(Math.random() * messages.length)];
       const emoji = iconEmoji[rItem.name] || "🎁";
-      setLiveNoti(`${rName}님이 ${emoji} ${rItem.name} ${rMsg}`);
+      // 언어별 조사
+      const particle = currentLang === "ko" ? "님이" : currentLang === "ja" ? "さんが" : "";
+      const itemName = currentLang === "ja" ? (rItem.nameJa || rItem.nameEn) : currentLang === "en" ? rItem.nameEn : rItem.name;
+      setLiveNoti(`${rName}${particle} ${emoji} ${itemName} ${rMsg}`);
     }, 6000 + Math.random() * 4000);
     return () => clearInterval(notiTimer);
   }, []);

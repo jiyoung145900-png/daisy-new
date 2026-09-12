@@ -29,6 +29,8 @@ export default function MyPage({
 }) {
   const [view, setView] = useState("main");
   const isKo = t.home === "홈페이지";
+  const isJa = t.home === "ホーム";
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
   
   // ★★★ [신규] 서브뷰 → main 뒤로가기 로직을 Dashboard의 backHandlerRef에 등록
   //   Dashboard의 popstate 감지 or goBack 호출 시 이 함수가 먼저 실행됨
@@ -93,25 +95,25 @@ export default function MyPage({
   const credit = getCreditInfo(userInfo.creditScore);
 
   // --- 화면 라우팅 ---
-  if (view === "profile") return <PasswordView onBack={()=>setView("settings")} isKo={isKo} onSubmit={updatePassword} userInfo={userInfo} />;
+  if (view === "profile") return <PasswordView onBack={()=>setView("settings")} isKo={isKo} isJa={isJa} onSubmit={updatePassword} userInfo={userInfo} />;
   
   // ★ [신규] 닉네임 변경 화면
-  if (view === "nickname") return <NicknameView onBack={()=>setView("settings")} isKo={isKo} onSubmit={updateNickname} userInfo={userInfo} />;
+  if (view === "nickname") return <NicknameView onBack={()=>setView("settings")} isKo={isKo} isJa={isJa} onSubmit={updateNickname} userInfo={userInfo} />;
   
   // ★ [수정] 입금 화면: 내역 버튼 누르면 'deposit_history'로 이동
-  if (view === "deposit") return <DepositView onBack={()=>setView("main")} isKo={isKo} onSubmit={requestDeposit} onViewHistory={()=>setView("deposit_history")} />;
+  if (view === "deposit") return <DepositView onBack={()=>setView("main")} isKo={isKo} isJa={isJa} onSubmit={requestDeposit} onViewHistory={()=>setView("deposit_history")} />;
   
   // ★ [수정] 출금 화면: userInfo를 넘겨서 저장된 계좌 자동 불러오기 활성화
-  if (view === "withdraw") return <WithdrawView onBack={()=>setView("main")} isKo={isKo} onSubmit={requestWithdraw} onViewHistory={()=>setView("withdraw_history")} userInfo={userInfo} />;
+  if (view === "withdraw") return <WithdrawView onBack={()=>setView("main")} isKo={isKo} isJa={isJa} onSubmit={requestWithdraw} onViewHistory={()=>setView("withdraw_history")} userInfo={userInfo} />;
   
   // ★ [신규] 입금 신청 내역 화면 연결
-  if (view === "deposit_history") return <TransactionHistoryView onBack={()=>setView("deposit")} isKo={isKo} title={isKo?"입금 신청 내역":"Deposit History"} data={myDeposits} />;
+  if (view === "deposit_history") return <TransactionHistoryView onBack={()=>setView("deposit")} isKo={isKo} isJa={isJa} title={tr("입금 신청 내역", "入金申請履歴", "Deposit History")} data={myDeposits} />;
   
   // ★ [신규] 출금 신청 내역 화면 연결
-  if (view === "withdraw_history") return <TransactionHistoryView onBack={()=>setView("withdraw")} isKo={isKo} title={isKo?"출금 신청 내역":"Withdraw History"} data={myWithdraws} />;
+  if (view === "withdraw_history") return <TransactionHistoryView onBack={()=>setView("withdraw")} isKo={isKo} isJa={isJa} title={tr("출금 신청 내역", "出金申請履歴", "Withdraw History")} data={myWithdraws} />;
 
-  if (view === "history") return <HistoryView onBack={()=>setView("main")} isKo={isKo} userId={userInfo.id} />;
-if (view === "settings") return <SettingsView onBack={()=>setView("main")} isKo={isKo} onChangeView={setView} telegramLink={telegramLink} />;
+  if (view === "history") return <HistoryView onBack={()=>setView("main")} isKo={isKo} isJa={isJa} userId={userInfo.id} />;
+if (view === "settings") return <SettingsView onBack={()=>setView("main")} isKo={isKo} isJa={isJa} onChangeView={setView} telegramLink={telegramLink} />;
 
   // --- 메인 대시보드 (기존 유지) ---
   return (
@@ -131,7 +133,7 @@ if (view === "settings") return <SettingsView onBack={()=>setView("main")} isKo=
                 <img src={getAvatarUrl(confirmedAvatarIdx, userInfo.id)} alt="avatar" style={myStyles.imgFull} />
               }
             </div>
-            <button style={myStyles.editBadgeOutside} onClick={() => setShowAvatarEditor(true)}>{isKo ? "변경" : "Edit"}</button>
+            <button style={myStyles.editBadgeOutside} onClick={() => setShowAvatarEditor(true)}>{tr("변경", "変更", "Edit")}</button>
           </div>
           <div style={myStyles.userTextMain}>
             <div style={myStyles.userIdMain}>
@@ -144,7 +146,7 @@ if (view === "settings") return <SettingsView onBack={()=>setView("main")} isKo=
             <div style={myStyles.creditBox}>
               <div style={myStyles.creditTopRow}>
                 <span style={myStyles.creditLabel}>
-                  {isKo ? "신용점수" : "CREDIT SCORE"}
+                  {tr("신용점수", "信用スコア", "CREDIT SCORE")}
                 </span>
                 <div style={{display:'flex', alignItems:'center'}}>
                   <span style={{...myStyles.creditScoreText, color: credit.color}}>
@@ -174,13 +176,13 @@ if (view === "settings") return <SettingsView onBack={()=>setView("main")} isKo=
 
       <div style={myStyles.balanceCard}>
         <div style={myStyles.balanceItem}>
-          <div style={myStyles.label}>{isKo ? "보유 다이아몬드" : "Diamonds"}</div>
+          <div style={myStyles.label}>{tr("보유 다이아몬드", "所持ダイヤモンド", "Diamonds")}</div>
           <div style={myStyles.value}>💎 {userInfo.diamond?.toLocaleString() ?? 0}</div>
         </div>
         <div style={myStyles.divider}></div>
         {/* ★ [수정] 데일리 보너스 버튼 자리를 빠른 출금 버튼으로 교체 - 기존 출금 로직/화면(WithdrawView) 그대로 재사용 */}
         <div style={{...myStyles.balanceItem, cursor: 'pointer'}} onClick={() => setView("withdraw")}>
-          <div style={{...myStyles.label, color: '#D4AF37'}}>{isKo ? "빠른 출금" : "Quick Withdraw"}</div>
+          <div style={{...myStyles.label, color: '#D4AF37'}}>{tr("빠른 출금", "クイック出金", "Quick Withdraw")}</div>
           <div style={myStyles.value}>🏦</div>
         </div>
       </div>
@@ -190,30 +192,30 @@ if (view === "settings") return <SettingsView onBack={()=>setView("main")} isKo=
         <div style={myStyles.goldMenu} onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-event'))}>
           <div style={myStyles.goldMenuContent}>
             <div style={myStyles.goldTag}>HOT</div>
-            <span style={myStyles.goldMenuTitle}>{isKo ? "프라이빗 이벤트 참여" : "Join Event"}</span>
+            <span style={myStyles.goldMenuTitle}>{tr("프라이빗 이벤트 참여", "プライベートイベント参加", "Join Event")}</span>
           </div>
           <span>❯</span>
         </div>
         <div style={myStyles.menuGroup}>
           <div style={myStyles.menuItem} onClick={() => setView("deposit")}>
-            <span style={myStyles.menuTitle}>💰 &nbsp; {isKo ? "입금 신청" : "Deposit"}</span>
+            <span style={myStyles.menuTitle}>💰 &nbsp; {tr("입금 신청", "入金申請", "Deposit")}</span>
             <span style={myStyles.arrow}>❯</span>
           </div>
           <div style={myStyles.menuItem} onClick={() => setView("withdraw")}>
-            <span style={myStyles.menuTitle}>🏦 &nbsp; {isKo ? "출금 신청" : "Withdraw"}</span>
+            <span style={myStyles.menuTitle}>🏦 &nbsp; {tr("출금 신청", "出金申請", "Withdraw")}</span>
             <span style={myStyles.arrow}>❯</span>
           </div>
           <div style={myStyles.menuItem} onClick={() => setView("history")}>
-            <span style={myStyles.menuTitle}>📋 &nbsp; {isKo ? "이용 내역" : "History"}</span>
+            <span style={myStyles.menuTitle}>📋 &nbsp; {tr("이용 내역", "利用履歴", "History")}</span>
             <span style={myStyles.arrow}>❯</span>
           </div>
           {/* ★ [수정완료] App.jsx의 telegramLink가 전체 URL 형식이므로 그대로 띄우게 연결했습니다. */}
           <div style={myStyles.menuItem} onClick={() => window.open(telegramLink || 'https://t.me/BANADA_support', '_blank')}>
-            <span style={myStyles.menuTitle}>💬 &nbsp; {isKo ? "1:1 실시간 상담" : "1:1 Support"}</span>
+            <span style={myStyles.menuTitle}>💬 &nbsp; {tr("1:1 실시간 상담", "1:1リアルタイム相談", "1:1 Support")}</span>
             <span style={myStyles.arrow}>❯</span>
           </div>
         </div>
-        <button onClick={onLogout} style={{...myStyles.logoutBtnMain, marginTop: 40, border: '1px solid #444', color: '#ff4d4d', fontWeight: 'bold', letterSpacing: '2px'}}>{isKo ? "로그아웃" : "LOG OUT"}</button>
+        <button onClick={onLogout} style={{...myStyles.logoutBtnMain, marginTop: 40, border: '1px solid #444', color: '#ff4d4d', fontWeight: 'bold', letterSpacing: '2px'}}>{tr("로그아웃", "ログアウト", "LOG OUT")}</button>
       </div>
 
       {showAvatarEditor && 

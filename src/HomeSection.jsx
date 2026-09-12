@@ -209,11 +209,11 @@ export default function HomeSection({
                   
                   <div style={h.cardSpecs}>
                     <span style={h.specText}>
-                      {m.loc || m.region || (t.home === "홈페이지" ? "지역" : "Area")}
+                      {m.loc || m.region || (t.home === "홈페이지" ? "지역" : t.home === "ホーム" ? "エリア" : "Area")}
                     </span>
                     <span style={h.specDivider}>·</span>
                     <span style={h.specText}>
-                      {m.age ? `${m.age}${t.home === "홈페이지" ? "세" : ""}` : (t.home === "홈페이지" ? "20대" : "20s")}
+                      {m.age ? `${m.age}${t.home === "홈페이지" ? "세" : t.home === "ホーム" ? "歳" : ""}` : (t.home === "홈페이지" ? "20대" : t.home === "ホーム" ? "20代" : "20s")}
                     </span>
                   </div>
                   
@@ -234,7 +234,7 @@ export default function HomeSection({
       {/* ===== FOOTER ===== */}
       <div style={h.footerBtnArea}>
         <button onClick={handleTelegram} className="shimmer-btn" style={h.teleBtn}>
-          💬 {t.home === "홈페이지" ? "실시간 상담 연결하기" : "Connect Real-time Chat"}
+          💬 {t.home === "홈페이지" ? "실시간 상담 연결하기" : t.home === "ホーム" ? "リアルタイム相談を接続" : "Connect Real-time Chat"}
         </button>
         <p style={h.footerNotice}>24/7 PRIVATE CONCIERGE SERVICE</p>
       </div>

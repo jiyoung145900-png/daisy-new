@@ -168,6 +168,9 @@ export default function ManagerSection({
   };
 
   const isKo = t.home === "홈페이지";
+  const isJa = t.home === "ホーム";
+  // 3개 언어 helper
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
 
   // 지역 이름을 현재 언어에 맞춰 반환하는 함수
   const getRegionName = (name) => {
@@ -180,6 +183,10 @@ export default function ManagerSection({
       `${name} 매니저는 세련된 매너와 섬세한 감각을 갖춘 엘리트 멤버입니다.`,
       `철저한 자기관리로 완성된 비주얼을 자랑하는 ${name} 매니저를 소개합니다.`,
       `밝은 에너지와 배려심으로 편안한 시간을 약속드리는 ${name} 매니저입니다.`
+    ] : isJa ? [
+      `${name}マネージャーは、洗練されたマナーと繊細な感性を持つエリートメンバーです。`,
+      `徹底した自己管理で完成されたビジュアルを誇る${name}マネージャーをご紹介します。`,
+      `明るいエネルギーと思いやりで、心地よい時間をお約束する${name}マネージャーです。`
     ] : [
       `${name} is an elite member with sophisticated manners and delicate senses.`,
       `Introducing ${name}, who boasts a visual perfected through thorough self-management.`,
@@ -234,7 +241,7 @@ export default function ManagerSection({
             <div style={m.cardInfo}>
               <div style={m.cardName}>{member.name}</div>
               <div style={m.cardSpecs}>
-                {getRegionName(member.loc || member.region || (isKo ? "지역" : "LOC"))} · {member.age ? `${member.age}${isKo ? '세' : ''}` : (isKo ? '20대' : '20s')}
+                {getRegionName(member.loc || member.region || tr("지역", "エリア", "LOC"))} · {member.age ? `${member.age}${tr('세', '歳', '')}` : tr('20대', '20代', '20s')}
               </div>
               <div style={{ ...m.cardSpecs, marginTop: '4px' }}>
                 {member.height ? member.height + 'cm' : 'cm'} · {member.bust || member.size || "Size"}
@@ -255,15 +262,15 @@ export default function ManagerSection({
                 style={m.modalActualImg} 
                 alt="" 
               />
-              <div style={m.luxTag}>✦ {isKo ? "클릭하여 확대" : "CLICK TO ZOOM"}</div>
+              <div style={m.luxTag}>✦ {tr("클릭하여 확대", "クリックで拡大", "CLICK TO ZOOM")}</div>
             </div>
 
             <div style={m.modalBody}>
               <h2 style={m.modalName}>{selectedMember.name}</h2>
               
               <div style={m.specGrid}>
-                <div style={m.specItem}>LOC<br/><b style={m.specVal}>{getRegionName(selectedMember.loc || selectedMember.region || (isKo ? "미정" : "TBA"))}</b></div>
-                <div style={m.specItem}>AGE<br/><b style={m.specVal}>{selectedMember.age ? `${selectedMember.age}${isKo ? '세' : ''}` : (isKo ? '20s' : '20s')}</b></div>
+                <div style={m.specItem}>LOC<br/><b style={m.specVal}>{getRegionName(selectedMember.loc || selectedMember.region || tr("미정", "未定", "TBA"))}</b></div>
+                <div style={m.specItem}>AGE<br/><b style={m.specVal}>{selectedMember.age ? `${selectedMember.age}${tr('세', '歳', '')}` : '20s'}</b></div>
                 <div style={m.specItem}>HEIGHT<br/><b style={m.specVal}>{selectedMember.height ? selectedMember.height + 'cm' : 'cm'}</b></div>
                 <div style={m.specItem}>WEIGHT<br/><b style={m.specVal}>{selectedMember.weight ? selectedMember.weight + 'kg' : 'kg'}</b></div>
                 <div style={m.specItem}>SIZE<br/><b style={m.specVal}>{selectedMember.bust || selectedMember.size || "Size"}</b></div>
@@ -277,7 +284,7 @@ export default function ManagerSection({
               {/* ★ 매니저 소개 영상 - 비디오 자동재생 대신 썸네일 이미지로 대체 */}
               {(selectedMember.video || isVideo(selectedMember.img)) && (
                 <div style={m.videoArea} onClick={() => openFull('video', selectedMember.video || selectedMember.img)}>
-                  <div style={m.introTitle}>PRIVATE MOVIE ({isKo ? "클릭하여 확대" : "CLICK TO ENLARGE"})</div>
+                  <div style={m.introTitle}>PRIVATE MOVIE ({tr("클릭하여 확대", "クリックで拡大", "CLICK TO ENLARGE")})</div>
                   <div style={{ position: 'relative' }}>
                     {/* 비디오 → 첫 프레임 썸네일 이미지 */}
                     <img 
@@ -288,12 +295,12 @@ export default function ManagerSection({
                     />
                     <div style={m.videoOverlay}>
                       <div style={m.videoPlayIcon}>▶</div>
-                      <div>{isKo ? "전체화면 재생" : "TAP TO PLAY"}</div>
+                      <div>{tr("전체화면 재생", "全画面再生", "TAP TO PLAY")}</div>
                     </div>
                   </div>
                 </div>
               )}
-              <button style={m.closeBtn} onClick={handleClose}>{isKo ? "닫기" : "CLOSE"}</button>
+              <button style={m.closeBtn} onClick={handleClose}>{tr("닫기", "閉じる", "CLOSE")}</button>
             </div>
           </div>
         </div>
@@ -302,7 +309,7 @@ export default function ManagerSection({
       {/* ===== 4. 풀스크린 뷰어 (URL 최적화 적용) ===== */}
       {fullScreenMedia && (
         <div id="full-screen-view" style={m.fullScreenOverlay} onClick={() => setFullScreenMedia(null)}>
-          <button style={m.fullScreenClose} onClick={() => setFullScreenMedia(null)}>✕ {isKo ? "닫기" : "CLOSE"}</button>
+          <button style={m.fullScreenClose} onClick={() => setFullScreenMedia(null)}>✕ {tr("닫기", "閉じる", "CLOSE")}</button>
           <div style={m.fullScreenContent} onClick={e => e.stopPropagation()}>
             {fullScreenMedia.type === 'video' ? (
               <video 

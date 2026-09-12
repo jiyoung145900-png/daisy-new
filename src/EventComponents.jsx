@@ -25,10 +25,12 @@ export const EventBanner = ({
   drawingItems,
   lastResultItems, // 이미 로컬라이즈된 문자열 배열
   isKo = true,
+  isJa = false,
   joined = false,
   impactTick = 0,
 }) => {
   const isUrgent = !isDrawing && timeLeft <= 10 && timeLeft > 0;
+  const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
 
   // 임팩트 플래시 상태 (impactTick이 바뀔 때마다 1회 재생)
   const [flash, setFlash] = useState(false);
@@ -159,7 +161,7 @@ export const EventBanner = ({
             {isDrawing ? "DRAWING" : "LIVE"}
           </motion.div>
           <span style={{ ...bs.roundInfo, color: isDrawing ? "#999" : "#555" }}>
-            {isKo ? `제 ${round}회차` : `Round ${round}`} {joined ? (isKo ? "(참여완료)" : "(Joined)") : ""}
+            {isKo ? `제 ${round}회차` : isJa ? `第${round}回` : `Round ${round}`} {joined ? tr("(참여완료)", "(参加完了)", "(Joined)") : ""}
           </span>
         </div>
 
@@ -204,7 +206,7 @@ export const EventBanner = ({
         <div style={{ ...bs.lastBar, background: isDrawing ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.6)" }}>
           <span style={{ ...bs.lastLabel, color: isDrawing ? "#ccc" : "#333" }}>
             {round - 1}
-            {isKo ? "회차 결과:" : " Result:"}
+            {tr("회차 결과:", "回結果:", " Result:")}
           </span>
           <div style={{ display: "flex", gap: "5px" }}>
             {lastResultItems && lastResultItems.length > 0
@@ -224,7 +226,7 @@ export const EventBanner = ({
                     </span>
                   );
                 })
-              : (isKo ? "대기중" : "Waiting")}
+              : tr("대기중", "待機中", "Waiting")}
           </div>
         </div>
       </div>

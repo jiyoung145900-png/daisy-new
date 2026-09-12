@@ -242,7 +242,7 @@ export default function Dashboard({
   // ★★★ [수정] 탭 클릭 시 히스토리 스택에 추가 (필터 정보 포함)
   const handleTabClick = (key) => {
     if (isGuest && (key === 'event' || key === 'mypage')) {
-      alert(lang === "ko" ? "승인된 회원 전용 구역입니다." : "Authorized Members Only.");
+      alert(lang === "ko" ? "승인된 회원 전용 구역입니다." : lang === "ja" ? "承認された会員専用エリアです。" : "Authorized Members Only.");
       return;
     }
     // 이미 같은 탭이면 아무것도 안 함
@@ -293,7 +293,7 @@ export default function Dashboard({
 
   const handleTelegram = () => {
     if (telegramLink) window.open(telegramLink, "_blank");
-    else alert(lang === "ko" ? "상담 링크가 설정되지 않았습니다." : "Link not set.");
+    else alert(lang === "ko" ? "상담 링크가 설정되지 않았습니다." : lang === "ja" ? "相談リンクが設定されていません。" : "Link not set.");
   };
 
   useEffect(() => { window.scrollTo(0, 0); }, [activeTab]);
@@ -392,7 +392,7 @@ export default function Dashboard({
         return isEventLoading ? (
           <div style={s.loadingContainer}>
             <div className="loading-spinner"></div>
-            <div style={s.loadingText}>{lang === "ko" ? "프라이빗 혜택 로딩 중..." : "Loading Private Benefits..."}</div>
+            <div style={s.loadingText}>{lang === "ko" ? "프라이빗 혜택 로딩 중..." : lang === "ja" ? "プライベート特典を読み込み中..." : "Loading Private Benefits..."}</div>
           </div>
         ) : (
           <EventSection 
@@ -448,12 +448,12 @@ export default function Dashboard({
           <div style={{...s.modalContent, textAlign: 'center'}} onClick={e => e.stopPropagation()}>
             <h3 style={s.modalName}>{t.logout}</h3>
             <p style={{color: '#8E8E93', fontSize: 14, marginBottom: 20}}>
-              {lang === "ko" ? "정말 로그아웃 하시겠습니까?" : "Are you sure you want to log out?"}
+              {lang === "ko" ? "정말 로그아웃 하시겠습니까?" : lang === "ja" ? "本当にログアウトしますか?" : "Are you sure you want to log out?"}
             </p>
             <div style={s.modalBtnGroup}>
               <button onClick={onLogout} style={s.mMatchBtn}>{t.logout}</button>
               <button onClick={() => setShowLogoutConfirm(false)} style={s.mCloseBtn}>
-                {lang === "ko" ? "취소" : "CANCEL"}
+                {lang === "ko" ? "취소" : lang === "ja" ? "キャンセル" : "CANCEL"}
               </button>
             </div>
           </div>

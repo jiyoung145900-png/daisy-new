@@ -43,10 +43,11 @@ const save = (k, v) => {
   }
 };
 
-// ★ Translations
+// ★ Translations - 3개 언어 지원 (한국어/영어/일본어)
 const translations = {
   ko: { login: "로그인", signup: "회원가입", id: "아이디", pw: "비밀번호", ref: "추천인 코드", guest: "게스트로 시작", logout: "로그아웃", home: "홈페이지", manager: "매니저", event: "이벤트", video: "동영상", mypage: "마이페이지", welcome: "📢 BANADA에 오신 것을 환영합니다!", desc_suffix: " 화면입니다.", prepare: "컨텐츠 준비 중입니다.", close: "닫기", input_id_pw: "아이디와 비밀번호를 입력하세요.", id_exists: "이미 존재하는 아이디입니다.", signup_ok: "가입이 완료되었습니다!", login_fail: "로그인 정보가 틀립니다." },
-  en: { login: "LOGIN", signup: "SIGN UP", id: "ID", pw: "PASSWORD", ref: "REFERRAL CODE", guest: "START AS GUEST", logout: "LOGOUT", home: "HOME", manager: "MODELS", event: "GAMES", video: "GALLERY", mypage: "MY PAGE", welcome: "📢 Welcome to BANADA!", desc_suffix: " Page Content.", prepare: "Coming Soon.", close: "CLOSE", input_id_pw: "Please enter ID and Password.", id_exists: "ID already exists.", signup_ok: "Sign up successful!", login_fail: "Login Failed" }
+  en: { login: "LOGIN", signup: "SIGN UP", id: "ID", pw: "PASSWORD", ref: "REFERRAL CODE", guest: "START AS GUEST", logout: "LOGOUT", home: "HOME", manager: "MODELS", event: "GAMES", video: "GALLERY", mypage: "MY PAGE", welcome: "📢 Welcome to BANADA!", desc_suffix: " Page Content.", prepare: "Coming Soon.", close: "CLOSE", input_id_pw: "Please enter ID and Password.", id_exists: "ID already exists.", signup_ok: "Sign up successful!", login_fail: "Login Failed" },
+  ja: { login: "ログイン", signup: "会員登録", id: "ID", pw: "パスワード", ref: "招待コード", guest: "ゲストで始める", logout: "ログアウト", home: "ホーム", manager: "マネージャー", event: "イベント", video: "動画", mypage: "マイページ", welcome: "📢 BANADAへようこそ!", desc_suffix: " ページ内容", prepare: "準備中です。", close: "閉じる", input_id_pw: "IDとパスワードを入力してください。", id_exists: "既に存在するIDです。", signup_ok: "登録が完了しました!", login_fail: "ログイン情報が間違っています。" }
 };
 
 export default function App() {
@@ -414,6 +415,8 @@ export default function App() {
           <span style={styles.offlineIcon}>📶</span>
           <span>{lang === "ko" 
             ? "인터넷 연결이 끊어졌습니다. 연결을 확인해주세요." 
+            : lang === "ja"
+            ? "インターネット接続が切れました。接続を確認してください。"
             : "You're offline. Please check your connection."}</span>
         </div>
       )}
@@ -424,6 +427,8 @@ export default function App() {
           <span style={styles.onlineIcon}>✅</span>
           <span>{lang === "ko" 
             ? "다시 연결되었습니다!" 
+            : lang === "ja"
+            ? "再接続されました!"
             : "Back online!"}</span>
         </div>
       )}
@@ -467,10 +472,57 @@ export default function App() {
       )}
 
       {showLanding && (
-        <header style={{ position: 'fixed', top: 20, right: 20, zIndex: 10002 }}>
-          <button style={styles.langBtn} onClick={() => setLang(lang === "ko" ? "en" : "ko")}>
-            {lang === "ko" ? "ENGLISH" : "한국어"}
-          </button>
+        <header style={{
+          position: 'fixed',
+          top: 20,
+          right: 20,
+          zIndex: 10002,
+          display: 'flex',
+          gap: '8px',
+          padding: '6px 10px',
+          background: 'rgba(0, 0, 0, 0.35)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          border: '1px solid rgba(201, 149, 105, 0.3)',
+          borderRadius: '999px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
+        }}>
+          {[
+            { code: 'ko', flag: '/flags/kr.png', label: '한국어' },
+            { code: 'ja', flag: '/flags/jp.png', label: '日本語' },
+            { code: 'en', flag: '/flags/uk.png', label: 'English' },
+          ].map((item) => (
+            <button
+              key={item.code}
+              onClick={() => setLang(item.code)}
+              title={item.label}
+              style={{
+                width: '36px',
+                height: '24px',
+                padding: 0,
+                border: lang === item.code ? '2px solid #E4B689' : '2px solid transparent',
+                borderRadius: '4px',
+                background: `url(${item.flag}) center/cover no-repeat`,
+                cursor: 'pointer',
+                opacity: lang === item.code ? 1 : 0.55,
+                transition: 'all 0.25s ease',
+                boxShadow: lang === item.code ? '0 2px 12px rgba(228, 182, 137, 0.6)' : 'none',
+                transform: lang === item.code ? 'scale(1.1)' : 'scale(1)',
+              }}
+              onMouseEnter={(e) => {
+                if (lang !== item.code) {
+                  e.currentTarget.style.opacity = '0.9';
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (lang !== item.code) {
+                  e.currentTarget.style.opacity = '0.55';
+                  e.currentTarget.style.transform = 'scale(1)';
+                }
+              }}
+            />
+          ))}
         </header>
       )}
     </div>
