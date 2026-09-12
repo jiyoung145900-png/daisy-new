@@ -171,6 +171,20 @@ export default function ManagerSection({
   const isJa = t.home === "ホーム";
   // 3개 언어 helper
   const tr = (ko, ja, en) => isKo ? ko : isJa ? ja : en;
+  
+  // ★ [신규] 매니저 이름/소개 - 언어별 자동 선택 (fallback: 없으면 한국어)
+  const getMemberName = (member) => {
+    if (!member) return "";
+    if (isJa) return member.name_ja || member.name;
+    if (!isKo) return member.name_en || member.name;
+    return member.name_ko || member.name;
+  };
+  const getMemberDesc = (member) => {
+    if (!member) return "";
+    if (isJa) return member.desc_ja || member.desc;
+    if (!isKo) return member.desc_en || member.desc;
+    return member.desc_ko || member.desc;
+  };
 
   // 지역 이름을 현재 언어에 맞춰 반환하는 함수
   const getRegionName = (name) => {
@@ -232,14 +246,14 @@ export default function ManagerSection({
               <img 
                 src={optimizeImage(member.img, { width: 400, crop: "fill" })} 
                 style={m.cardImg} 
-                alt={member.name}
+                alt={getMemberName(member)}
                 loading="lazy"
               />
               <div style={m.cardOverlay} />
               <div style={m.cardBadge}>PREMIUM</div>
             </div>
             <div style={m.cardInfo}>
-              <div style={m.cardName}>{member.name}</div>
+              <div style={m.cardName}>{getMemberName(member)}</div>
               <div style={m.cardSpecs}>
                 {getRegionName(member.loc || member.region || tr("지역", "エリア", "LOC"))} · {member.age ? `${member.age}${tr('세', '歳', '')}` : tr('20대', '20代', '20s')}
               </div>
@@ -266,7 +280,7 @@ export default function ManagerSection({
             </div>
 
             <div style={m.modalBody}>
-              <h2 style={m.modalName}>{selectedMember.name}</h2>
+              <h2 style={m.modalName}>{getMemberName(selectedMember)}</h2>
               
               <div style={m.specGrid}>
                 <div style={m.specItem}>LOC<br/><b style={m.specVal}>{getRegionName(selectedMember.loc || selectedMember.region || tr("미정", "未定", "TBA"))}</b></div>
@@ -278,7 +292,7 @@ export default function ManagerSection({
 
               <div style={m.introBox}>
                 <div style={m.introTitle}>INTRO</div>
-                <p style={m.introText}>{selectedMember.desc || generateIntro(selectedMember.name)}</p>
+                <p style={m.introText}>{getMemberDesc(selectedMember) || generateIntro(getMemberName(selectedMember))}</p>
               </div>
 
               {/* ★ 매니저 소개 영상 - 비디오 자동재생 대신 썸네일 이미지로 대체 */}
