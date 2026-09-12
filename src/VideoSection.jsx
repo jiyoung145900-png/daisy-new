@@ -144,7 +144,7 @@ export default function VideoSection({
               <div style={s.videoDesc}>
                 <span style={s.descBadge}>EXCLUSIVE</span>
                 <p style={s.descText}>
-                  {vid.description || tr(
+                  {(isJa ? (vid.desc_ja || vid.description) : !isKo ? (vid.desc_en || vid.description) : (vid.desc_ko || vid.description)) || tr(
                     `프리미엄 ${vid.category} 쇼`,
                     `プレミアム ${getCatName(vid.category)} ショー`,
                     `PREMIUM ${getCatName(vid.category)} SHOW`
