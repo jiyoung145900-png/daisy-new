@@ -232,6 +232,7 @@ export default function ManagerSection({
   // ★ [수정] 지역명 번역 - 필터 탭 + 시군구 카드 모두 커버
   const getRegionName = (name) => {
     if (!name) return "";
+    console.log("[지역 디버그]", JSON.stringify(name), "→ LOC_MAP 존재:", !!LOC_MAP[name]);
     if (isKo) return name;
     // 필터 탭 (광역) 먼저 체크
     const region = regionTranslation[name];
