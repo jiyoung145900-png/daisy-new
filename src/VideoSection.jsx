@@ -129,9 +129,10 @@ export default function VideoSection({
           currentVideos.map((vid) => (
             <div key={vid.id} style={s.videoCard} onClick={() => openFull(vid.url)}>
               <div style={s.videoWrapper}>
-                {/* 비디오 대신 첫 프레임 썸네일 이미지 표시 → Transformation 절약 */}
+                {/* ★ R2 이전 후: vid.thumbnail (자동 생성된 첫 프레임) 우선 사용
+                   ★ 옛날 Cloudinary 영상: videoThumbnail() 변환 URL로 fallback */}
                 <img 
-                  src={videoThumbnail(vid.url, { width: 400, crop: "fill" })}
+                  src={vid.thumbnail || videoThumbnail(vid.url, { width: 400, crop: "fill" })}
                   style={s.videoEl}
                   alt="video thumbnail"
                   loading="lazy"
